@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="io.kup.server.AppTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2020-01-24T03:34:14" hostname="Jacobs-MacBook-Pro-2.local" time="0.012">
+  <properties/>
+  <testcase name="testAppHasAGreeting" classname="io.kup.server.AppTest" time="0.012"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
