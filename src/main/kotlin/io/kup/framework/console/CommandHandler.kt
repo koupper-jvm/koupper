@@ -3,7 +3,10 @@ package io.kup.framework.console
 import io.kup.framework.ANSIColors.ANSI_RESET
 import io.kup.framework.ANSIColors.ANSI_WHITE
 import io.kup.framework.ANSIColors.RED_BACKGROUND_203
-import io.kup.framework.console.commands.*
+import io.kup.framework.console.commands.AVAILABLE_COMMANDS
+import io.kup.framework.console.commands.Command
+import io.kup.framework.console.commands.DefaultCommand
+import io.kup.framework.console.commands.UndefinedCommand
 import io.kup.framework.console.commands.options.Option
 import kotlin.system.exitProcess
 
