@@ -21,7 +21,9 @@ class MakeController : Argument() {
     override fun displayArguments() {
         println(" ${ANSIColors.ANSI_YELLOW_229}• Arguments:${ANSIColors.ANSI_RESET}")
 
-        println("   ${ANSIColors.ANSI_GREEN_155}name${ANSIColors.ANSI_RESET}The controller name")
+        println("   ${ANSIColors.ANSI_GREEN_155}name${ANSIColors.ANSI_RESET} The controller name")
+
+        println()
     }
 
     override fun name(): String {

@@ -20,7 +20,25 @@ class CommandHandler {
 
         if (this.isAFlag(args[0])) {
             if (args.size > 1) {
-                this.getFlagWithName(args[0]).`for`(this.getCommandWithName(args[1]))
+                val param = args[1]
+
+                if (param.contains(":")) {
+                    val commandName = param.substring(0, param.indexOf(":"))
+
+                    val commandArgument = param.substring(param.indexOf(":") + 1)
+
+                    val command = this.getCommandWithName(commandName)
+
+                    command.arguments.forEach {
+                        if (it.name.equals(commandArgument, ignoreCase = true)) {
+                            it.execute()
+                        }
+                    }
+
+                    return
+                }
+
+                this.getFlagWithName(args[0]).`for`(this.getCommandWithName(param))
 
                 return
             }
