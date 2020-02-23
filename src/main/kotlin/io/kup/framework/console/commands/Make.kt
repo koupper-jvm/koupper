@@ -1,11 +1,12 @@
 package io.kup.framework.console.commands
 
+import io.kup.framework.ANSIColors
 import io.kup.framework.console.commands.arguments.make.MakeController
 
 class Make : Command() {
     init {
         super.name = "make"
-        super.usage = "$name:[argument]"
+        super.usage = "$name:[${ANSIColors.ANSI_GREEN_155}argument${ANSIColors.ANSI_RESET}]"
         super.description = "Create a resource"
         super.arguments = listOf(
             MakeController()

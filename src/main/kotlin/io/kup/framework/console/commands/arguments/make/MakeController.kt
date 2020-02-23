@@ -6,7 +6,7 @@ import io.kup.framework.console.commands.arguments.Argument
 class MakeController : Argument() {
     init {
         super.name = "controller"
-        super.usage = "make:controller"
+        super.usage = "make:controller [${ANSIColors.ANSI_GREEN_155}argument${ANSIColors.ANSI_RESET}]"
         super.description = "Create a controller class"
     }
 
