@@ -1,15 +1,15 @@
 package io.kup.framework
 
-import io.kup.framework.config.PackageLoader
+import io.kup.framework.config.JAXRSLoader
 
 open class KupBootstrapper : Bootstrapper {
     init {
-        this.go()
+        this.registerJAXRSComponents()
     }
 
-    override fun go() {
+    override fun registerJAXRSComponents() {
         val sourcePackage = this.javaClass.`package`.clearName()
 
-        PackageLoader().include(sourcePackage)
+        JAXRSLoader().include(sourcePackage)
     }
 }
