@@ -10,6 +10,6 @@ open class KupBootstrapper : Bootstrapper {
     override fun registerJAXRSComponents() {
         val sourcePackage = this.javaClass.`package`.clearName()
 
-        JAXRSLoader().include(sourcePackage)
+        JAXRSLoader().scanTo(sourcePackage)
     }
 }
