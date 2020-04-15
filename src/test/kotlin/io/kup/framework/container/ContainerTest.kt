@@ -1,7 +1,7 @@
 package io.kup.framework.container
 
 import io.kotest.core.spec.style.AnnotationSpec
-import io.kup.framework.extensions.instance
+import io.kup.framework.extensions.instanceOf
 import io.kup.framework.extensions.singletonOf
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -16,11 +16,11 @@ class ContainerTest : AnnotationSpec() {
             ConcreteClass()
         }
 
-        val concreteClassOfContainer = container.create().instance<AbstractClass>()
+        val concreteClassOfContainer = container.create().instanceOf<AbstractClass>()
 
         assertTrue(concreteClassOfContainer is ConcreteClass)
 
-        val concreteClassOfContainer2 = container.create().instance<AbstractClass>()
+        val concreteClassOfContainer2 = container.create().instanceOf<AbstractClass>()
 
         assertNotEquals(concreteClassOfContainer, concreteClassOfContainer2)
     }
