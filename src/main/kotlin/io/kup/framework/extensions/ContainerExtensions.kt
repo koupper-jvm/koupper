@@ -1,14 +1,12 @@
 package io.kup.framework.extensions
 
 inline fun <reified T> MutableMap<Any, Any>.instance(): T {
-    val map: MutableMap<Any, Any> = this
+    if (this[T::class] is Function<*>) return (this[T::class] as () -> T).invoke()
 
-    val key = T::class
+    return this[T::class] as T
+}
 
-    val value = map[key]
-
-    if (value is Function<*>) return (value as () -> T).invoke()
-
-    return map[key] as T
+inline fun <reified T> MutableMap<Any, Any>.singletonOf(): T {
+    return this[T::class] as T
 }
 
