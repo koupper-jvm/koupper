@@ -26,6 +26,21 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
+    fun `should bind a concrete class using the alternative bind method`() {
+        val container = KupContainer()
+
+        container.bind(AbstractClass::class, ConcreteClass::class)
+
+        val concreteClassOfContainer = container.create().instanceOf<AbstractClass>()
+
+        assertTrue(concreteClassOfContainer is ConcreteClass)
+
+        val concreteClassOfContainer2 = container.create().instanceOf<AbstractClass>()
+
+        assertNotEquals(concreteClassOfContainer, concreteClassOfContainer2)
+    }
+
+    @Test
     fun `should bind a singleton class and return the same instance over and over`() {
         val container = KupContainer()
 
