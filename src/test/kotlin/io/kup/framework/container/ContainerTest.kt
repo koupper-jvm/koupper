@@ -54,4 +54,17 @@ class ContainerTest : AnnotationSpec() {
 
         assertEquals(concreteClassOfContainer, concreteClassOfContainer2)
     }
+
+    @Test
+    fun `should bind a singleton class using the alternative singleton method`() {
+        val container = KupContainer()
+
+        container.singleton(AbstractClass::class, ConcreteClass::class)
+
+        val concreteClassOfContainer = container.get().singletonOf<AbstractClass>()
+
+        val concreteClassOfContainer2 = container.get().singletonOf<AbstractClass>()
+
+        assertEquals(concreteClassOfContainer, concreteClassOfContainer2)
+    }
 }
