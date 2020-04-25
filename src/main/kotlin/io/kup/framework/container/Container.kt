@@ -5,11 +5,19 @@ interface Container {
 
     fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V)
 
-    fun create(): MutableMap<Any, Any>
+    fun create(): Container
 
     fun <T : Any> singleton(abstractClass: T, callback: () -> T)
 
     fun <T : Any, V : Any> singleton(abstractClass: T, concreteClass: V)
 
-    fun get(): MutableMap<Any, Any>
+    fun get(): Container
+
+    fun <T : Any> listenFor(abstractClass: T, callback: (instance: Any) -> Unit)
+
+    fun getBindings(): MutableMap<Any, Any>
+
+    fun getSingletons(): MutableMap<Any, Any>
+
+    fun getListeners(): MutableMap<Any, Any>
 }

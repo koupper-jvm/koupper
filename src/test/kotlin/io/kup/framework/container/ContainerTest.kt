@@ -18,7 +18,9 @@ class ContainerTest : AnnotationSpec() {
 
         val concreteClassOfContainer = container.create().instanceOf<AbstractClass>()
 
-        assertTrue(concreteClassOfContainer is ConcreteClass)
+        assertTrue {
+            concreteClassOfContainer is ConcreteClass
+        }
 
         val concreteClassOfContainer2 = container.create().instanceOf<AbstractClass>()
 
@@ -33,7 +35,9 @@ class ContainerTest : AnnotationSpec() {
 
         val concreteClassOfContainer = container.create().instanceOf<AbstractClass>()
 
-        assertTrue(concreteClassOfContainer is ConcreteClass)
+        assertTrue {
+            concreteClassOfContainer is ConcreteClass
+        }
 
         val concreteClassOfContainer2 = container.create().instanceOf<AbstractClass>()
 
@@ -66,5 +70,35 @@ class ContainerTest : AnnotationSpec() {
         val concreteClassOfContainer2 = container.get().singletonOf<AbstractClass>()
 
         assertEquals(concreteClassOfContainer, concreteClassOfContainer2)
+    }
+
+    @Test
+    fun `should listen for a resolved by bind method`() {
+        val container = KupContainer()
+
+        container.bind(AbstractClass::class, ConcreteClass::class)
+
+        container.listenFor(AbstractClass::class, {
+            assertTrue {
+                it is ConcreteClass
+            }
+        })
+
+        container.create().instanceOf<AbstractClass>()
+    }
+
+    @Test
+    fun `should listen for a resolved by singleton method`() {
+        val container = KupContainer()
+
+        container.singleton(AbstractClass::class, ConcreteClass::class)
+
+        container.listenFor(AbstractClass::class, {
+            assertTrue {
+                it is ConcreteClass
+            }
+        })
+
+        container.create().singletonOf<AbstractClass>()
     }
 }

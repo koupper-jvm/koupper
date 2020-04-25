@@ -1,14 +1,31 @@
 package io.kup.framework.extensions
 
-inline fun <reified T> MutableMap<Any, Any>.instanceOf(): T {
-    if (this[T::class] is Function<*>) {
-        return (this[T::class] as () -> T).invoke()
+import io.kup.framework.container.KupContainer
+
+inline fun <reified T> KupContainer.instanceOf(): T {
+    val instance = if (this.getBindings()[T::class] is Function<*>) {
+        (this.getBindings()[T::class] as () -> T).invoke()
+    } else {
+        this.getBindings()[T::class] as T
     }
 
-    return this[T::class] as T
+    if (this.getListeners()[T::class] is Function<*>) {
+        val callback = this.getListeners()[T::class] as (T) -> Unit
+
+        callback(instance)
+    }
+
+    return instance
 }
 
-inline fun <reified T> MutableMap<Any, Any>.singletonOf(): T {
-    return this[T::class] as T
-}
+inline fun <reified T> KupContainer.singletonOf(): T {
+    val instance = this.getSingletons()[T::class] as T
 
+    if (this.getListeners()[T::class] is Function<*>) {
+        val callback = this.getListeners()[T::class] as (T) -> Unit
+
+        callback(instance)
+    }
+
+    return instance
+}

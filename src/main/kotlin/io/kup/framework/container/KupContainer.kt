@@ -8,6 +8,8 @@ class KupContainer : Container {
 
     private var singletons: MutableMap<Any, Any> = mutableMapOf()
 
+    private var listeners: MutableMap<Any, Any> = mutableMapOf()
+
     override fun <T : Any> bind(abstractClass: T, callback: () -> T) {
         this.bindings[abstractClass] = callback
     }
@@ -16,8 +18,8 @@ class KupContainer : Container {
         this.bindings[abstractClass] = { (concreteClass as KClass<*>).createInstance() }
     }
 
-    override fun create(): MutableMap<Any, Any> {
-        return this.bindings
+    override fun create(): KupContainer {
+        return this
     }
 
     override fun <T : Any> singleton(abstractClass: T, callback: () -> T) {
@@ -28,7 +30,23 @@ class KupContainer : Container {
         this.singletons[abstractClass] = (concreteClass as KClass<*>).createInstance()
     }
 
-    override fun get(): MutableMap<Any, Any> {
+    override fun get(): KupContainer {
+        return this
+    }
+
+    override fun <T : Any> listenFor(abstractClass: T, callback: (instance: Any) -> Unit) {
+        this.listeners[abstractClass] = callback
+    }
+
+    override fun getBindings(): MutableMap<Any, Any> {
+        return this.bindings
+    }
+
+    override fun getSingletons(): MutableMap<Any, Any> {
         return this.singletons
+    }
+
+    override fun getListeners(): MutableMap<Any, Any> {
+        return this.listeners
     }
 }
