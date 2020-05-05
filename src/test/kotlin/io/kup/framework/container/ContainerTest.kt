@@ -101,11 +101,4 @@ class ContainerTest : AnnotationSpec() {
 
         container.create().singletonOf<AbstractClass>()
     }
-
-    @Test
-    fun `should get a list of dependencies for specific object`() {
-        val container = KupContainer()
-
-        container.dependenciesFor(ConcreteClassWithDependencies::class)
-    }
 }

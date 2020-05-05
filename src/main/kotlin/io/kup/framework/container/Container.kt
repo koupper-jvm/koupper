@@ -20,6 +20,4 @@ interface Container {
     fun getSingletons(): MutableMap<Any, Any>
 
     fun getListeners(): MutableMap<Any, Any>
-
-    fun <T : Any> dependenciesFor(concreteClass: T)
 }

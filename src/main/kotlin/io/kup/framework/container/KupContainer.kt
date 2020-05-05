@@ -2,6 +2,7 @@ package io.kup.framework.container
 
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createInstance
+import kotlin.reflect.full.primaryConstructor
 
 class KupContainer : Container {
     private var bindings: MutableMap<Any, Any> = mutableMapOf()
