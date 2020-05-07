@@ -11,8 +11,8 @@ class KupContainer : Container {
 
     private var listeners: MutableMap<Any, Any> = mutableMapOf()
 
-    override fun <T : Any> bind(abstractClass: T, callback: () -> T) {
-        this.bindings[abstractClass] = callback
+    override fun <T : Any> bind(abstractClass: T, callback: (container: Container) -> T) {
+        this.bindings[abstractClass] = { callback(this) }
     }
 
     override fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V) {
@@ -24,7 +24,7 @@ class KupContainer : Container {
     }
 
     override fun <T : Any> singleton(abstractClass: T, callback: () -> T) {
-        this.singletons[abstractClass] = callback.invoke()
+        this.singletons[abstractClass] = callback()
     }
 
     override fun <T : Any, V : Any> singleton(abstractClass: T, concreteClass: V) {

@@ -11,6 +11,6 @@ class InjectorTest : AnnotationSpec() {
         val dependencies = injector.dependenciesIn(ConcreteClassWithDependencies::class)
 
 
-        assertEquals("AbstractClass", dependencies[0].simpleName)
+        assertEquals("io.kup.framework.container.AbstractDependency1", dependencies[0].qualifiedName)
     }
 }

@@ -5,6 +5,7 @@ import io.kup.framework.extensions.instanceOf
 import io.kup.framework.extensions.singletonOf
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class ContainerTest : AnnotationSpec() {
@@ -100,5 +101,25 @@ class ContainerTest : AnnotationSpec() {
         })
 
         container.create().singletonOf<AbstractClass>()
+    }
+
+    @Test
+    fun `should create a new instance using the bind method injecting a concrete class dependency`() {
+        val container = KupContainer()
+
+        container.bind(AbstractDependency1::class) {
+            ConcreteDependency1()
+        }
+
+        container.bind(AbstractClass::class) {
+            ConcreteClassWithDependencies(it.create().instanceOf())
+        }
+
+        val concreteClassWithDependencies = container.create().instanceOf<AbstractClass>() as ConcreteClassWithDependencies
+
+        assertNotNull(concreteClassWithDependencies)
+        assertTrue {
+            concreteClassWithDependencies.abstractDependency1.exist()
+        }
     }
 }

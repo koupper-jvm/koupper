@@ -1,8 +1,9 @@
 package io.kup.framework.extensions
 
+import io.kup.framework.container.Container
 import io.kup.framework.container.KupContainer
 
-inline fun <reified T> KupContainer.instanceOf(): T {
+inline fun <reified T> Container.instanceOf(): T {
     val instance = if (this.getBindings()[T::class] is Function<*>) {
         (this.getBindings()[T::class] as () -> T).invoke()
     } else {
