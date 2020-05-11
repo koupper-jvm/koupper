@@ -5,4 +5,7 @@ class ConcreteClassWithDependencies(val abstractDependency1: AbstractDependency1
         print("ConcreteClassWithDependencies")
     }
 
+    override fun hasInjectedDependencies(): Boolean {
+        return if (this.abstractDependency1 != null) this.abstractDependency1.exist() else false
+    }
 }

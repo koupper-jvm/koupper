@@ -107,8 +107,12 @@ class ContainerTest : AnnotationSpec() {
     fun `should create a new instance using the bind method injecting a concrete class dependency`() {
         val container = KupContainer()
 
+        container.bind(AbstractNestedDependency2::class) {
+            ConcreteNestedDependency2()
+        }
+
         container.bind(AbstractDependency1::class) {
-            ConcreteDependency1()
+            ConcreteDependency1(it.create().instanceOf())
         }
 
         container.bind(AbstractClass::class) {
