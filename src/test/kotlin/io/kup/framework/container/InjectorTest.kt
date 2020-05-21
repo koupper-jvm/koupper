@@ -40,7 +40,7 @@ class InjectorTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should not resolve dependencies for a no binding object in container`() {
+    fun `should not resolve dependencies for unbinding object in container`() {
         val exception = assertFailsWith<ParameterNotInjextedException> {
             injector.resolveDependenciesFor(ConcreteClassWithDependencies::class)
         }
