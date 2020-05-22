@@ -18,7 +18,7 @@ class InjectorTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should resolve dependencies for a certain object`() {
+    fun `should resolve dependencies for a certain object binding in the container`() {
         val container = app
 
         container.bind(AbstractNestedDependency2::class) {

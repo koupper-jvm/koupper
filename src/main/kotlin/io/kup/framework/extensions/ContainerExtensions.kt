@@ -2,7 +2,6 @@ package io.kup.framework.extensions
 
 import io.kup.framework.container.Container
 import io.kup.framework.container.KupContainer
-import io.kup.framework.container.injector
 import kotlin.reflect.KClass
 
 inline fun <reified T> Container.instanceOf(): T {
@@ -21,7 +20,7 @@ inline fun <reified T> Container.instanceOf(): T {
     return instance
 }
 
-fun <T : Any> Container.instanceOf(kClass: KClass<T>): T  {
+fun <T : Any> Container.instanceOf(kClass: KClass<T>): T {
     val instance = if (this.getBindings()[kClass] is Function<*>) {
         (this.getBindings()[kClass] as () -> T).invoke()
     } else {
@@ -47,4 +46,22 @@ inline fun <reified T> KupContainer.singletonOf(): T {
     }
 
     return instance
+}
+
+fun <T> Container.instanceOf(name: String): T {
+    var instance: T? = null
+
+    this.getBindings().forEach lit@{ key, value ->
+        if ((key as KClass<*>).qualifiedName == name || key.simpleName == name ) {
+            instance = if (value is Function<*>) {
+                (value as () -> T).invoke()
+            } else {
+                value as T
+            }
+
+            return@lit
+        }
+    }
+
+    return instance!!
 }
