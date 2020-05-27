@@ -4,6 +4,8 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.createInstance
 import kotlin.reflect.full.primaryConstructor
 
+val app = KupContainer()
+
 class KupContainer : Container {
     private var bindings: MutableMap<Any, Any> = mutableMapOf()
 

@@ -1,5 +1,5 @@
 package io.kup.framework.container
 
-interface AbstractDependency1 : AbstractClass {
+interface AbstractNestedDependency2 {
     fun exist(): Boolean
 }
