@@ -1,12 +1,26 @@
 package io.kup.framework.container
 
+import io.kup.framework.extensions.asKClass
+import io.kup.framework.extensions.isConcrete
+import io.kup.framework.extensions.isNotAnyClass
+import java.io.BufferedReader
+import java.io.DataInputStream
+import java.io.InputStream
+import java.util.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createInstance
-import kotlin.reflect.full.primaryConstructor
 
 val app = KupContainer()
 
-class KupContainer : Container {
+class KupContainer() : Container {
+    private var scope: String = ""
+
+    constructor(scope: String) : this() {
+        this.scope = scope
+
+        this.loadAbstractClassesFromScope()
+    }
+
     private var bindings: MutableMap<Any, Any> = mutableMapOf()
 
     private var singletons: MutableMap<Any, Any> = mutableMapOf()
@@ -52,4 +66,52 @@ class KupContainer : Container {
     override fun getListeners(): MutableMap<Any, Any> {
         return this.listeners
     }
+
+    override fun loadAbstractClassesFromScope() {
+        if (scope.isNotEmpty()) {
+            val abstractClassesList = mutableMapOf<Class<*>, List<KClass<*>>>()
+
+            this.getClasses(this::class.java.classLoader, scope)!!.forEach { kClass ->
+                if (kClass.isConcrete()) {
+                    kClass.supertypes.forEach { superType ->
+                        if (superType.isNotAnyClass()) {
+                            if (abstractClassesList[superType.asKClass().java] != null) {
+                                (abstractClassesList[superType.asKClass().java] as MutableList).add(kClass)
+                            } else {
+                                val concrete = mutableListOf(kClass)
+
+                                abstractClassesList[superType.asKClass().java] = concrete
+                            }
+                        }
+                    }
+                } else {
+                    if (abstractClassesList[kClass.java] == null) {
+                        abstractClassesList[kClass.java] = mutableListOf()
+                    }
+                }
+            }
+
+            this.bindings.putAll(abstractClassesList)
+        }
+    }
+
+    @Throws(Exception::class)
+    fun getClasses(classLoader: ClassLoader, `package`: String): List<KClass<*>>? {
+        val resourceLocation = classLoader.getResource(`package`.replace(".", "/"))
+
+        val inputStream = resourceLocation.content as InputStream
+
+        val classes: MutableList<KClass<*>> = ArrayList()
+
+        val resources = inputStream.bufferedReader().readLines()
+
+        resources.forEach {
+            val kotlinResource = it.substring(0, it.indexOf("."))
+
+            classes.add(Class.forName("$`package`.$kotlinResource").kotlin)
+        }
+
+        return classes
+    }
+
 }

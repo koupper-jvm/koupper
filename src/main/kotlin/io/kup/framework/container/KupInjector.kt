@@ -1,25 +1,25 @@
 package io.kup.framework.container
 
-import io.kup.framework.exceptions.ParameterNotInjextedException
+import io.kup.framework.exceptions.ParameterNotInjectedException
 import io.kup.framework.extensions.instanceOf
 import kotlin.reflect.KClass
 
 val injector: Injector = KupInjector()
 
 class KupInjector : Injector {
-    override fun <T : Any> resolveDependenciesFor(concreteClass: KClass<T>): T {
+    override fun <T : Any> resolveDependenciesFor(container: Container, concreteClass: KClass<T>): T {
         val parametersOfConstructor = arrayListOf<T>()
 
         concreteClass.constructors.forEach { constructor ->
             constructor.parameters.forEach { parameter ->
                 val type = parameter.type.classifier as KClass<T>
 
-                if (app.getBindings()[type] === null) {
-                    throw ParameterNotInjextedException("Type[${type.simpleName}] is not bound in the container")
+                if (container.getBindings()[type] === null && container.getBindings()[type.java] === null) {
+                    throw ParameterNotInjectedException("Type[${type.simpleName}] is not bound in the container")
                 }
 
                 if (type.isAbstract) {
-                    parametersOfConstructor.add(app.create().instanceOf(type))
+                    parametersOfConstructor.add(container.create().instanceOf(type))
                 }
             }
         }

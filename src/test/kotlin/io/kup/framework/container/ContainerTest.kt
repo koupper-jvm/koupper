@@ -1,15 +1,15 @@
 package io.kup.framework.container
 
 import io.kotest.core.spec.style.AnnotationSpec
+import io.kup.framework.container.scope.*
+import io.kup.framework.exceptions.MultipleAbstractImplementationsException
 import io.kup.framework.extensions.instanceOf
 import io.kup.framework.extensions.singletonOf
-import kotlin.test.assertEquals
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class ContainerTest : AnnotationSpec() {
     @Test
-    fun `should bind a concrete class and return new instances for multiple creations`() {
+    fun `should bind a concrete class and return new one instances for multiple creations`() {
         val container = KupContainer()
 
         container.bind(AbstractClass::class) {
@@ -45,7 +45,7 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should bind a singleton class and return the same instance over and over`() {
+    fun `should bind a singleton class and return the same one instance over and over`() {
         val container = KupContainer()
 
         container.singleton(AbstractClass::class) {
@@ -73,7 +73,7 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should listen for a resolved by bind method`() {
+    fun `should listen for a resolved instance by bind method`() {
         val container = KupContainer()
 
         container.bind(AbstractClass::class, ConcreteClass::class)
@@ -88,7 +88,7 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should listen for a resolved by singleton method`() {
+    fun `should listen for a resolved instance by singleton method`() {
         val container = KupContainer()
 
         container.singleton(AbstractClass::class, ConcreteClass::class)
@@ -125,6 +125,40 @@ class ContainerTest : AnnotationSpec() {
 
         assertTrue {
             concreteClass is ConcreteClass
+        }
+    }
+
+    @Test
+    fun `should auto bind an abstract class to existing concrete classes in the specified scope`() {
+        val container = KupContainer("io.kup.framework.container.scope")
+
+        val concreteClass = container.create().instanceOf<SingleAbstract>()
+
+        assertTrue {
+            concreteClass is SingleConcrete
+        }
+    }
+
+    @Test
+    fun `should throw exception if try create a instance of an abstract class with multiple concrete classes`() {
+        val exception = assertFailsWith<MultipleAbstractImplementationsException> {
+            KupContainer("io.kup.framework.container.scope").create().instanceOf<io.kup.framework.container.scope.AbstractClass>()
+        }
+
+        assertTrue {
+            exception.cause is MultipleAbstractImplementationsException
+            "Type[AbstractClass] has multiple instances" == exception.message
+        }
+    }
+
+    @Test
+    fun `should resolver a instance with their dependencies resolved automatically`() {
+        val parentConcreteClass = KupContainer("io.kup.framework.container.scope").create().instanceOf<ParentAbstractClass>()
+
+        assertTrue {
+            parentConcreteClass is ParentConcreteClass
+            (parentConcreteClass as ParentConcreteClass).firstAbstractClass is FirstConcreteClass
+            ((parentConcreteClass).firstAbstractClass as FirstConcreteClass).thirdAbstractClass is ThirdConcreteClass
         }
     }
 }

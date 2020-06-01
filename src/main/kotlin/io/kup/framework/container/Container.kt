@@ -1,5 +1,7 @@
 package io.kup.framework.container
 
+import kotlin.reflect.KClass
+
 interface Container {
     fun <T : Any> bind(abstractClass: T, callback: (container: Container) -> T)
 
@@ -20,4 +22,6 @@ interface Container {
     fun getSingletons(): MutableMap<Any, Any>
 
     fun getListeners(): MutableMap<Any, Any>
+
+    fun loadAbstractClassesFromScope()
 }

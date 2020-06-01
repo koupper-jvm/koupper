@@ -1,7 +1,7 @@
 package io.kup.framework.container
 
 import io.kotest.core.spec.style.AnnotationSpec
-import io.kup.framework.exceptions.ParameterNotInjextedException
+import io.kup.framework.exceptions.ParameterNotInjectedException
 import io.kup.framework.extensions.instanceOf
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -18,7 +18,7 @@ class InjectorTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should resolve dependencies for a certain object binding in the container`() {
+    fun `should inject dependencies for a certain object binding in the container`() {
         val container = app
 
         container.bind(AbstractNestedDependency2::class) {
@@ -31,7 +31,7 @@ class InjectorTest : AnnotationSpec() {
 
         val injector = KupInjector()
 
-        val instance = injector.resolveDependenciesFor(ConcreteClassWithDependencies::class)
+        val instance = injector.resolveDependenciesFor(container, ConcreteClassWithDependencies::class)
 
         assertTrue {
             instance.hasInjectedDependencies()
@@ -40,13 +40,13 @@ class InjectorTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should not resolve dependencies for unbinding object in container`() {
-        val exception = assertFailsWith<ParameterNotInjextedException> {
-            injector.resolveDependenciesFor(ConcreteClassWithDependencies::class)
+    fun `should not inject dependencies for unbinding object in container`() {
+        val exception = assertFailsWith<ParameterNotInjectedException> {
+            injector.resolveDependenciesFor(KupContainer(), ConcreteClassWithDependencies::class)
         }
 
         assertTrue {
-            exception.cause is ParameterNotInjextedException
+            exception.cause is ParameterNotInjectedException
             "Type[AbstractDependency1] is not bound in the container" == exception.message
         }
     }
