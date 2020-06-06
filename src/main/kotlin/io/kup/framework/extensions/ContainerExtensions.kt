@@ -47,7 +47,7 @@ fun <T : Any> createInstance(container: Container, kClass: KClass<T>): T {
             injector.resolveDependenciesFor(container, (container.getBindings()[kClass.java] as ArrayList<*>)[0] as KClass<*>) as T
         }
         else -> {
-            container.getBindings()[kClass] as T
+            injector.resolveDependenciesFor(container, container.getBindings()[kClass] as KClass<T>)
         }
     }
 
@@ -60,15 +60,21 @@ fun <T : Any> createInstance(container: Container, kClass: KClass<T>): T {
     return instance
 }
 
-fun <T> Container.instanceOf(name: String): T {
+fun <T : Any> Container.instanceOf(name: String): T {
     var instance: T? = null
 
     this.getBindings().forEach lit@{ key, value ->
         if ((key as KClass<*>).qualifiedName == name || key.simpleName == name) {
-            instance = if (value is Function<*>) {
-                (value as () -> T).invoke()
-            } else {
-                value as T
+            instance = when (value) {
+                is Function<*> -> {
+                    (value as () -> T).invoke()
+                }
+                is KClass<*> -> {
+                    injector.resolveDependenciesFor(this, value as KClass<T>)
+                }
+                else -> {
+                    value as T
+                }
             }
 
             return@lit

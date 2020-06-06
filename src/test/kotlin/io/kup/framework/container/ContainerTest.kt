@@ -152,13 +152,30 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should resolver a instance with their dependencies resolved automatically`() {
+    fun `should solve a instance with their dependencies resolved automatically`() {
         val parentConcreteClass = KupContainer("io.kup.framework.container.scope").create().instanceOf<ParentAbstractClass>()
 
         assertTrue {
             parentConcreteClass is ParentConcreteClass
             (parentConcreteClass as ParentConcreteClass).firstAbstractClass is FirstConcreteClass
             ((parentConcreteClass).firstAbstractClass as FirstConcreteClass).thirdAbstractClass is ThirdConcreteClass
+        }
+    }
+
+    @Test
+    fun `should bind a concrete class by type and auto solve their nested dependencies`() {
+        val container = KupContainer("io.kup.framework.container.scope")
+
+        val parentConcreteClass = ParentConcreteClass::class
+
+        container.bind(ParentAbstractClass::class, parentConcreteClass)
+
+        val resolvedParentConcreteClass = container.create().instanceOf<ParentAbstractClass>()
+
+        assertTrue {
+            resolvedParentConcreteClass is ParentConcreteClass
+            (resolvedParentConcreteClass as ParentConcreteClass).firstAbstractClass is FirstConcreteClass
+            ((resolvedParentConcreteClass).firstAbstractClass as FirstConcreteClass).thirdAbstractClass is ThirdConcreteClass
         }
     }
 }

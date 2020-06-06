@@ -32,7 +32,7 @@ class KupContainer() : Container {
     }
 
     override fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V) {
-        this.bindings[abstractClass] = { (concreteClass as KClass<*>).createInstance() }
+        this.bindings[abstractClass] = (concreteClass as KClass<*>)
     }
 
     override fun create(): KupContainer {
