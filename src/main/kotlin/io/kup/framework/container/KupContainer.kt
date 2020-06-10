@@ -1,10 +1,8 @@
 package io.kup.framework.container
 
-import io.kup.framework.extensions.asKClass
-import io.kup.framework.extensions.isConcrete
-import io.kup.framework.extensions.isNotAnyClass
-import java.io.BufferedReader
-import java.io.DataInputStream
+import io.kup.framework.container.extensions.asKClass
+import io.kup.framework.container.extensions.isConcrete
+import io.kup.framework.container.extensions.isNotAnyClass
 import java.io.InputStream
 import java.util.*
 import kotlin.reflect.KClass

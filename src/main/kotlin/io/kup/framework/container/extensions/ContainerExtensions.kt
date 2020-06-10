@@ -1,9 +1,9 @@
-package io.kup.framework.extensions
+package io.kup.framework.container.extensions
 
 import io.kup.framework.container.Container
 import io.kup.framework.container.KupContainer
-import io.kup.framework.container.injector
-import io.kup.framework.exceptions.MultipleAbstractImplementationsException
+import io.kup.framework.container.injector.injector
+import io.kup.framework.container.exceptions.MultipleAbstractImplementationsException
 import kotlin.reflect.KClass
 import kotlin.reflect.KType
 

@@ -2,9 +2,9 @@ package io.kup.framework.container
 
 import io.kotest.core.spec.style.AnnotationSpec
 import io.kup.framework.container.scope.*
-import io.kup.framework.exceptions.MultipleAbstractImplementationsException
-import io.kup.framework.extensions.instanceOf
-import io.kup.framework.extensions.singletonOf
+import io.kup.framework.container.exceptions.MultipleAbstractImplementationsException
+import io.kup.framework.container.extensions.instanceOf
+import io.kup.framework.container.extensions.singletonOf
 import kotlin.test.*
 
 class ContainerTest : AnnotationSpec() {

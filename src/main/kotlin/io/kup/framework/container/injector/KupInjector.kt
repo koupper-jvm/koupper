@@ -1,5 +1,6 @@
-package io.kup.framework.container
+package io.kup.framework.container.injector
 
+import io.kup.framework.container.Container
 import io.kup.framework.container.exceptions.ParameterNotInjectedException
 import io.kup.framework.container.extensions.instanceOf
 import kotlin.reflect.KClass

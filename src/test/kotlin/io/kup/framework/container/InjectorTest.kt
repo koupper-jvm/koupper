@@ -1,8 +1,10 @@
 package io.kup.framework.container
 
 import io.kotest.core.spec.style.AnnotationSpec
-import io.kup.framework.exceptions.ParameterNotInjectedException
-import io.kup.framework.extensions.instanceOf
+import io.kup.framework.container.exceptions.ParameterNotInjectedException
+import io.kup.framework.container.extensions.instanceOf
+import io.kup.framework.container.injector.KupInjector
+import io.kup.framework.container.injector.injector
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
