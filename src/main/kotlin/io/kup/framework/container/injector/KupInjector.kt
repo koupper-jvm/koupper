@@ -1,7 +1,7 @@
 package io.kup.framework.container
 
-import io.kup.framework.exceptions.ParameterNotInjectedException
-import io.kup.framework.extensions.instanceOf
+import io.kup.framework.container.exceptions.ParameterNotInjectedException
+import io.kup.framework.container.extensions.instanceOf
 import kotlin.reflect.KClass
 
 val injector: Injector = KupInjector()
