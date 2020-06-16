@@ -8,3 +8,6 @@
  */
 
 rootProject.name = 'kup-framework'
+include 'octopus', 'container', 'console'
+include 'provider'
+

@@ -1,0 +1,12 @@
+application {
+    mainClassName = 'io.kup.console.CommandHandlerKt'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'io.kup.console.CommandHandlerKt'
+    }
+    dependencies {
+        implementation project(':container')
+    }
+}
