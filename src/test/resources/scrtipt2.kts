@@ -1,0 +1,3 @@
+fun printer() {
+    print("hi")
+}
