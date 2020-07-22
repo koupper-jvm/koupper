@@ -1,3 +1,0 @@
-fun printer() {
-    print("hi")
-}

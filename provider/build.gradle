@@ -1,7 +1,3 @@
-plugins {
-    id 'org.jetbrains.kotlin.jvm'
-}
+apply plugin: 'application'
 
-application {
-    mainClassName = 'io.kup.container.KupContainerInitKt'
-}
+mainClassName = 'io.kup.container.KupContainerInitKt'

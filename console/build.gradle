@@ -1,6 +1,6 @@
-application {
-    mainClassName = 'io.kup.console.CommandHandlerKt'
-}
+apply plugin: 'application'
+
+mainClassName = 'io.kup.console.CommandHandlerKt'
 
 jar {
     manifest {

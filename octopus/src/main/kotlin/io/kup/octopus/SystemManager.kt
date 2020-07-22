@@ -19,5 +19,5 @@ val isValidSentence: (String) -> Boolean = {
 }
 
 val isTyped: (String) -> Boolean = {
-    !it.contains("val\\s[a-zA-Z0-9]+:")
+    it.contains("val\\s[a-zA-Z0-9]+:".toRegex())
 }
