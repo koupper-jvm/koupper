@@ -103,7 +103,7 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should create a new instance from a class package name`() {
+    fun `should create a new instance from a full namespace`() {
         val container = KupContainer()
 
         container.bind(AbstractClass::class, ConcreteClass::class)
@@ -116,7 +116,7 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should create a news instance from a class name`() {
+    fun `should create a new instance using its simple class name`() {
         val container = KupContainer()
 
         container.bind(AbstractClass::class, ConcreteClass::class)
@@ -152,7 +152,7 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should solve a instance with their dependencies resolved automatically`() {
+    fun `should solve a instance with its dependencies resolved automatically`() {
         val parentConcreteClass = KupContainer("io.kup.container.scope").create().instanceOf<ParentAbstractClass>()
 
         assertTrue {
@@ -163,7 +163,7 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should bind a concrete class by type and auto solve their nested dependencies`() {
+    fun `should bind a concrete class resolving their nested dependencies using the container`() {
         val container = KupContainer("io.kup.container.scope")
 
         val parentConcreteClass = ParentConcreteClass::class
