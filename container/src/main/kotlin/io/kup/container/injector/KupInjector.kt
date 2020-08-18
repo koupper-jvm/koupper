@@ -1,6 +1,6 @@
 package io.kup.container.injector
 
-import io.kup.container.Container
+import io.kup.container.interfaces.Container
 import io.kup.container.exceptions.ParameterNotInjectedException
 import io.kup.container.extensions.instanceOf
 import kotlin.reflect.KClass

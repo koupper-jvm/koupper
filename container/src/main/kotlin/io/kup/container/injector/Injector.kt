@@ -1,6 +1,6 @@
 package io.kup.container.injector
 
-import io.kup.container.Container
+import io.kup.container.interfaces.Container
 import kotlin.reflect.KClass
 
 interface Injector {

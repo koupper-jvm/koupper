@@ -1,10 +1,14 @@
 package io.kup.container
 
+import io.kup.container.exceptions.MultipleAbstractImplementationsException
+import io.kup.container.exceptions.ParameterNotInjectedException
 import io.kup.container.extensions.asKClass
 import io.kup.container.extensions.isConcrete
 import io.kup.container.extensions.isNotAnyClass
+import io.kup.container.interfaces.Container
 import java.io.InputStream
 import java.util.*
+import kotlin.math.abs
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createInstance
 
@@ -21,19 +25,83 @@ class KupContainer() : Container {
 
     private var bindings: MutableMap<Any, Any> = mutableMapOf()
 
+    private var bindingsMirror: MutableMap<Any, Any> = mutableMapOf()
+
     private var singletons: MutableMap<Any, Any> = mutableMapOf()
 
     private var listeners: MutableMap<Any, Any> = mutableMapOf()
 
-    override fun <T : Any> bind(abstractClass: T, callback: (container: Container) -> T) {
-        this.bindings[abstractClass] = { callback(this) }
+    override fun <T : Any> bind(abstractClass: T, callback: (container: Container) -> T, tag: String) {
+        if (this.bindings[abstractClass] != null && tag == "undefined") {
+            throw MultipleAbstractImplementationsException("Type[${(abstractClass as KClass<*>).simpleName}] has multiple instances, use tag for exclude the instance.")
+        }
+
+        if (this.bindings[abstractClass] != null && tag != "undefined") {
+            val value = mutableMapOf(
+                    tag to { callback(this) }
+            )
+            value.putAll(this.bindings[abstractClass] as Map<out String, () -> T>)
+
+            this.bindings[abstractClass] = value
+        }
+
+        if (this.bindings[abstractClass] == null && tag == "undefined") {
+            this.bindings[abstractClass] = { callback(this) }
+        }
+
+        if (this.bindings[abstractClass] == null && tag != "undefined") {
+            this.bindings[abstractClass] = mapOf(
+                    tag to { callback(this) }
+            )
+        }
+
+        this.bindingsMirror.putAll(this.bindings)
     }
 
-    override fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V) {
-        this.bindings[abstractClass] = (concreteClass as KClass<*>)
+    override fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V, tag: String) {
+        if (this.bindings[abstractClass] != null && tag == "undefined") {
+            throw MultipleAbstractImplementationsException("Type[${(abstractClass as KClass<*>).simpleName}] has multiple instances, use tag for exclude the instance.")
+        }
+
+        if (this.bindings[abstractClass] != null && tag != "undefined") {
+            val value = mutableMapOf(
+                    tag to concreteClass as KClass<*>
+            )
+            value.putAll(this.bindings[abstractClass] as Map<out String, KClass<*>>)
+
+            this.bindings[abstractClass] = value
+        }
+
+        if (this.bindings[abstractClass] == null && tag == "undefined") {
+            this.bindings[abstractClass] = concreteClass as KClass<*>
+        }
+
+        if (this.bindings[abstractClass] == null && tag != "undefined") {
+            this.bindings[abstractClass] = mapOf(
+                    tag to concreteClass as KClass<*>
+            )
+        }
+
+        this.bindingsMirror.putAll(this.bindings)
     }
 
-    override fun create(): KupContainer {
+    override fun create(tagName: String): KupContainer {
+        if (tagName != "undefined") {
+            val filteredBinding = mutableMapOf<Any, Any>()
+
+            this.bindingsMirror.forEach { binding ->
+                if (binding.value is Map<*, *>) {
+                    val value = binding.value as Map<String, Any>
+
+                    filteredBinding[binding.key] = value[tagName]!!
+                } else {
+                    filteredBinding[binding.key] = binding.value
+                }
+            }
+
+            this.bindings = filteredBinding
+        }
+
         return this
     }
 

@@ -12,9 +12,9 @@ class ContainerTest : AnnotationSpec() {
     fun `should bind a concrete class and return new one instances for multiple creations`() {
         val container = KupContainer()
 
-        container.bind(AbstractClass::class) {
+        container.bind(AbstractClass::class, {
             ConcreteClass()
-        }
+        })
 
         val concreteClassOfContainer = container.create().instanceOf<AbstractClass>()
 
@@ -73,7 +73,7 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should listen for a resolved instance by bind method`() {
+    fun `should listen for a resolved instance using bind method`() {
         val container = KupContainer()
 
         container.bind(AbstractClass::class, ConcreteClass::class)
@@ -88,7 +88,7 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should listen for a resolved instance by singleton method`() {
+    fun `should listen for a resolved instance using singleton method`() {
         val container = KupContainer()
 
         container.singleton(AbstractClass::class, ConcreteClass::class)
@@ -176,6 +176,44 @@ class ContainerTest : AnnotationSpec() {
             resolvedParentConcreteClass is ParentConcreteClass
             (resolvedParentConcreteClass as ParentConcreteClass).firstAbstractClass is FirstConcreteClass
             ((resolvedParentConcreteClass).firstAbstractClass as FirstConcreteClass).thirdAbstractClass is ThirdConcreteClass
+        }
+    }
+
+    @Test
+    fun `should throw exception if multiple instances try to be binding to same abstract class`() {
+        val container = KupContainer()
+
+        container.bind(AbstractClass::class, {
+            ConcreteClass()
+        })
+
+        val exception = assertFailsWith<MultipleAbstractImplementationsException> {
+            container.bind(AbstractClass::class, {
+                ConcreteClass2()
+            })
+        }
+
+        assertTrue {
+            exception.cause is MultipleAbstractImplementationsException
+            "Type[AbstractClass] has multiple instances, use tag for exclude the instance." == exception.message
+        }
+    }
+
+    @Test
+    fun `should bind multiple instances to same abstract class`() {
+        val container = KupContainer()
+
+        container.bind(AbstractClass::class, {
+            ConcreteClass()
+        }, "ConcreteClass")
+
+        container.bind(AbstractClass::class, {
+            ConcreteClass2()
+        }, "ConcreteClass2")
+
+        assertTrue {
+            container.create(tagName = "ConcreteClass").instanceOf<AbstractClass>() is ConcreteClass
+            container.create(tagName = "ConcreteClass2").instanceOf<AbstractClass>() is ConcreteClass2
         }
     }
 }

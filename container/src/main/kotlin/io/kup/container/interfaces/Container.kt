@@ -1,11 +1,11 @@
-package io.kup.container
+package io.kup.container.interfaces
 
 interface Container {
-    fun <T : Any> bind(abstractClass: T, callback: (container: Container) -> T)
+    fun <T : Any> bind(abstractClass: T, callback: (container: Container) -> T, tag: String = "undefined")
 
-    fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V)
+    fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V, tag: String = "undefined")
 
-    fun create(): Container
+    fun create(tagName: String = "undefined"): Container
 
     fun <T : Any> singleton(abstractClass: T, callback: () -> T)
 

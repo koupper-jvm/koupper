@@ -1,6 +1,6 @@
 package io.kup.container.extensions
 
-import io.kup.container.Container
+import io.kup.container.interfaces.Container
 import io.kup.container.KupContainer
 import io.kup.container.injector.injector
 import io.kup.container.exceptions.MultipleAbstractImplementationsException
@@ -32,19 +32,19 @@ fun <T : Any> createInstance(container: Container, kClass: KClass<T>): T {
         container.getBindings()[kClass] is Function<*> -> {
             (container.getBindings()[kClass] as () -> T).invoke()
         }
-        container.getBindings()[kClass] is ArrayList<*> -> {
-            if (container.getBindings()[kClass] != null && (container.getBindings()[kClass] as ArrayList<*>).size > 1) {
+        container.getBindings()[kClass] is List<*> -> {
+            if (container.getBindings()[kClass] != null && (container.getBindings()[kClass] as List<*>).size > 1) {
                 throw MultipleAbstractImplementationsException("Type[${kClass.simpleName}] has multiple instances")
             }
 
-            injector.resolveDependenciesFor(container, (container.getBindings()[kClass] as ArrayList<*>)[0] as KClass<*>) as T
+            injector.resolveDependenciesFor(container, (container.getBindings()[kClass] as List<*>)[0] as KClass<*>) as T
         }
-        container.getBindings()[kClass.java] is ArrayList<*> -> {
-            if (container.getBindings()[kClass.java] != null && (container.getBindings()[kClass.java] as ArrayList<*>).size > 1) {
+        container.getBindings()[kClass.java] is List<*> -> {
+            if (container.getBindings()[kClass.java] != null && (container.getBindings()[kClass.java] as List<*>).size > 1) {
                 throw MultipleAbstractImplementationsException("Type[${kClass.simpleName}] has multiple instances")
             }
 
-            injector.resolveDependenciesFor(container, (container.getBindings()[kClass.java] as ArrayList<*>)[0] as KClass<*>) as T
+            injector.resolveDependenciesFor(container, (container.getBindings()[kClass.java] as List<*>)[0] as KClass<*>) as T
         }
         else -> {
             injector.resolveDependenciesFor(container, container.getBindings()[kClass] as KClass<T>)

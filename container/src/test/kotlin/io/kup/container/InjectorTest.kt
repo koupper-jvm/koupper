@@ -23,13 +23,13 @@ class InjectorTest : AnnotationSpec() {
     fun `should inject dependencies for a certain object binding in the container`() {
         val container = app
 
-        container.bind(AbstractNestedDependency2::class) {
+        container.bind(AbstractNestedDependency2::class, {
             ConcreteNestedDependency2()
-        }
+        })
 
-        container.bind(AbstractDependency1::class) {
+        container.bind(AbstractDependency1::class, {
             ConcreteDependency1(it.create().instanceOf())
-        }
+        })
 
         val injector = KupInjector()
 

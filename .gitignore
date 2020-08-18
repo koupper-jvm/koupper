@@ -21,3 +21,7 @@ gradle-app.setting
 **/build/
 
 # End of https://www.gitignore.io/api/gradle
+
+providers/src/main/kotlin/zigocapital/**
+providers/src/test/kotlin/zigocapital/**
+.env_notifications
