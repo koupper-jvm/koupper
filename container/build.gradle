@@ -4,12 +4,12 @@ plugins {
 }
 
 application {
-    mainClassName = 'io.kup.container.KupContainerInitKt'
+    mainClassName = 'com.koupper.container.KupContainerInitKt'
 }
 
 jar {
     manifest {
-        attributes 'Main-Class': 'io.kup.container.KupContainerInitKt'
+        attributes 'Main-Class': 'com.koupper.container.KupContainerInitKt'
     }
 }
 

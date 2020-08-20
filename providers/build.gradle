@@ -4,11 +4,11 @@ plugins {
 }
 
 application {
-    mainClassName = 'io.kup.octopus.ServiceProviderManagerKt'
+    mainClassName = 'com.koupper.providers.ServiceProviderManagerKt'
 }
 
 jar {
     manifest {
-        attributes 'Main-Class': 'io.kup.providers.ServiceProviderManagerKt'
+        attributes 'Main-Class': 'com.koupper.providers.ServiceProviderManagerKt'
     }
 }

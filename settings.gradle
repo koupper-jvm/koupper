@@ -7,5 +7,5 @@
  * in the user manual at https://docs.gradle.org/5.5.1/userguide/multi_project_builds.html
  */
 
-rootProject.name = 'kup-framework'
-include 'octopus', 'container', 'providers', 'assertions'
+rootProject.name = 'koupper'
+include 'octopus', 'container', 'providers', 'assertions', 'console', 'bootstrap'

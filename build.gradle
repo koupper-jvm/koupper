@@ -11,7 +11,7 @@ allprojects {
 }
 
 subprojects {
-    group = 'io.kup'
+    group = 'com.koupper'
     version = '1.0'
 
     test {

@@ -4,12 +4,12 @@ plugins {
 }
 
 application {
-    mainClassName = 'io.kup.octopus.OctopusKt'
+    mainClassName = 'com.koupper.octopus.OctopusKt'
 }
 
 jar {
     manifest {
-        attributes 'Main-Class': 'io.kup.octopus.OctopusKt'
+        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
     }
     from {
         configurations.runtimeClasspath.collect {
