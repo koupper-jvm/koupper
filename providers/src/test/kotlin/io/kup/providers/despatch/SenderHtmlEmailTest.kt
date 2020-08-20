@@ -1,6 +1,7 @@
 package io.kup.providers.despatch
 
 import io.kotest.core.spec.style.AnnotationSpec
+import io.kup.providers.logger.Logger
 import io.mockk.*
 import kotlin.test.assertTrue
 
@@ -48,6 +49,21 @@ class SenderHtmlEmailTest : AnnotationSpec() {
             properties["mail.smtp.port"]?.equals(2525)
             properties["mail.smtp.auth"]?.equals("true")
             properties["mail.smtp.starttls.enable"]?.equals("true")!!
+        }
+    }
+
+    @Test
+    fun `should invoke the start method for the logger object` () {
+        val loggerMock = mockkClass(Logger::class)
+
+        val isTracked = SenderHtmlEmail().trackUsing(loggerMock)
+
+        assertTrue {
+            isTracked
+        }
+
+        verify {
+            loggerMock.log()
         }
     }
 }

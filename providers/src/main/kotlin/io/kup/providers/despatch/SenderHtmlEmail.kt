@@ -1,5 +1,6 @@
 package io.kup.providers.despatch
 
+import io.kup.providers.logger.Logger
 import io.kup.providers.parsing.TextParserEnvPropertiesTemplate
 import io.kup.providers.parsing.extensions.splitKeyValue
 import java.util.*
@@ -46,6 +47,12 @@ class SenderHtmlEmail() : Sender {
         val message = this.buildMessage()
 
         Transport.send(message)
+
+        return true
+    }
+
+    override fun trackUsing(logger: Logger): Boolean {
+        logger.log()
 
         return true
     }
