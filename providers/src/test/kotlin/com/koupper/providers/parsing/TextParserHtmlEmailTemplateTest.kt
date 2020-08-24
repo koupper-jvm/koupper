@@ -14,7 +14,7 @@ class TextParserHtmlEmailTemplateTest : AnnotationSpec() {
                         "name" to "Jacob",
                         "email" to "jacob.gacosta@gmail.com"
                 ),
-                htmlEmailTemplate.readFromPath("/Users/jacobacosta/Code/kup-framework/octopus/src/main/resources/notifications/template.html")
+                htmlEmailTemplate.readFromPath("template.html")
         )
 
         assertTrue {

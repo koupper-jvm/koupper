@@ -60,13 +60,13 @@ class OctopusTest : AnnotationSpec() {
 
         val octopus = Octopus(containerImplementation)
 
-        octopus.registerBuildInBindingsInContainer()
+        octopus.registerBuildInServicesProvidersInContainer()
 
         octopus.registerExternalServiceProviders(listOf(
                 ZigoServiceProvider()
         ))
 
-        octopus.runScriptFile("/Users/jacobacosta/Code/koupper/octopus/src/main/resources/example.kts") { result: Container ->
+        octopus.runScriptFile("example.kts") { result: Container ->
             assertEquals(containerImplementation, result)
         }
     }
@@ -94,7 +94,7 @@ class OctopusTest : AnnotationSpec() {
 
         val octopus = Octopus(containerImplementation)
 
-        octopus.registerBuildInBindingsInContainer().forEach { (abstractClass, value) ->
+        octopus.registerBuildInServicesProvidersInContainer().forEach { (abstractClass, value) ->
             if (value is Map<*, *>) {
                 value.forEach { (key, value) ->
                     assertTrue {

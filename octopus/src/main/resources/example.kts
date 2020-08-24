@@ -13,11 +13,11 @@ val applicationFundedNotification: (Container) -> Container = { container ->
 
     val htmlParser = container.create("TextParserHtmlEmailTemplate").instanceOf<TextParser>()
 
-    val htmlLayout = htmlParser.readFromPath("/Users/jacobacosta/Code/koupper/octopus/src/main/resources/notifications/template.html")
+    val htmlLayout = htmlParser.readFromPath("template.html")
 
     val htmlEmailSender = container.create()
             .instanceOf<Sender>()
-            .configUsing("/Users/jacobacosta/Code/koupper/octopus/src/main/resources/notifications/.env_notifications")
+            .configUsing(".env_notifications")
 
     val dbLogger = container
             .create().instanceOf<Logger>()

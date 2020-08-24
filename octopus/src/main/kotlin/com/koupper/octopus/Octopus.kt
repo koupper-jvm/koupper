@@ -1,6 +1,6 @@
 package com.koupper.octopus
 
-import com.koupper.container.KupContainer
+import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.exceptions.InvalidScriptException
 import com.koupper.providers.ServiceProvider
@@ -64,7 +64,7 @@ class Octopus(private var container: Container) : ProcessManager {
         return this.registeredServiceProviders
     }
 
-    fun registerBuildInBindingsInContainer(): Map<KClass<*>, Any> {
+    fun registerBuildInServicesProvidersInContainer(): Map<KClass<*>, Any> {
         this.availableServiceProviders().forEach { provider ->
             ((provider).constructors.elementAt(0).call() as ServiceProvider).up()
         }
@@ -79,6 +79,16 @@ class Octopus(private var container: Container) : ProcessManager {
     }
 }
 
-fun main() {
-    Octopus(KupContainer())
+fun main(args: Array<String>) {
+    val containerImplementation = app
+
+    val octopus = Octopus(containerImplementation)
+
+    octopus.registerBuildInServicesProvidersInContainer()
+
+    args.forEach {
+        octopus.runScriptFile(it) { result: Container ->
+            print(result)
+        }
+    }
 }

@@ -10,7 +10,7 @@ class DBLoggerTest : AnnotationSpec() {
         class TestDBLoggerConfig() : LoggerConfiguration {
             override fun setup(): Map<String, Any> {
                 return mapOf(
-                        "url" to "jdbc:postgresql://localhost:5432/zigocapital?user=jacobacosta&password=mimamamemima",
+                        "url" to "jdbc:postgresql://localhost:5432/yourdatabase?user=youruser&password=yourpassword",
                         "tableName" to "user_notifications",
                         "params" to mapOf(
                                 "user_id" to 31,

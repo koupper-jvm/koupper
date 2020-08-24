@@ -40,7 +40,7 @@ class SenderHtmlEmailTest : AnnotationSpec() {
 
     @Test
     fun `should set the properties using a file`() {
-        val htmlEmailSender = SenderHtmlEmail().configUsing("/Users/jacobacosta/Code/kup-framework/octopus/src/main/resources/notifications/notifications.env") as SenderHtmlEmail
+        val htmlEmailSender = SenderHtmlEmail().configUsing("notifications.env") as SenderHtmlEmail
 
         val properties = htmlEmailSender.properties
 
