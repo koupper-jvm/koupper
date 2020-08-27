@@ -7,7 +7,6 @@ import java.sql.Statement
 
 class DBPSQLConnector(urlConnection: String, maxPoolSize: Int) : DBConnector {
     private var pool: HikariDBPool
-    private var pool2: JasyncDBPool
 
     init {
         val config = Json.obj(
@@ -17,10 +16,7 @@ class DBPSQLConnector(urlConnection: String, maxPoolSize: Int) : DBConnector {
 
         pool = HikariDBPool(config)
         pool.setInsertStatementMode(Statement.RETURN_GENERATED_KEYS)
-        pool2 = JasyncDBPool(config)
     }
 
-    suspend fun session(): DBSession = HikariDBSession(pool, pool.createConnection())
-
-    suspend fun session2(): DBSession = JasyncDBSession(pool2, pool2.createConnection())
+    override suspend fun session(): DBSession = HikariDBSession(pool, pool.createConnection())
 }

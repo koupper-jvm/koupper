@@ -16,7 +16,7 @@ class KupInjector : Injector {
                 val type = parameter.type.classifier as KClass<T>
 
                 if (container.getBindings()[type] === null && container.getBindings()[type.java] === null) {
-                    throw ParameterNotInjectedException("Type[${type.simpleName}] is not bound in the container")
+                    throw ParameterNotInjectedException("Type[${type.simpleName}] is not bound in the container.")
                 }
 
                 if (type.isAbstract) {

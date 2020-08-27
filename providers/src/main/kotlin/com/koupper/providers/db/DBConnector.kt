@@ -1,5 +1,7 @@
 package com.koupper.providers.db
 
-interface DBConnector {
+import io.zeko.db.sql.connections.DBSession
 
+interface DBConnector {
+    suspend fun session(): DBSession
 }
