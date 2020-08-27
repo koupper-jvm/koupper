@@ -2,6 +2,7 @@ package com.koupper.container.extensions
 
 import com.koupper.container.interfaces.Container
 import com.koupper.container.KupContainer
+import com.koupper.container.exceptions.BindingException
 import com.koupper.container.injector.injector
 import com.koupper.container.exceptions.MultipleAbstractImplementationsException
 import kotlin.reflect.KClass
@@ -45,6 +46,9 @@ fun <T : Any> createInstance(container: Container, kClass: KClass<T>): T {
             }
 
             injector.resolveDependenciesFor(container, (container.getBindings()[kClass.java] as List<*>)[0] as KClass<*>) as T
+        }
+        container.getBindings()[kClass] == null -> {
+            throw BindingException("Type[$kClass] is not bound in the container")
         }
         else -> {
             injector.resolveDependenciesFor(container, container.getBindings()[kClass] as KClass<T>)

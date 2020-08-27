@@ -1,5 +1,6 @@
 package com.koupper.container
 
+import com.koupper.container.exceptions.BindingException
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.scope.*
 import com.koupper.container.exceptions.MultipleAbstractImplementationsException
@@ -214,6 +215,18 @@ class ContainerTest : AnnotationSpec() {
         assertTrue {
             container.create(tagName = "ConcreteClass").instanceOf<AbstractClass>() is ConcreteClass
             container.create(tagName = "ConcreteClass2").instanceOf<AbstractClass>() is ConcreteClass2
+        }
+    }
+
+    @Test
+    fun `should throw exception if try create a instance of an unbinding class`() {
+        val exception = assertFailsWith<BindingException> {
+            KupContainer().create().instanceOf<AbstractClass>()
+        }
+
+        assertTrue {
+            exception.cause is BindingException
+            "Type[class com.koupper.container.AbstractClass] is not bound in the container" == exception.message
         }
     }
 }

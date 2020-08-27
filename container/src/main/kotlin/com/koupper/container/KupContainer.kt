@@ -93,7 +93,11 @@ class KupContainer() : Container {
                 if (binding.value is Map<*, *>) {
                     val value = binding.value as Map<String, Any>
 
-                    filteredBinding[binding.key] = value[tagName]!!
+                    value.forEach { (k, v) ->
+                        if (k == tagName) {
+                            filteredBinding[binding.key] = value[tagName]!!
+                        }
+                    }
                 } else {
                     filteredBinding[binding.key] = binding.value
                 }
