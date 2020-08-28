@@ -49,7 +49,7 @@ class InjectorTest : AnnotationSpec() {
 
         assertTrue {
             exception.cause is ParameterNotInjectedException
-            "Type[AbstractDependency1] is not bound in the container" == exception.message
+            "Type[AbstractDependency1] is not bound in the container." == exception.message
         }
     }
 }
