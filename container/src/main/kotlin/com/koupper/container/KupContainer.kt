@@ -43,19 +43,31 @@ class KupContainer() : Container {
             value.putAll(this.bindings[abstractClass] as Map<out String, () -> T>)
 
             this.bindings[abstractClass] = value
+
+            this.bindingsMirror[abstractClass] = value
+
+            return
         }
 
         if (this.bindings[abstractClass] == null && tag == "undefined") {
             this.bindings[abstractClass] = { callback(this) }
+
+            this.bindingsMirror[abstractClass] = { callback(this) }
+
+            return
         }
 
         if (this.bindings[abstractClass] == null && tag != "undefined") {
             this.bindings[abstractClass] = mapOf(
                     tag to { callback(this) }
             )
-        }
 
-        this.bindingsMirror.putAll(this.bindings)
+            this.bindingsMirror[abstractClass] = mapOf(
+                    tag to { callback(this) }
+            )
+
+            return
+        }
     }
 
     override fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V, tag: String) {
@@ -70,19 +82,31 @@ class KupContainer() : Container {
             value.putAll(this.bindings[abstractClass] as Map<out String, KClass<*>>)
 
             this.bindings[abstractClass] = value
+
+            this.bindingsMirror[abstractClass] = value
+
+            return
         }
 
         if (this.bindings[abstractClass] == null && tag == "undefined") {
             this.bindings[abstractClass] = concreteClass as KClass<*>
+
+            this.bindingsMirror[abstractClass] = concreteClass as KClass<*>
+
+            return
         }
 
         if (this.bindings[abstractClass] == null && tag != "undefined") {
             this.bindings[abstractClass] = mapOf(
                     tag to concreteClass as KClass<*>
             )
-        }
 
-        this.bindingsMirror.putAll(this.bindings)
+            this.bindingsMirror[abstractClass] = mapOf(
+                    tag to concreteClass as KClass<*>
+            )
+
+            return
+        }
     }
 
     override fun create(tagName: String): KupContainer {
