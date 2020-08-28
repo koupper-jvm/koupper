@@ -9,9 +9,9 @@ import kotlin.reflect.KClass
 class ServiceProviderManager {
     fun listProviders(): List<KClass<*>> {
         return listOf(
+                TextParserServiceProvider::class,
                 DBServiceProvider::class,
                 SenderServiceProvider::class,
-                TextParserServiceProvider::class,
                 LoggerServiceProvider::class
         )
     }
