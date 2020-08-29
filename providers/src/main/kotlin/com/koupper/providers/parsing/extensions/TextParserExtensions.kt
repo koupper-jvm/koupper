@@ -6,11 +6,13 @@ fun TextParser.splitKeyValue(delimiter: Regex): Map<String?, String?> {
     val properties = mutableMapOf<String?, String?>()
 
     this.getText().lines().forEach { line ->
-        val key = line.split(delimiter)[0]
+        if (line.isNotEmpty()) {
+            val key = line.split(delimiter)[0]
 
-        val value = line.split(delimiter)[1]
+            val value = line.split(delimiter)[1]
 
-        properties[key] = value
+            properties[key] = value
+        }
     }
 
     return properties
