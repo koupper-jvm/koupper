@@ -13,7 +13,7 @@ class TextParserHtmlEmailTemplate : TextParser {
     }
 
     override fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder {
-        data.forEach { key, value ->
+        data.forEach { (key, value) ->
             if (content.contains("\\{\\{\\s*\\$${key}\\s*\\}\\}".toRegex())) {
                 val parsedVariable = content.replace("\\{\\{\\s*\\$${key}\\s*\\}\\}".toRegex(), value.toString())
 
