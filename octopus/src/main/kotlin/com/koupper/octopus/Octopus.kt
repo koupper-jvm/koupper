@@ -9,7 +9,7 @@ import java.io.File
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 
-class Octopus(private var container: Container) : ProcessManager {
+class Octopus(private var container: Container, private var config: Config) : ProcessManager {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
 
     override fun <T> run(sentence: String, result: (value: T) -> Unit) {
@@ -22,7 +22,7 @@ class Octopus(private var container: Container) : ProcessManager {
 
             val firstSpaceInSentence = sentence.indexOf(" ")
 
-            if (isTyped(sentence)) {
+            if (isContainerType(sentence)) {
                 if (dependesOfContainer(sentence)) {
                     eval("import com.koupper.container.interfaces.Container")
 
@@ -40,6 +40,20 @@ class Octopus(private var container: Container) : ProcessManager {
                 } else {
 
                 }
+            } else if (isConFigType(sentence)) {
+                eval("import com.koupper.octopus.Config")
+
+                eval(sentence)
+
+                val endOfVariableNameInSentence = sentence.indexOf(":")
+
+                val startOfSentence = sentence.indexOf("val")
+
+                val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
+
+                val targetCallback = eval(valName) as (Config) -> Config
+
+                result(targetCallback.invoke(config) as T)
             } else {
                 eval(sentence)
 
@@ -54,6 +68,14 @@ class Octopus(private var container: Container) : ProcessManager {
 
     override fun <T> runScriptFile(scriptPath: String, result: (value: T) -> Unit) {
         val scriptContent = File(scriptPath).readText(Charsets.UTF_8)
+
+        if ("init.kt" in  scriptPath) {
+            this.run(scriptContent) { config: Config ->
+                result(config as T)
+            }
+
+            return
+        }
 
         this.run(scriptContent) { container: Container ->
             result(container as T)
@@ -82,13 +104,19 @@ class Octopus(private var container: Container) : ProcessManager {
 fun main(args: Array<String>) {
     val containerImplementation = app
 
-    val octopus = Octopus(containerImplementation)
+    val config = Config()
+
+    val octopus = Octopus(containerImplementation, config)
 
     octopus.registerBuildInServicesProvidersInContainer()
 
-    args.forEach {
-        octopus.runScriptFile(it) { result: Container ->
-            print(result)
+    octopus.runScriptFile("/Users/jacobacosta/Code/koupper/octopus/src/test/resources/init.kts") { config : Config ->
+        val listScripts = config.listScripts()
+
+        listScripts.forEach {
+            octopus.runScriptFile(it) { result: Container ->
+                print(result)
+            }
         }
     }
 }

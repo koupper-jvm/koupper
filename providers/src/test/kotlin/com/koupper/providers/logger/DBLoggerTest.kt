@@ -3,8 +3,9 @@ package com.koupper.providers.logger
 import io.kotest.core.spec.style.AnnotationSpec
 
 class DBLoggerTest : AnnotationSpec() {
+    @Ignore
     @Test
-    fun `should build a functional db logger object`() {
+    fun `should build a functional db logger`() {
         val dbLogger = DBLogger()
 
         class TestDBLoggerConfig() : LoggerConfiguration {

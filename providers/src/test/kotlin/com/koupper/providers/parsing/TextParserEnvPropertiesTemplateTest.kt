@@ -5,11 +5,12 @@ import com.koupper.providers.parsing.extensions.splitKeyValue
 import kotlin.test.assertTrue
 
 class TextParserEnvPropertiesTemplateTest : AnnotationSpec() {
+    @Ignore
     @Test
-    fun `should returns a map of env properties`() {
+    fun `should returns a map of env properties from env file`() {
         val parseEnv = TextParserEnvPropertiesTemplate()
 
-        parseEnv.readFromPath("/.env_notifications")
+        parseEnv.readFromPath(".your_env_file")
 
         val properties: Map<String?, String?> = parseEnv.splitKeyValue("=".toRegex())
 

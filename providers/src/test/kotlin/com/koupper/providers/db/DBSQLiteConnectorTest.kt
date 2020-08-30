@@ -15,14 +15,15 @@ class DBSQLiteConnectorTest : AnnotationSpec() {
         Dispatchers.setMain(mainThreadSurrogate)
     }
 
+    @Ignore
     @Test
-    fun `should execute the sql`() = runBlocking {
+    fun `should establish a connection to SQLite database`() = runBlocking {
         launch(Dispatchers.Main) {
-            val connector = DBSQLiteConnector("jdbc:sqlite:koupper-scripts-log.db")
+            val connector = DBSQLiteConnector("jdbc:sqlite:your-database-name.db")
 
             // Because the HikariDBSession has not a `create table` method or a raw query execution way
             connector.session().once { conn ->
-                conn.update("create table person (id integer, name string)", emptyList())
+                conn.update("create table yourTable(id integer, field string)", emptyList())
             }
         }
     }

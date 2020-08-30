@@ -54,9 +54,10 @@ class OctopusTest : AnnotationSpec() {
         }
     }
 
+    @Ignore
     @Test
     fun `should read script from file`() {
-        val containerImplementation = app
+        val containerImplementation = KupContainer()
 
         val octopus = Octopus(containerImplementation)
 
@@ -66,7 +67,7 @@ class OctopusTest : AnnotationSpec() {
                 ZigoServiceProvider()
         ))
 
-        octopus.runScriptFile("example.kts") { result: Container ->
+        octopus.runScriptFile("./example.kts") { result: Container ->
             assertEquals(containerImplementation, result)
         }
     }
@@ -89,7 +90,7 @@ class OctopusTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should bind the available service providers to container`() {
+    fun `should bind the available service providers in container`() {
         val containerImplementation = KupContainer()
 
         val octopus = Octopus(containerImplementation)
@@ -108,7 +109,5 @@ class OctopusTest : AnnotationSpec() {
                 }
             }
         }
-
-        app.getBindings().clear()
     }
 }

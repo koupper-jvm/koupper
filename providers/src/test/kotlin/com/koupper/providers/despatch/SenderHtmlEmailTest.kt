@@ -38,9 +38,10 @@ class SenderHtmlEmailTest : AnnotationSpec() {
         }
     }
 
+    @Ignore
     @Test
-    fun `should set the properties using a file`() {
-        val htmlEmailSender = SenderHtmlEmail().configUsing("notifications.env") as SenderHtmlEmail
+    fun `should set the sender html email properties using a file`() {
+        val htmlEmailSender = SenderHtmlEmail().configUsing(".your_env_properties") as SenderHtmlEmail
 
         val properties = htmlEmailSender.properties
 
@@ -53,8 +54,12 @@ class SenderHtmlEmailTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should invoke the start method for the logger object` () {
+    fun `should invoke the log method for the logger object` () {
         val loggerMock = mockkClass(Logger::class)
+
+        every {
+            loggerMock.log()
+        } just Runs
 
         val isTracked = SenderHtmlEmail().trackUsing(loggerMock)
 
@@ -62,8 +67,6 @@ class SenderHtmlEmailTest : AnnotationSpec() {
             isTracked
         }
 
-        verify {
-            loggerMock.log()
-        }
+        verify { loggerMock.log() }
     }
 }

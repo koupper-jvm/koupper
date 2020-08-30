@@ -20,24 +20,25 @@ class DBPSQLConnectorTest : AnnotationSpec() {
         Dispatchers.setMain(mainThreadSurrogate)
     }
 
+    @Ignore
     @Test
-    fun `should generate the sql sentence`() = runBlocking {
+    fun `should establish a connection to PSQL database`() = runBlocking {
         launch(Dispatchers.Main) {  // Will be launched in the mainThreadSurrogate dispatcher
-            val sql = Query().fields("*").from("users").where("email" eq "jacob.gacosta@gmail.com").toSql()
+            val sql = Query().fields("*").from("someTable").where("field" eq "value").toSql()
 
             val connector = DBPSQLConnector("jdbc:postgresql://localhost:5432/yourdatabase?user=youruser&password=yourpassword", 30)
 
             lateinit var rows: List<User>
 
             connector.session().once { conn ->
-                rows = conn.queryPrepared(sql, listOf("jacob.gacosta@gmail.com"), { User(it) }) as List<User>
+                rows = conn.queryPrepared(sql, listOf("email@domain.com"), { User(it) }) as List<User>
             }
 
             assertEquals(1, rows.size)
             rows.forEach {
                 assertTrue {
-                    it.email.equals("jacob.gacosta@gmail.com")
-                    it.firstName.equals("Jacob")
+                    it.email.equals("email@domain.com")
+                    it.firstName.equals("YourName")
                 }
             }
         }
