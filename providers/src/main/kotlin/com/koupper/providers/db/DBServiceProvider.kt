@@ -1,7 +1,6 @@
 package com.koupper.providers.db
 
 import com.koupper.container.app
-import com.koupper.container.extensions.instanceOf
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.parsing.TextParser
 import com.koupper.providers.parsing.extensions.splitKeyValue
@@ -13,7 +12,7 @@ class DBServiceProvider : ServiceProvider() {
     override fun up() {
         this.currentDirectory = System.getProperty("user.dir")
 
-        this.parser = app.create("TextParserEnvPropertiesTemplate").instanceOf()
+        this.parser = app.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
 
         this.registerPostgres()
 

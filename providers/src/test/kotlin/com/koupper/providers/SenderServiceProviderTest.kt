@@ -2,7 +2,6 @@ package com.koupper.providers
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.app
-import com.koupper.container.extensions.instanceOf
 import com.koupper.providers.despatch.Sender
 import com.koupper.providers.despatch.SenderHtmlEmail
 import com.koupper.providers.despatch.SenderServiceProvider
@@ -14,7 +13,7 @@ class SenderServiceProviderTest : AnnotationSpec() {
         SenderServiceProvider().up()
 
         assertTrue {
-            app.create().instanceOf<Sender>() is SenderHtmlEmail
+            app.createInstanceOf(Sender::class) is SenderHtmlEmail
         }
     }
 }

@@ -2,7 +2,6 @@ package com.koupper.providers
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.app
-import com.koupper.container.extensions.instanceOf
 import com.koupper.providers.parsing.TextParserHtmlEmailTemplate
 import com.koupper.providers.parsing.TextParserServiceProvider
 import com.koupper.providers.parsing.TextParser
@@ -15,8 +14,8 @@ class TextParserServiceProviderTest : AnnotationSpec() {
         TextParserServiceProvider().up()
 
         assertTrue {
-            app.create("TextParserHtmlEmailTemplate").instanceOf<TextParser>() is TextParserHtmlEmailTemplate
-            app.create("TextParserEnvPropertiesTemplate").instanceOf<TextParser>() is TextParserEnvPropertiesTemplate
+            app.createInstanceOf(TextParser::class, "TextParserHtmlEmailTemplate") is TextParserHtmlEmailTemplate
+            app.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate") is TextParserEnvPropertiesTemplate
         }
     }
 }
