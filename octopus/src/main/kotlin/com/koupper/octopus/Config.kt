@@ -1,15 +1,17 @@
 package com.koupper.octopus
 
-class Config {
-    private val scripts : MutableList<String> = mutableListOf()
+import com.koupper.container.interfaces.ScriptManager
 
-    fun runScript(scriptPath: String) : Config {
-        scripts.add(scriptPath)
+class Config : ScriptManager {
+    private val scripts : MutableMap<String, Map<String, Any>> = mutableMapOf()
+
+    override fun runScript(scriptPath: String, params: Map<String, Any>) : ScriptManager {
+        this.scripts[scriptPath] = params
 
         return this
     }
 
-    fun listScripts() : MutableList<String> {
+    override fun listScripts() : MutableMap<String, Map<String, Any>> {
         return this.scripts
     }
 }

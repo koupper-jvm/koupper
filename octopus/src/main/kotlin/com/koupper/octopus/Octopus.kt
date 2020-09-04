@@ -2,6 +2,7 @@ package com.koupper.octopus
 
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
+import com.koupper.container.interfaces.ScriptManager
 import com.koupper.octopus.exceptions.InvalidScriptException
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
@@ -11,21 +12,20 @@ import kotlin.reflect.KClass
 
 class Octopus(private var container: Container, private var config: Config) : ProcessManager {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
+    private val userPath = System.getProperty("user.home")
 
     override fun <T> run(sentence: String, result: (value: T) -> Unit) {
-        System.setProperty("kotlin.script.classpath", currentClassPath)
+        System.setProperty("kotlin.script.classpath", "$userPath/.koupper/libs/octopus-1.0.jar")
 
         with(ScriptEngineManager().getEngineByExtension("kts")) {
             if (!isValidSentence(sentence)) {
-                throw InvalidScriptException("The script is invalid.")
+                throw InvalidScriptException("The script is invalid. $sentence")
             }
 
             val firstSpaceInSentence = sentence.indexOf(" ")
 
-            if (isContainerType(sentence)) {
-                if (dependesOfContainer(sentence)) {
-                    eval("import com.koupper.container.interfaces.Container")
-
+            when {
+                isContainerType(sentence) -> {
                     eval(sentence)
 
                     val endOfVariableNameInSentence = sentence.indexOf(":")
@@ -37,41 +37,61 @@ class Octopus(private var container: Container, private var config: Config) : Pr
                     val targetCallback = eval(valName) as (Container) -> T
 
                     result(targetCallback.invoke(container) as T)
-                } else {
-
                 }
-            } else if (isConFigType(sentence)) {
-                eval("import com.koupper.octopus.Config")
+                isConFigType(sentence) -> {
+                    eval(sentence)
 
-                eval(sentence)
+                    val endOfVariableNameInSentence = sentence.indexOf(":")
 
-                val endOfVariableNameInSentence = sentence.indexOf(":")
+                    val startOfSentence = sentence.indexOf("val")
 
-                val startOfSentence = sentence.indexOf("val")
+                    val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
 
-                val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
+                    val targetCallback = eval(valName) as (ScriptManager) -> ScriptManager
 
-                val targetCallback = eval(valName) as (Config) -> Config
+                    result(targetCallback.invoke(config) as T)
+                }
+                else -> {
+                    eval(sentence)
 
-                result(targetCallback.invoke(config) as T)
-            } else {
-                eval(sentence)
+                    val endOfVariableNameInSentence = sentence.indexOf("=") - 1
 
-                val endOfVariableNameInSentence = sentence.indexOf("=") - 1
+                    val valName = sentence.substring(firstSpaceInSentence, endOfVariableNameInSentence).trim()
 
-                val valName = sentence.substring(firstSpaceInSentence, endOfVariableNameInSentence).trim()
-
-                result(eval(valName) as T)
+                    result(eval(valName) as T)
+                }
             }
+        }
+    }
+
+    override fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
+        System.setProperty("kotlin.script.classpath", "$userPath/.koupper/libs/octopus-1.0.jar")
+
+        with(ScriptEngineManager().getEngineByExtension("kts")) {
+            if (!isValidSentence(sentence)) {
+                throw InvalidScriptException("The script is invalid.")
+            }
+
+            eval(sentence)
+
+            val endOfVariableNameInSentence = sentence.indexOf(":")
+
+            val startOfSentence = sentence.indexOf("val")
+
+            val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
+
+            val targetCallback = eval(valName) as (Container, Map<String, Any>) -> T
+
+            result(targetCallback.invoke(container, params) as T)
         }
     }
 
     override fun <T> runScriptFile(scriptPath: String, result: (value: T) -> Unit) {
         val scriptContent = File(scriptPath).readText(Charsets.UTF_8)
 
-        if ("init.kt" in  scriptPath) {
-            this.run(scriptContent) { config: Config ->
-                result(config as T)
+        if ("init.kt" in scriptPath) {
+            this.run(scriptContent) { scriptManager: ScriptManager ->
+                result(scriptManager as T)
             }
 
             return
@@ -79,6 +99,26 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 
         this.run(scriptContent) { container: Container ->
             result(container as T)
+        }
+    }
+
+    override fun <T> runScriptFiles(scripts: MutableMap<String, Map<String, Any>>, result: (value: T, scriptName: String) -> Unit) {
+        scripts.forEach { (scriptPath, params) ->
+            val scriptContent = File(scriptPath).readText(Charsets.UTF_8)
+
+            val scriptName = File(scriptPath).name
+
+            if (params.isEmpty()) {
+                this.run(scriptContent) { container: Container ->
+                    result(container as T, scriptName)
+                }
+
+                return@forEach
+            }
+
+            this.run(scriptContent, params) { container: Container ->
+                result(container as T, scriptName)
+            }
         }
     }
 
@@ -102,21 +142,19 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 }
 
 fun main(args: Array<String>) {
+    if (args.isEmpty()) print("No parameters provided.")
+
     val containerImplementation = app
 
-    val config = Config()
-
-    val octopus = Octopus(containerImplementation, config)
+    val octopus = Octopus(containerImplementation, Config())
 
     octopus.registerBuildInServicesProvidersInContainer()
 
-    octopus.runScriptFile("/Users/jacobacosta/Code/koupper/octopus/src/test/resources/init.kts") { config : Config ->
-        val listScripts = config.listScripts()
+    octopus.runScriptFile(args[0]) { scriptManager: ScriptManager ->
+        val listScripts = scriptManager.listScripts()
 
-        listScripts.forEach {
-            octopus.runScriptFile(it) { result: Container ->
-                print(result)
-            }
+        octopus.runScriptFiles(listScripts) { result: Container, script: String ->
+            println("script [$script] ->\u001B[38;5;155m executed.\u001B[0m")
         }
     }
 }

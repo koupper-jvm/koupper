@@ -8,7 +8,7 @@ val existInClassPath: (String) -> Boolean = {
 
 val currentClassPath: String = System.getProperty("java.class.path")
 
-val dependesOfContainer: (String) -> Boolean = {
+val dependsOfContainer: (String) -> Boolean = {
     it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Container\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }
 
@@ -16,7 +16,8 @@ val isValidSentence: (String) -> Boolean = {
     it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Container\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
             it.contains("val\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
             it.contains("val\\s[a-zA-Z0-9]+\\s:\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
-            it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Config\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
+            it.contains("val\\s[a-zA-Z0-9]+:\\s\\(ScriptManager\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
+            it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Container,\\s*Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }
 
 val isContainerType: (String) -> Boolean = {
@@ -24,5 +25,5 @@ val isContainerType: (String) -> Boolean = {
 }
 
 val isConFigType: (String) -> Boolean = {
-    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Config\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
+    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(ScriptManager\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }
