@@ -27,3 +27,7 @@ val isContainerType: (String) -> Boolean = {
 val isConFigType: (String) -> Boolean = {
     it.contains("val\\s[a-zA-Z0-9]+:\\s\\(ScriptManager\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }
+
+val isParameterized: (String) -> Boolean = {
+    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Container,\\s*Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
+}

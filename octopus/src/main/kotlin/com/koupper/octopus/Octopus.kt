@@ -51,6 +51,11 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 
                     result(targetCallback.invoke(config) as T)
                 }
+                isParameterized(sentence) -> {
+                    run(sentence, emptyMap()) { container: Container ->
+                        result(container as T)
+                    }
+                }
                 else -> {
                     eval(sentence)
 
@@ -150,11 +155,17 @@ fun main(args: Array<String>) {
 
     octopus.registerBuildInServicesProvidersInContainer()
 
-    octopus.runScriptFile(args[0]) { scriptManager: ScriptManager ->
-        val listScripts = scriptManager.listScripts()
+    octopus.runScriptFile(args[0]) { result: Any ->
+        if (result is ScriptManager) {
+            val listScripts = result.listScripts()
 
-        octopus.runScriptFiles(listScripts) { result: Container, script: String ->
-            println("script [$script] ->\u001B[38;5;155m executed.\u001B[0m")
+            octopus.runScriptFiles(listScripts) { result: Container, script: String ->
+                println("script [$script] ->\u001B[38;5;155m executed.\u001B[0m")
+            }
+        } else if (result is Container) {
+            val nameScript = args[0]
+
+            println("\nscript [$nameScript] ->\u001B[38;5;155m executed.\u001B[0m")
         }
     }
 }
