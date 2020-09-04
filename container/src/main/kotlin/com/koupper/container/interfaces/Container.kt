@@ -1,11 +1,13 @@
 package com.koupper.container.interfaces
 
+import kotlin.reflect.KClass
+
 interface Container {
     fun <T : Any> bind(abstractClass: T, callback: (container: Container) -> T, tag: String = "undefined")
 
     fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V, tag: String = "undefined")
 
-    fun create(tagName: String = "undefined"): Container
+    fun <T : Any> createInstanceOf(kClass: KClass<T>, tagName: String = "undefined"): T
 
     fun <T : Any> singleton(abstractClass: T, callback: () -> T)
 

@@ -4,8 +4,6 @@ import com.koupper.container.exceptions.BindingException
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.scope.*
 import com.koupper.container.exceptions.MultipleAbstractImplementationsException
-import com.koupper.container.extensions.instanceOf
-import com.koupper.container.extensions.singletonOf
 import kotlin.test.*
 
 class ContainerTest : AnnotationSpec() {
@@ -17,13 +15,13 @@ class ContainerTest : AnnotationSpec() {
             ConcreteClass()
         })
 
-        val concreteClassOfContainer = container.create().instanceOf<AbstractClass>()
+        val concreteClassOfContainer = container.createInstanceOf(AbstractClass::class)
 
         assertTrue {
             concreteClassOfContainer is ConcreteClass
         }
 
-        val concreteClassOfContainer2 = container.create().instanceOf<AbstractClass>()
+        val concreteClassOfContainer2 = container.createInstanceOf(AbstractClass::class)
 
         assertNotEquals(concreteClassOfContainer, concreteClassOfContainer2)
     }
@@ -34,13 +32,13 @@ class ContainerTest : AnnotationSpec() {
 
         container.bind(AbstractClass::class, ConcreteClass::class)
 
-        val concreteClassOfContainer = container.create().instanceOf<AbstractClass>()
+        val concreteClassOfContainer = container.createInstanceOf(AbstractClass::class)
 
         assertTrue {
             concreteClassOfContainer is ConcreteClass
         }
 
-        val concreteClassOfContainer2 = container.create().instanceOf<AbstractClass>()
+        val concreteClassOfContainer2 = container.createInstanceOf(AbstractClass::class)
 
         assertNotEquals(concreteClassOfContainer, concreteClassOfContainer2)
     }
@@ -53,9 +51,9 @@ class ContainerTest : AnnotationSpec() {
             ConcreteClass()
         }
 
-        val concreteClassOfContainer = container.get().singletonOf<AbstractClass>()
+        val concreteClassOfContainer = container.get().createSingletonOf(AbstractClass::class)
 
-        val concreteClassOfContainer2 = container.get().singletonOf<AbstractClass>()
+        val concreteClassOfContainer2 = container.get().createSingletonOf(AbstractClass::class)
 
         assertEquals(concreteClassOfContainer, concreteClassOfContainer2)
     }
@@ -66,9 +64,9 @@ class ContainerTest : AnnotationSpec() {
 
         container.singleton(AbstractClass::class, ConcreteClass::class)
 
-        val concreteClassOfContainer = container.get().singletonOf<AbstractClass>()
+        val concreteClassOfContainer = container.get().createSingletonOf(AbstractClass::class)
 
-        val concreteClassOfContainer2 = container.get().singletonOf<AbstractClass>()
+        val concreteClassOfContainer2 = container.get().createSingletonOf(AbstractClass::class)
 
         assertEquals(concreteClassOfContainer, concreteClassOfContainer2)
     }
@@ -85,7 +83,7 @@ class ContainerTest : AnnotationSpec() {
             }
         })
 
-        container.create().instanceOf<AbstractClass>()
+        container.createInstanceOf(AbstractClass::class)
     }
 
     @Test
@@ -100,7 +98,7 @@ class ContainerTest : AnnotationSpec() {
             }
         })
 
-        container.create().singletonOf<AbstractClass>()
+        container.createSingletonOf(AbstractClass::class)
     }
 
     @Test
@@ -109,7 +107,7 @@ class ContainerTest : AnnotationSpec() {
 
         container.bind(AbstractClass::class, ConcreteClass::class)
 
-        val concreteClass = container.create().instanceOf("com.koupper.container.AbstractClass") as AbstractClass
+        val concreteClass = container.createInstanceOf("com.koupper.container.AbstractClass") as AbstractClass
 
         assertTrue {
             concreteClass is ConcreteClass
@@ -122,7 +120,7 @@ class ContainerTest : AnnotationSpec() {
 
         container.bind(AbstractClass::class, ConcreteClass::class)
 
-        val concreteClass = container.create().instanceOf("AbstractClass") as AbstractClass
+        val concreteClass = container.createInstanceOf("AbstractClass") as AbstractClass
 
         assertTrue {
             concreteClass is ConcreteClass
@@ -133,7 +131,7 @@ class ContainerTest : AnnotationSpec() {
     fun `should auto bind an abstract class to existing concrete classes in the specified scope`() {
         val container = KupContainer("com.koupper.container.scope")
 
-        val concreteClass = container.create().instanceOf<SingleAbstract>()
+        val concreteClass = container.createInstanceOf(SingleAbstract::class)
 
         assertTrue {
             concreteClass is SingleConcrete
@@ -143,7 +141,7 @@ class ContainerTest : AnnotationSpec() {
     @Test
     fun `should throw exception if try create a instance of an abstract class with multiple concrete classes`() {
         val exception = assertFailsWith<MultipleAbstractImplementationsException> {
-            KupContainer("com.koupper.container.scope").create().instanceOf<com.koupper.container.scope.AbstractClass>()
+            KupContainer("com.koupper.container.scope").createInstanceOf(com.koupper.container.scope.AbstractClass::class)
         }
 
         assertTrue {
@@ -154,7 +152,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should solve a instance with its dependencies resolved automatically`() {
-        val parentConcreteClass = KupContainer("com.koupper.container.scope").create().instanceOf<ParentAbstractClass>()
+        val parentConcreteClass = KupContainer("com.koupper.container.scope").createInstanceOf(ParentAbstractClass::class)
 
         assertTrue {
             parentConcreteClass is ParentConcreteClass
@@ -171,7 +169,7 @@ class ContainerTest : AnnotationSpec() {
 
         container.bind(ParentAbstractClass::class, parentConcreteClass)
 
-        val resolvedParentConcreteClass = container.create().instanceOf<ParentAbstractClass>()
+        val resolvedParentConcreteClass = container.createInstanceOf(ParentAbstractClass::class)
 
         assertTrue {
             resolvedParentConcreteClass is ParentConcreteClass
@@ -213,15 +211,15 @@ class ContainerTest : AnnotationSpec() {
         }, "ConcreteClass2")
 
         assertTrue {
-            container.create(tagName = "ConcreteClass").instanceOf<AbstractClass>() is ConcreteClass
-            container.create(tagName = "ConcreteClass2").instanceOf<AbstractClass>() is ConcreteClass2
+            container.createInstanceOf(AbstractClass::class, tagName = "ConcreteClass") is ConcreteClass
+            container.createInstanceOf(AbstractClass::class, tagName = "ConcreteClass2") is ConcreteClass2
         }
     }
 
     @Test
     fun `should throw exception if try create a instance of an unbinding class`() {
         val exception = assertFailsWith<BindingException> {
-            KupContainer().create().instanceOf<AbstractClass>()
+            KupContainer().createInstanceOf(AbstractClass::class)
         }
 
         assertTrue {

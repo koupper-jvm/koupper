@@ -2,7 +2,6 @@ package com.koupper.container
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.exceptions.ParameterNotInjectedException
-import com.koupper.container.extensions.instanceOf
 import com.koupper.container.injector.KupInjector
 import com.koupper.container.injector.injector
 import kotlin.test.assertEquals
@@ -28,7 +27,7 @@ class InjectorTest : AnnotationSpec() {
         })
 
         container.bind(AbstractDependency1::class, {
-            ConcreteDependency1(it.create().instanceOf())
+            ConcreteDependency1(it.createInstanceOf(AbstractNestedDependency2::class))
         })
 
         val injector = KupInjector()

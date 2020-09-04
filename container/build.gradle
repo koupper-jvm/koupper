@@ -12,11 +12,3 @@ jar {
         attributes 'Main-Class': 'com.koupper.container.KupContainerInitKt'
     }
 }
-
-sourceSets {
-    main {
-        kotlin {
-            srcDirs = ["src/main/kotlin"]
-        }
-    }
-}

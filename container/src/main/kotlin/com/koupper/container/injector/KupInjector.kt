@@ -2,7 +2,6 @@ package com.koupper.container.injector
 
 import com.koupper.container.interfaces.Container
 import com.koupper.container.exceptions.ParameterNotInjectedException
-import com.koupper.container.extensions.instanceOf
 import kotlin.reflect.KClass
 
 val injector: Injector = KupInjector()
@@ -20,7 +19,7 @@ class KupInjector : Injector {
                 }
 
                 if (type.isAbstract) {
-                    parametersOfConstructor.add(container.create().instanceOf(type))
+                    parametersOfConstructor.add(container.createInstanceOf(type))
                 }
             }
         }
