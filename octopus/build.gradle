@@ -13,15 +13,11 @@ jar {
     }
     from {
         configurations.runtimeClasspath.collect {
-            it.isDirectory() && it.name != 'org.jetbrains.kotlin:kotlin-stdlib-jdk8' ? it : zipTree(it)
-        }
-    }
-}
-
-sourceSets {
-    main {
-        kotlin {
-            srcDirs = ["src/main/kotlin"]
+            it.isDirectory() &&
+                    it.name != 'org.jetbrains.kotlin:kotlin-stdlib-jdk8' &&
+                    it.name != "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable" &&
+                    it.name != "org.jetbrains.kotlin:kotlin-script-runtime" &&
+                    it.name != "org.jetbrains.kotlin:kotlin-script-util" ? it : zipTree(it)
         }
     }
 }
