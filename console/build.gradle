@@ -1,10 +1,10 @@
-application {
-    mainClassName = 'io.kup.console.CommandHandlerKt'
-}
+apply plugin: 'application'
+
+mainClassName = 'com.koupper.console.CommandHandlerKt'
 
 jar {
     manifest {
-        attributes 'Main-Class': 'io.kup.console.CommandHandlerKt'
+        attributes 'Main-Class': 'com.koupper.console.CommandHandlerKt'
     }
     dependencies {
         implementation project(':container')

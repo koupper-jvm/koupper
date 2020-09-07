@@ -1,29 +1,14 @@
 plugins {
-    id 'org.jetbrains.kotlin.jvm'
+    id 'application'
+    id "org.jetbrains.kotlin.jvm"
 }
 
 application {
-    mainClassName = 'io.kup.container.KupContainerInitKt'
+    mainClassName = 'com.koupper.container.KupContainerInitKt'
 }
 
 jar {
     manifest {
-        attributes 'Main-Class': 'io.kup.container.KupContainerInitKt'
+        attributes 'Main-Class': 'com.koupper.container.KupContainerInitKt'
     }
-}
-
-dependencies {
-    // Use the Kotlin JDK 8 standard library.
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
-    implementation 'org.jetbrains.kotlin:kotlin-reflect'
-
-    // Use the Kotlin test library.
-    testImplementation 'org.jetbrains.kotlin:kotlin-test'
-    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit'
-    // Use the Kotlin JUnit integration.
-    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit'
-    testImplementation 'io.kotest:kotest-runner-junit5-jvm:4.0.5' // for kotest framework
-    testImplementation 'io.kotest:kotest-assertions-core-jvm:4.0.5' // for kotest core jvm assertions
-    testImplementation 'io.mockk:mockk:1.9.3.kotlin12'
-    testImplementation 'io.mockk:mockk:1.10.0'
 }
