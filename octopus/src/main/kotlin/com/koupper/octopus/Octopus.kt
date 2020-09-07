@@ -7,8 +7,14 @@ import com.koupper.octopus.exceptions.InvalidScriptException
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import java.io.File
+import java.nio.file.Paths
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
+import kotlin.system.exitProcess
+
+val isSingleFileName: (String) -> Boolean = {
+    it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
+}
 
 class Octopus(private var container: Container, private var config: Config) : ProcessManager {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
@@ -94,7 +100,7 @@ class Octopus(private var container: Container, private var config: Config) : Pr
     override fun <T> runScriptFile(scriptPath: String, args: String, result: (value: T) -> Unit) {
         val scriptContent = File(scriptPath).readText(Charsets.UTF_8)
 
-        if ("init.kt" in scriptPath) {
+        if ("init.kts" in scriptPath) {
             this.run(scriptContent) { scriptManager: ScriptManager ->
                 result(scriptManager as T)
             }
@@ -127,20 +133,36 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 
     override fun <T> runScriptFiles(scripts: MutableMap<String, Map<String, Any>>, result: (value: T, scriptName: String) -> Unit) {
         scripts.forEach { (scriptPath, params) ->
-            val scriptContent = File(scriptPath).readText(Charsets.UTF_8)
+            if (scriptPath.isNotEmpty()) {
+                if (".kts" !in scriptPath) {
+                    println("\n\u001B[31m The file should be an [kts] extension.\n")
 
-            val scriptName = File(scriptPath).name
-
-            if (params.isEmpty()) {
-                this.run(scriptContent) { container: Container ->
-                    result(container as T, scriptName)
+                    exitProcess(7)
                 }
 
-                return@forEach
-            }
+                var finalInitPath = ""
 
-            this.run(scriptContent, params) { container: Container ->
-                result(container as T, scriptName)
+                finalInitPath += if (isSingleFileName(scriptPath)) {
+                    Paths.get("").toAbsolutePath().toString() + "/$scriptPath "
+                } else {
+                    scriptPath
+                }.trim()
+
+                val scriptContent = File(finalInitPath).readText(Charsets.UTF_8)
+
+                val scriptName = File(finalInitPath).name
+
+                if (params.isEmpty()) {
+                    this.run(scriptContent) { container: Container ->
+                        result(container as T, scriptName)
+                    }
+
+                    return@forEach
+                }
+
+                this.run(scriptContent, params) { container: Container ->
+                    result(container as T, scriptName)
+                }
             }
         }
     }
