@@ -1,5 +1,7 @@
-import com.koupper.octopus.Config
+import com.koupper.container.interfaces.ScriptManager
 
-val init: (Config) -> Config = {
-    it.runScript("/Users/jacobacosta/Code/koupper/octopus/src/test/resources/example.kts")
+val init: (ScriptManager) -> ScriptManager = {
+    it.runScript("example.kts", mapOf(
+            "user_id" to 1234
+    ))
 }
