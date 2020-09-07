@@ -6,7 +6,7 @@ import io.zeko.db.sql.connections.*
 import java.sql.Statement
 
 class DBPSQLConnector(urlConnection: String, maxPoolSize: Int) : DBConnector {
-    private var pool: HikariDBPool
+    private lateinit var pool: HikariDBPool
 
     init {
         val config = Json.obj(
