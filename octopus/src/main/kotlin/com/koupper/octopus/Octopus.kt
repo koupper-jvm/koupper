@@ -87,11 +87,11 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 
             val targetCallback = eval(valName) as (Container, Map<String, Any>) -> T
 
-            result(targetCallback.invoke(container, params) as T)
+            result(targetCallback.invoke(container, params))
         }
     }
 
-    override fun <T> runScriptFile(scriptPath: String, result: (value: T) -> Unit) {
+    override fun <T> runScriptFile(scriptPath: String, args: String, result: (value: T) -> Unit) {
         val scriptContent = File(scriptPath).readText(Charsets.UTF_8)
 
         if ("init.kt" in scriptPath) {
@@ -102,9 +102,27 @@ class Octopus(private var container: Container, private var config: Config) : Pr
             return
         }
 
-        this.run(scriptContent) { container: Container ->
+        this.run(scriptContent, this.buildParams(args)) { container: Container ->
             result(container as T)
         }
+    }
+
+    private fun buildParams(args: String): Map<String, Any> {
+        if (args.isEmpty()) emptyMap<String, Any>()
+
+        val params = mutableMapOf<String, Any>()
+
+        val input = args.split(",").forEach { arg ->
+            val keyValue = arg.split(":")
+
+            val key = keyValue[0]
+
+            val value = keyValue[1]
+
+            params[key] = value
+        }
+
+        return params
     }
 
     override fun <T> runScriptFiles(scripts: MutableMap<String, Map<String, Any>>, result: (value: T, scriptName: String) -> Unit) {
@@ -155,12 +173,16 @@ fun main(args: Array<String>) {
 
     octopus.registerBuildInServicesProvidersInContainer()
 
-    octopus.runScriptFile(args[0]) { result: Any ->
+    var params = ""
+
+    if (args.size > 1) params = args[1]
+
+    octopus.runScriptFile(args[0], params) { result: Any ->
         if (result is ScriptManager) {
             val listScripts = result.listScripts()
 
-            octopus.runScriptFiles(listScripts) { result: Container, script: String ->
-                println("script [$script] ->\u001B[38;5;155m executed.\u001B[0m")
+            octopus.runScriptFiles(listScripts) { result: Container, nameScript: String ->
+                println("script [$nameScript] ->\u001B[38;5;155m executed.\u001B[0m")
             }
         } else if (result is Container) {
             val nameScript = args[0]
