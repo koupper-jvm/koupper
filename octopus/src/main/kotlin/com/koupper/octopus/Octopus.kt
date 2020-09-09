@@ -7,10 +7,12 @@ import com.koupper.octopus.exceptions.InvalidScriptException
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import java.io.File
+import java.net.URLClassLoader
 import java.nio.file.Paths
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
+
 
 val isSingleFileName: (String) -> Boolean = {
     it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
@@ -21,7 +23,7 @@ class Octopus(private var container: Container, private var config: Config) : Pr
     private val userPath = System.getProperty("user.home")
 
     override fun <T> run(sentence: String, result: (value: T) -> Unit) {
-        System.setProperty("kotlin.script.classpath", "$userPath/.koupper/libs/octopus-1.0.jar")
+        System.setProperty("kotlin.script.classpath", currentClassPath)
 
         with(ScriptEngineManager().getEngineByExtension("kts")) {
             if (!isValidSentence(sentence)) {
@@ -76,7 +78,7 @@ class Octopus(private var container: Container, private var config: Config) : Pr
     }
 
     override fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
-        System.setProperty("kotlin.script.classpath", "$userPath/.koupper/libs/octopus-1.0.jar")
+        System.setProperty("kotlin.script.classpath", currentClassPath)
 
         with(ScriptEngineManager().getEngineByExtension("kts")) {
             if (!isValidSentence(sentence)) {
@@ -103,6 +105,14 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         if ("init.kts" in scriptPath) {
             this.run(scriptContent) { scriptManager: ScriptManager ->
                 result(scriptManager as T)
+            }
+
+            return
+        }
+
+        if (args == "EMPTY_PARAMS" || args.isEmpty()) {
+            this.run(scriptContent) { container: Container ->
+                result(container as T)
             }
 
             return

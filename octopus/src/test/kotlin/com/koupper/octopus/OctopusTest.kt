@@ -31,7 +31,6 @@ class OctopusTest : AnnotationSpec() {
     @Test
     fun `should execute script sentence`() {
         val octopus = Octopus(this.container, Config())
-
         octopus.run("val valueNumber = (0..10).random()") { result: Int ->
             assertTrue {
                 result is Int
@@ -63,12 +62,8 @@ class OctopusTest : AnnotationSpec() {
 
         octopus.registerBuildInServicesProvidersInContainer()
 
-        /*octopus.registerExternalServiceProviders(listOf(
-                ZigoServiceProvider()
-        ))*/
-
         octopus.runScriptFile("init.kts") { result: ScriptManager ->
-            octopus.runScriptFiles(result.listScripts()) { result: Container, script: String ->
+            octopus.runScriptFiles(result.listScripts()) { _: Container, script: String ->
                 assertTrue {
                     script == "example.kts"
                 }
