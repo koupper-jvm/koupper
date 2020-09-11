@@ -10,9 +10,12 @@ application {
 jar {
     manifest {
         attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+        //attributes 'Class-Path': configurations.runtimeClasspath.collect { it.getName() }.join(' ')
     }
     from {
-        configurations.runtimeClasspath.collect {
+        configurations.runtimeClasspath.filter {
+            !it.name.contains("kotlin-stdlib-jdk8")
+        }.collect {
             it.isDirectory() ? it : zipTree(it)
         }
     }
