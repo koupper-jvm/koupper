@@ -12,15 +12,11 @@ class TextParserHtmlEmailTemplate : TextParser {
     private lateinit var text: String
 
     override fun readFromPath(path: String): StringBuilder {
-        var finalInitPath = ""
-
-        finalInitPath += if (isSingleFileName(path)) {
+        this.text = File(if (isSingleFileName(path)) {
             Paths.get("").toAbsolutePath().toString() + "/$path "
         } else {
             path
-        }.trim()
-
-        this.text = File(finalInitPath).readText(Charsets.UTF_8)
+        }.trim()).readText(Charsets.UTF_8)
 
         return StringBuilder(this.text)
     }

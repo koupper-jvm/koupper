@@ -15,6 +15,7 @@ jar {
     from {
         configurations.runtimeClasspath.filter {
             !it.name.contains("kotlin-stdlib-jdk8")
+            //it.name.contains("container") || it.name.contains("providers")
         }.collect {
             it.isDirectory() ? it : zipTree(it)
         }
