@@ -4,4 +4,6 @@ import io.zeko.db.sql.connections.DBSession
 
 interface DBConnector {
     suspend fun session(): DBSession
+
+    fun configUsing(configPath: String): DBConnector
 }
