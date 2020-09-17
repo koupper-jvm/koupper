@@ -176,12 +176,8 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         }
     }
 
-    fun availableServiceProviders(): List<KClass<*>> {
-        return this.registeredServiceProviders
-    }
-
     fun registerBuildInServicesProvidersInContainer(): Map<KClass<*>, Any> {
-        this.availableServiceProviders().forEach { provider ->
+        this.registeredServiceProviders.forEach { provider ->
             ((provider).constructors.elementAt(0).call() as ServiceProvider).up()
         }
 
