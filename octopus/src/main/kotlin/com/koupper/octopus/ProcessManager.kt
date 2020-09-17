@@ -20,6 +20,12 @@ interface ProcessManager {
     fun <T> runScriptFile(scriptPath: String, args: String = "", result: (value : T) -> Unit)
 
     /**
+     * Loads a script from URL, running it under ScriptEngineManager implementation and
+     * callback the resulting execution.
+     */
+    fun <T> runScriptFileFromUrl(scriptUrl: String, args: String = "", result: (value : T) -> Unit)
+
+    /**
      * Loads a script files from paths, running it under ScriptEngineManager implementation and
      * callback the resulting execution.
      */

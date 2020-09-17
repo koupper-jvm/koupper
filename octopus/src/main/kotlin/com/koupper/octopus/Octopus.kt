@@ -7,6 +7,7 @@ import com.koupper.octopus.exceptions.InvalidScriptException
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import java.io.File
+import java.net.URL
 import java.nio.file.Paths
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
@@ -99,10 +100,20 @@ class Octopus(private var container: Container, private var config: Config) : Pr
     }
 
     override fun <T> runScriptFile(scriptPath: String, args: String, result: (value: T) -> Unit) {
-        val scriptContent = File(scriptPath).readText(Charsets.UTF_8)
+        val content = File(scriptPath).readText(Charsets.UTF_8)
 
-        if ("init.kts" in scriptPath) {
-            this.run(scriptContent) { scriptManager: ScriptManager ->
+        this.runByType(scriptPath, args, content, result)
+    }
+
+    override fun <T> runScriptFileFromUrl(scriptUrl: String, args: String, result: (value: T) -> Unit) {
+        val content = URL(scriptUrl).readText()
+
+        this.runByType(scriptUrl, args, content, result)
+    }
+
+    private fun <T> runByType(scriptFile: String, args: String, content: String, result: (value: T) -> Unit) {
+        if ("init.kts" in scriptFile) {
+            this.run(content) { scriptManager: ScriptManager ->
                 result(scriptManager as T)
             }
 
@@ -110,14 +121,14 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         }
 
         if (args == "EMPTY_PARAMS" || args.isEmpty()) {
-            this.run(scriptContent) { container: Container ->
+            this.run(content) { container: Container ->
                 result(container as T)
             }
 
             return
         }
 
-        this.run(scriptContent, this.buildParams(args)) { container: Container ->
+        this.run(content, this.buildParams(args)) { container: Container ->
             result(container as T)
         }
     }
@@ -174,6 +185,10 @@ class Octopus(private var container: Container, private var config: Config) : Pr
                 }
             }
         }
+    }
+
+    fun availableServiceProviders(): List<KClass<*>> {
+        return this.registeredServiceProviders
     }
 
     fun registerBuildInServicesProvidersInContainer(): Map<KClass<*>, Any> {
