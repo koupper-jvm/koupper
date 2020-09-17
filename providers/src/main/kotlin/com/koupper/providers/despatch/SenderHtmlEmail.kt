@@ -20,10 +20,10 @@ class SenderHtmlEmail() : Sender {
     var properties: Properties = Properties()
 
     override fun configUsing(configPath: String): Sender {
-        val parserHtmlTemplate = TextParserEnvPropertiesTemplate()
-        parserHtmlTemplate.readFromPath(configPath)
+        val parserEnvProperties = TextParserEnvPropertiesTemplate()
+        parserEnvProperties.readFromPath(configPath)
 
-        val properties: Map<String?, String?> = parserHtmlTemplate.splitKeyValue("=".toRegex())
+        val properties: Map<String?, String?> = parserEnvProperties.splitKeyValue("=".toRegex())
 
         this.host = properties["MAIL_HOST"]
         this.port = properties["MAIL_PORT"]
