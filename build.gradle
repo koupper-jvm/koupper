@@ -48,9 +48,9 @@ project(':container') {
 
 project(':octopus') {
     dependencies {
-        implementation "org.jetbrains.kotlin:kotlin-reflect"
         implementation project(':container')
         implementation project(':providers')
+        implementation "org.jetbrains.kotlin:kotlin-reflect"
         implementation "org.jetbrains.kotlin:kotlin-script-util"
         implementation "org.jetbrains.kotlin:kotlin-script-runtime"
         implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable"

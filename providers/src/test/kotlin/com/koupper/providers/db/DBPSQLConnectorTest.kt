@@ -26,7 +26,8 @@ class DBPSQLConnectorTest : AnnotationSpec() {
         launch(Dispatchers.Main) {  // Will be launched in the mainThreadSurrogate dispatcher
             val sql = Query().fields("*").from("someTable").where("field" eq "value").toSql()
 
-            val connector = DBPSQLConnector("jdbc:postgresql://localhost:5432/yourdatabase?user=youruser&password=yourpassword", 30)
+            val connector = DBPSQLConnector()
+            connector.configUsing("jdbc:postgresql://localhost:5432/yourdatabase?user=youruser&password=yourpassword")
 
             lateinit var rows: List<User>
 
