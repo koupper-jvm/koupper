@@ -4,9 +4,9 @@ import com.koupper.container.interfaces.Container
 import com.koupper.container.exceptions.ParameterNotInjectedException
 import kotlin.reflect.KClass
 
-val injector: Injector = KupInjector()
+val injector: Injector = KoupperInjector()
 
-class KupInjector : Injector {
+class KoupperInjector : Injector {
     override fun <T : Any> resolveDependenciesFor(container: Container, concreteClass: KClass<T>): T {
         val parametersOfConstructor = arrayListOf<T>()
 

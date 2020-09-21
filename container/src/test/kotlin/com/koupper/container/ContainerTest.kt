@@ -9,7 +9,7 @@ import kotlin.test.*
 class ContainerTest : AnnotationSpec() {
     @Test
     fun `should bind a concrete class and return new one instances for multiple creations`() {
-        val container = KupContainer()
+        val container = KoupperContainer()
 
         container.bind(AbstractClass::class, {
             ConcreteClass()
@@ -28,7 +28,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should bind a concrete class using the alternative bind method`() {
-        val container = KupContainer()
+        val container = KoupperContainer()
 
         container.bind(AbstractClass::class, ConcreteClass::class)
 
@@ -45,7 +45,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should bind a singleton class and return the same one instance over and over`() {
-        val container = KupContainer()
+        val container = KoupperContainer()
 
         container.singleton(AbstractClass::class) {
             ConcreteClass()
@@ -60,7 +60,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should bind a singleton class using the alternative singleton method`() {
-        val container = KupContainer()
+        val container = KoupperContainer()
 
         container.singleton(AbstractClass::class, ConcreteClass::class)
 
@@ -73,7 +73,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should listen for a resolved instance using bind method`() {
-        val container = KupContainer()
+        val container = KoupperContainer()
 
         container.bind(AbstractClass::class, ConcreteClass::class)
 
@@ -88,7 +88,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should listen for a resolved instance using singleton method`() {
-        val container = KupContainer()
+        val container = KoupperContainer()
 
         container.singleton(AbstractClass::class, ConcreteClass::class)
 
@@ -103,7 +103,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should create a new instance from a full namespace`() {
-        val container = KupContainer()
+        val container = KoupperContainer()
 
         container.bind(AbstractClass::class, ConcreteClass::class)
 
@@ -116,7 +116,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should create a new instance using its simple class name`() {
-        val container = KupContainer()
+        val container = KoupperContainer()
 
         container.bind(AbstractClass::class, ConcreteClass::class)
 
@@ -129,7 +129,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should auto bind an abstract class to existing concrete classes in the specified scope`() {
-        val container = KupContainer("com.koupper.container.scope")
+        val container = KoupperContainer("com.koupper.container.scope")
 
         val concreteClass = container.createInstanceOf(SingleAbstract::class)
 
@@ -141,7 +141,7 @@ class ContainerTest : AnnotationSpec() {
     @Test
     fun `should throw exception if try create a instance of an abstract class with multiple concrete classes`() {
         val exception = assertFailsWith<MultipleAbstractImplementationsException> {
-            KupContainer("com.koupper.container.scope").createInstanceOf(com.koupper.container.scope.AbstractClass::class)
+            KoupperContainer("com.koupper.container.scope").createInstanceOf(com.koupper.container.scope.AbstractClass::class)
         }
 
         assertTrue {
@@ -152,7 +152,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should solve a instance with its dependencies resolved automatically`() {
-        val parentConcreteClass = KupContainer("com.koupper.container.scope").createInstanceOf(ParentAbstractClass::class)
+        val parentConcreteClass = KoupperContainer("com.koupper.container.scope").createInstanceOf(ParentAbstractClass::class)
 
         assertTrue {
             parentConcreteClass is ParentConcreteClass
@@ -163,7 +163,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should bind a concrete class resolving their nested dependencies using the container`() {
-        val container = KupContainer("com.koupper.container.scope")
+        val container = KoupperContainer("com.koupper.container.scope")
 
         val parentConcreteClass = ParentConcreteClass::class
 
@@ -180,7 +180,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should throw exception if multiple instances try to be binding to same abstract class`() {
-        val container = KupContainer()
+        val container = KoupperContainer()
 
         container.bind(AbstractClass::class, {
             ConcreteClass()
@@ -200,7 +200,7 @@ class ContainerTest : AnnotationSpec() {
 
     @Test
     fun `should bind multiple instances to same abstract class`() {
-        val container = KupContainer()
+        val container = KoupperContainer()
 
         container.bind(AbstractClass::class, {
             ConcreteClass()
@@ -219,7 +219,7 @@ class ContainerTest : AnnotationSpec() {
     @Test
     fun `should throw exception if try create a instance of an unbinding class`() {
         val exception = assertFailsWith<BindingException> {
-            KupContainer().createInstanceOf(AbstractClass::class)
+            KoupperContainer().createInstanceOf(AbstractClass::class)
         }
 
         assertTrue {

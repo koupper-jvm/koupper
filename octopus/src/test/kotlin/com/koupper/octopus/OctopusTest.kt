@@ -2,9 +2,8 @@ package com.koupper.octopus
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.interfaces.Container
-import com.koupper.container.KupContainer
+import com.koupper.container.KoupperContainer
 import com.koupper.container.app
-import com.koupper.container.interfaces.ScriptManager
 import com.koupper.providers.db.DBConnector
 import com.koupper.providers.db.DBPSQLConnector
 import com.koupper.providers.db.DBServiceProvider
@@ -25,7 +24,7 @@ class OctopusTest : AnnotationSpec() {
 
     @BeforeEach
     fun initialize() {
-        this.container = mockkClass(KupContainer::class)
+        this.container = mockkClass(KoupperContainer::class)
     }
 
     @Test
@@ -83,7 +82,7 @@ class OctopusTest : AnnotationSpec() {
 
     @Test
     fun `should return the available service providers`() {
-        val octopus = Octopus(KupContainer(), Config())
+        val octopus = Octopus(KoupperContainer(), Config())
 
         val availableServiceProviders = octopus.availableServiceProviders()
 
@@ -100,7 +99,7 @@ class OctopusTest : AnnotationSpec() {
 
     @Test
     fun `should bind the available service providers in container`() {
-        val containerImplementation = KupContainer()
+        val containerImplementation = KoupperContainer()
 
         val octopus = Octopus(containerImplementation, Config())
 

@@ -10,9 +10,9 @@ import kotlin.reflect.KClass
 import kotlin.reflect.KType
 import kotlin.reflect.full.createInstance
 
-val app = KupContainer()
+val app = KoupperContainer()
 
-class KupContainer() : Container {
+class KoupperContainer() : Container {
     private var scope: String = ""
 
     constructor(scope: String) : this() {
@@ -139,7 +139,7 @@ class KupContainer() : Container {
         this.singletons[abstractClass] = (concreteClass as KClass<*>).createInstance()
     }
 
-    override fun get(): KupContainer {
+    override fun get(): KoupperContainer {
         return this
     }
 

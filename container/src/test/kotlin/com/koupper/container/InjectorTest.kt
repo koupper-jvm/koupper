@@ -2,7 +2,7 @@ package com.koupper.container
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.exceptions.ParameterNotInjectedException
-import com.koupper.container.injector.KupInjector
+import com.koupper.container.injector.KoupperInjector
 import com.koupper.container.injector.injector
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 class InjectorTest : AnnotationSpec() {
     @Test
     fun `should get a list of dependencies for specific object`() {
-        val injector = KupInjector()
+        val injector = KoupperInjector()
 
         val dependencies = injector.listDependenciesIn(ConcreteClassWithDependencies::class)
 
@@ -30,7 +30,7 @@ class InjectorTest : AnnotationSpec() {
             ConcreteDependency1(it.createInstanceOf(AbstractNestedDependency2::class))
         })
 
-        val injector = KupInjector()
+        val injector = KoupperInjector()
 
         val instance = injector.resolveDependenciesFor(container, ConcreteClassWithDependencies::class)
 
@@ -43,7 +43,7 @@ class InjectorTest : AnnotationSpec() {
     @Test
     fun `should not inject dependencies for unbinding object in container`() {
         val exception = assertFailsWith<ParameterNotInjectedException> {
-            injector.resolveDependenciesFor(KupContainer(), ConcreteClassWithDependencies::class)
+            injector.resolveDependenciesFor(KoupperContainer(), ConcreteClassWithDependencies::class)
         }
 
         assertTrue {

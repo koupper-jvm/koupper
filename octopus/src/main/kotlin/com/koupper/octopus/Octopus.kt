@@ -15,7 +15,6 @@ import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
 
-
 val isSingleFileName: (String) -> Boolean = {
     it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
 }
