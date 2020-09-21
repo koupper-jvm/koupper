@@ -9,6 +9,8 @@ import com.koupper.providers.ServiceProviderManager
 import java.io.File
 import java.net.URL
 import java.nio.file.Paths
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
@@ -23,8 +25,6 @@ class Octopus(private var container: Container, private var config: Config) : Pr
     private val userPath = System.getProperty("user.home")
 
     override fun <T> run(sentence: String, result: (value: T) -> Unit) {
-        System.setProperty("kotlin.script.classpath", currentClassPath)
-
         with(ScriptEngineManager().getEngineByExtension("kts")) {
             if (!isValidSentence(sentence)) {
                 throw InvalidScriptException("The script is invalid. $sentence")
@@ -78,7 +78,8 @@ class Octopus(private var container: Container, private var config: Config) : Pr
     }
 
     override fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
-        System.setProperty("kotlin.script.classpath", currentClassPath)
+        val executionDate = LocalDateTime.now()
+        val formattedExecutionDate = executionDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"))
 
         with(ScriptEngineManager().getEngineByExtension("kts")) {
             if (!isValidSentence(sentence)) {
@@ -97,6 +98,9 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 
             result(targetCallback.invoke(container, params))
         }
+
+        val finishedExecutionDate = LocalDateTime.now()
+        val formattedFinishedExecutionDate = finishedExecutionDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"))
     }
 
     override fun <T> runScriptFile(scriptPath: String, args: String, result: (value: T) -> Unit) {
@@ -209,27 +213,41 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 fun main(args: Array<String>) {
     if (args.isEmpty()) print("No parameters provided.")
 
-    val containerImplementation = app
-
-    val octopus = Octopus(containerImplementation, Config())
-
-    octopus.registerBuildInServicesProvidersInContainer()
+    val octopus = createDefaultConfiguration()
 
     var params = ""
 
     if (args.size > 1) params = args[1]
 
     octopus.runScriptFile(args[0], params) { result: Any ->
-        if (result is ScriptManager) {
-            val listScripts = result.listScripts()
+        executeCallback(octopus, args[0], result)
+    }
+}
 
-            octopus.runScriptFiles(listScripts) { result: Container, nameScript: String ->
-                println("script [$nameScript] ->\u001B[38;5;155m executed.\u001B[0m")
-            }
-        } else if (result is Container) {
-            val nameScript = args[0]
+fun createDefaultConfiguration(): ProcessManager {
+    val containerImplementation = app
 
-            println("\nscript [$nameScript] ->\u001B[38;5;155m executed.\u001B[0m")
+    val octopus = Octopus(containerImplementation, Config())
+
+    octopus.registerBuildInServicesProvidersInContainer()
+
+    return octopus
+}
+
+fun runScriptFileFromUrl(context: ProcessManager, url: String, args: String) {
+    context.runScriptFileFromUrl(url, args) { result: Any ->
+        executeCallback(context, url, result)
+    }
+}
+
+fun executeCallback(context: ProcessManager, scriptName: String, result: Any) {
+    if (result is ScriptManager) {
+        val listScripts = result.listScripts()
+
+        context.runScriptFiles(listScripts) { result: Container, nameScript: String ->
+            println("script [$nameScript] ->\u001B[38;5;155m executed.\u001B[0m")
         }
+    } else if (result is Container) {
+        println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
     }
 }

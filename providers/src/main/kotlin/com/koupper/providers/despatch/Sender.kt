@@ -3,7 +3,9 @@ package com.koupper.providers.despatch
 import com.koupper.providers.logger.Logger
 
 interface Sender {
-    fun configUsing(configPath: String): Sender
+    fun configFromPath(configPath: String): Sender
+
+    fun configFromUrl(configPath: String): Sender
 
     fun withContent(content: String)
 

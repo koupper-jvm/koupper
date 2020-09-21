@@ -41,7 +41,22 @@ class SenderHtmlEmailTest : AnnotationSpec() {
     @Ignore
     @Test
     fun `should set the sender html email properties using a file`() {
-        val htmlEmailSender = SenderHtmlEmail().configUsing(".your_env_properties") as SenderHtmlEmail
+        val htmlEmailSender = SenderHtmlEmail().configFromPath(".your_env_properties") as SenderHtmlEmail
+
+        val properties = htmlEmailSender.properties
+
+        assertTrue {
+            properties["mail.smtp.host"]?.equals("smtp.mailtrap.io")
+            properties["mail.smtp.port"]?.equals(2525)
+            properties["mail.smtp.auth"]?.equals("true")
+            properties["mail.smtp.starttls.enable"]?.equals("true")!!
+        }
+    }
+
+    @Ignore
+    @Test
+    fun `should set the sender html email properties using a url`() {
+        val htmlEmailSender = SenderHtmlEmail().configFromUrl("https://yourdomain.com/.your_env") as SenderHtmlEmail
 
         val properties = htmlEmailSender.properties
 

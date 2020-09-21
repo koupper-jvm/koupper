@@ -55,6 +55,20 @@ class OctopusTest : AnnotationSpec() {
 
     @Ignore
     @Test
+    fun `should read script from url`() {
+        val containerImplementation = app
+
+        val octopus = Octopus(containerImplementation, Config())
+
+        octopus.registerBuildInServicesProvidersInContainer()
+
+        octopus.runScriptFileFromUrl("https://yourdomain.com/script.kt") { result: Container ->
+            // validate here
+        }
+    }
+
+    @Ignore
+    @Test
     fun `should read script from file`() {
         val containerImplementation = app
 
@@ -62,12 +76,8 @@ class OctopusTest : AnnotationSpec() {
 
         octopus.registerBuildInServicesProvidersInContainer()
 
-        octopus.runScriptFile("init.kts") { result: ScriptManager ->
-            octopus.runScriptFiles(result.listScripts()) { _: Container, script: String ->
-                assertTrue {
-                    script == "example.kts"
-                }
-            }
+        octopus.runScriptFileFromUrl("script.kt") { result: Container ->
+            // validate here
         }
     }
 

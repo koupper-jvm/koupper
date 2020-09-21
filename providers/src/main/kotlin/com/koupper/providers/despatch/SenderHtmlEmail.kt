@@ -3,6 +3,7 @@ package com.koupper.providers.despatch
 import com.koupper.providers.logger.Logger
 import com.koupper.providers.parsing.TextParserEnvPropertiesTemplate
 import com.koupper.providers.parsing.extensions.splitKeyValue
+import java.net.URL
 import java.util.*
 import javax.mail.*
 import javax.mail.internet.InternetAddress
@@ -19,18 +20,32 @@ class SenderHtmlEmail() : Sender {
     lateinit var session: Session
     var properties: Properties = Properties()
 
-    override fun configUsing(configPath: String): Sender {
+    override fun configFromPath(configPath: String): Sender {
         val parserEnvProperties = TextParserEnvPropertiesTemplate()
-        parserEnvProperties.readFromPath(configPath)
+        val content = parserEnvProperties.readFromPath(configPath)
 
-        val properties: Map<String?, String?> = parserEnvProperties.splitKeyValue("=".toRegex())
+        val properties: Map<String?, String?> = TextParserEnvPropertiesTemplate(content.toString()).splitKeyValue("=".toRegex())
 
+        this.setupPropertiesFrom(properties)
+
+        return this
+    }
+
+    override fun configFromUrl(configPath: String): Sender {
+        val content = URL(configPath).readText()
+
+        val properties: Map<String?, String?> = TextParserEnvPropertiesTemplate(content).splitKeyValue("=".toRegex())
+
+        this.setupPropertiesFrom(properties)
+
+        return this
+    }
+
+    private fun setupPropertiesFrom(properties: Map<String?, String?>) {
         this.host = properties["MAIL_HOST"]
         this.port = properties["MAIL_PORT"]
         this.userName = properties["MAIL_USERNAME"]
         this.password = properties["MAIL_PASSWORD"]
-
-        return this
     }
 
     override fun withContent(content: String) {
