@@ -26,7 +26,8 @@ class DBLogger : Logger {
     override fun configUsing(configuration: LoggerConfiguration): Logger {
         configuration.setup().forEach { (key, value) ->
             if (key == "url") {
-                this.connector = DBPSQLConnector(value as String, 4)
+                this.connector = DBPSQLConnector()
+                this.connector.configUsing(value as String)
             }
 
             if (key == "tableName") {

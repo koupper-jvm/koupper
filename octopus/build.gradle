@@ -10,14 +10,14 @@ application {
 jar {
     manifest {
         attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+        //attributes 'Class-Path': configurations.runtimeClasspath.collect { it.getName() }.join(' ')
     }
     from {
-        configurations.runtimeClasspath.collect {
-            it.isDirectory() &&
-                    it.name != 'org.jetbrains.kotlin:kotlin-stdlib-jdk8' &&
-                    it.name != "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable" &&
-                    it.name != "org.jetbrains.kotlin:kotlin-script-runtime" &&
-                    it.name != "org.jetbrains.kotlin:kotlin-script-util" ? it : zipTree(it)
+        configurations.runtimeClasspath.filter {
+            !it.name.contains("kotlin-stdlib-jdk8")
+            //it.name.contains("container") || it.name.contains("providers")
+        }.collect {
+            it.isDirectory() ? it : zipTree(it)
         }
     }
 }

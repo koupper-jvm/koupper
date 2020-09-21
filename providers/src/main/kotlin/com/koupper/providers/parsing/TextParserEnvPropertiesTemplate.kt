@@ -2,23 +2,28 @@ package com.koupper.providers.parsing
 
 import java.io.File
 import java.lang.StringBuilder
+import java.net.URL
 import java.nio.file.Paths
 
-class TextParserEnvPropertiesTemplate : TextParser {
-    private lateinit var text: String
+class TextParserEnvPropertiesTemplate(content: String = "NO_CONTENT") : TextParser {
+    private var text: String
+
+    init {
+        this.text = content
+    }
 
     override fun readFromPath(path: String): StringBuilder {
-        var finalInitPath = ""
-
-        finalInitPath += if (isSingleFileName(path)) {
+        this.text = File(if (isSingleFileName(path)) {
             Paths.get("").toAbsolutePath().toString() + "/$path "
         } else {
             path
-        }.trim()
-
-        this.text = File(finalInitPath).readText(Charsets.UTF_8)
+        }.trim()).readText(Charsets.UTF_8)
 
         return StringBuilder(this.text)
+    }
+
+    override fun readFromURL(url: String): String {
+        return URL(url).readText()
     }
 
     override fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder {
