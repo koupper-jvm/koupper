@@ -2,15 +2,15 @@ package com.koupper.octopus
 
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
-import com.koupper.container.interfaces.ScriptManager
 import com.koupper.octopus.exceptions.InvalidScriptException
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
+import com.koupper.providers.parsing.TextParser
+import com.koupper.providers.parsing.extensions.splitKeyValue
 import java.io.File
 import java.net.URL
+import java.nio.file.Files
 import java.nio.file.Paths
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
@@ -21,9 +21,12 @@ val isSingleFileName: (String) -> Boolean = {
 
 class Octopus(private var container: Container, private var config: Config) : ProcessManager {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
-    private val userPath = System.getProperty("user.home")
+    private val userHomePath = System.getProperty("user.home")
+    //private val NULL_FILE = File(if (System.getProperty("os.name").startsWith("Windows")) "NUL" else "/dev/null")
 
     override fun <T> run(sentence: String, result: (value: T) -> Unit) {
+        System.setProperty("kotlin.script.classpath", currentClassPath)
+
         with(ScriptEngineManager().getEngineByExtension("kts")) {
             if (!isValidSentence(sentence)) {
                 throw InvalidScriptException("The script is invalid. $sentence")
@@ -77,9 +80,6 @@ class Octopus(private var container: Container, private var config: Config) : Pr
     }
 
     override fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
-        val executionDate = LocalDateTime.now()
-        val formattedExecutionDate = executionDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"))
-
         with(ScriptEngineManager().getEngineByExtension("kts")) {
             if (!isValidSentence(sentence)) {
                 throw InvalidScriptException("The script is invalid.")
@@ -97,9 +97,6 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 
             result(targetCallback.invoke(container, params))
         }
-
-        val finishedExecutionDate = LocalDateTime.now()
-        val formattedFinishedExecutionDate = finishedExecutionDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"))
     }
 
     override fun <T> runScriptFile(scriptPath: String, args: String, result: (value: T) -> Unit) {
@@ -190,6 +187,114 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         }
     }
 
+    override fun buildFrom(scriptManager: ScriptManager) {
+        println("\u001B[38;5;155mPreparing deployable application This take a while...\u001B[0m")
+
+        val parser = this.container.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
+        parser.readFromResource(".env")
+        val properties = parser.splitKeyValue("=".toRegex())
+
+        val modelProjectUrl = properties["MODEL_PROJECT_URL"]
+
+        downloadFile(
+                URL(modelProjectUrl),
+                "${Paths.get("").toAbsolutePath()}/unnamed.zip"
+        )
+
+        ProcessBuilder()
+                .command("unzip", "-qq", "${Paths.get("").toAbsolutePath()}/unnamed.zip")
+                .redirectError(ProcessBuilder.Redirect.INHERIT)
+                .start()
+                .waitFor()
+
+        File("${Paths.get("").toAbsolutePath()}/unnamed.zip").delete()
+
+        println("Locating scripts...")
+
+        File("${Paths.get("").toAbsolutePath()}/unnamed").renameTo(File(scriptManager.deployableName()))
+
+        this.changeFileContent(
+                "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/settings.gradle",
+                "rootProject.name = 'unnamed'",
+                "rootProject.name = '${scriptManager.deployableName()}'"
+        )
+
+        scriptManager.listScriptsToExecute().forEach {
+            print("${it.key} ...")
+
+            this.locateScript(
+                    it.key,
+                    "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(it.key)}"
+            )
+
+            println("\u001B[38;5;155m[ok]\u001B[0m")
+        }
+
+        val processManager = properties["OPTIMIZED_PROCESS_MANAGER"]
+
+        print("\u001B[38;5;155mRequesting an optimized process manager... \u001B[0m")
+
+        downloadFile(
+                URL(processManager),
+                "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/libs/octopus-1.0.jar"
+        )
+
+        println("\u001B[38;5;155m✔\u001B[0m")
+
+        println("\u001B[38;5;155mProcess Manager located.\u001B[0m")
+
+        println("\u001B[38;5;155mScripts located.\u001B[0m")
+
+        println("\u001B[38;5;155mBuilding done.\u001B[0m")
+    }
+
+    private fun locateScript(scriptPath: String, destinationPath: String) {
+        val file = File(scriptPath)
+
+        val tempFile = createTempFile()
+
+        tempFile.printWriter().use { writer ->
+            var lineNumber = 0
+
+            file.forEachLine { line ->
+                if (lineNumber == 0) {
+                    writer.println("package scripts\n\n$line")
+                } else {
+                    writer.println(line)
+                }
+
+                lineNumber++
+            }
+        }
+
+        tempFile.renameTo(File(destinationPath))
+    }
+
+    private fun changeFileContent(filePath: String, oldContent: String, newContent: String) {
+        val file = File(filePath)
+
+        val tempFile = createTempFile()
+
+        tempFile.printWriter().use { writer ->
+            file.forEachLine { line ->
+                writer.println(when {
+                    line.contains(oldContent) -> line.replace(oldContent, newContent)
+                    else -> line
+                })
+            }
+        }
+
+        check(file.delete() && tempFile.renameTo(file)) { "failed to replace file." }
+    }
+
+    private fun convertToKtExtensionFor(name: String): String {
+        return name.replace(".kts", ".kt")
+    }
+
+    override fun execute(callable: (container: Container, params: Map<String, Any>) -> Container, params: String) {
+        callable(container, this.buildParams(params))
+    }
+
     fun availableServiceProviders(): List<KClass<*>> {
         return this.registeredServiceProviders
     }
@@ -223,6 +328,30 @@ fun main(args: Array<String>) {
     }
 }
 
+fun runScriptFileFromUrl(context: ProcessManager, url: String, args: String) {
+    context.runScriptFileFromUrl(url, args) { result: Any ->
+        executeCallback(context, url, result)
+    }
+}
+
+private fun executeCallback(context: ProcessManager, scriptName: String, result: Any) {
+    if (result is ScriptManager) {
+        val listScripts = result.listScriptsToExecute()
+
+        if (result.deployType() == DeploymentType.NONE) {
+            context.runScriptFiles(listScripts) { _: Container, nameScript: String ->
+                println("script [$nameScript] ->\u001B[38;5;155m executed.\u001B[0m")
+            }
+
+            return
+        }
+
+        context.buildFrom(result)
+    } else if (result is Container) {
+        println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
+    }
+}
+
 fun createDefaultConfiguration(): ProcessManager {
     val containerImplementation = app
 
@@ -233,20 +362,6 @@ fun createDefaultConfiguration(): ProcessManager {
     return octopus
 }
 
-fun runScriptFileFromUrl(context: ProcessManager, url: String, args: String) {
-    context.runScriptFileFromUrl(url, args) { result: Any ->
-        executeCallback(context, url, result)
-    }
-}
-
-fun executeCallback(context: ProcessManager, scriptName: String, result: Any) {
-    if (result is ScriptManager) {
-        val listScripts = result.listScripts()
-
-        context.runScriptFiles(listScripts) { result: Container, nameScript: String ->
-            println("script [$nameScript] ->\u001B[38;5;155m executed.\u001B[0m")
-        }
-    } else if (result is Container) {
-        println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
-    }
+fun downloadFile(url: URL, targetFileName: String) {
+    url.openStream().use { `in` -> Files.copy(`in`, Paths.get(targetFileName)) }
 }

@@ -26,6 +26,12 @@ class TextParserHtmlEmailTemplate : TextParser {
         return URL(path).readText()
     }
 
+    override fun readFromResource(path: String): String {
+        this.text = TextParserHtmlEmailTemplate::class.java.classLoader.getResource(path).readText()
+
+        return this.text
+    }
+
     override fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder {
         data.forEach { (key, value) ->
             if (content.contains("\\{\\{\\s*\\$${key}\\s*\\}\\}".toRegex())) {

@@ -1,4 +1,4 @@
-import com.koupper.container.interfaces.ScriptManager
+import com.koupper.octopus.ScriptManager
 
 val init: (ScriptManager) -> ScriptManager = {
     it.runScript("yourScript.kts") // the params are optional as a map in second place to 'runScript' function.

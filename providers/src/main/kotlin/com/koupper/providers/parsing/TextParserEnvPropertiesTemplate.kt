@@ -26,6 +26,12 @@ class TextParserEnvPropertiesTemplate(content: String = "NO_CONTENT") : TextPars
         return URL(url).readText()
     }
 
+    override fun readFromResource(path: String): String {
+        this.text = TextParserEnvPropertiesTemplate::class.java.classLoader.getResource(path).readText()
+
+        return this.text
+    }
+
     override fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder {
         TODO("Not yet implemented")
     }
