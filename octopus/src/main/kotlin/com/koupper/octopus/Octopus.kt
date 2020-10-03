@@ -220,14 +220,48 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         )
 
         scriptManager.listScriptsToExecute().forEach {
-            print("${it.key} ...")
+            if (isSingleFileName(it.key)) {
+                print("${it.key} ...")
 
-            this.locateScript(
-                    it.key,
-                    "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(it.key)}"
-            )
+                this.locateScript(
+                        it.key,
+                        "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(it.key)}"
+                )
 
-            println("\u001B[38;5;155m[ok]\u001B[0m")
+                this.changeFileContent(
+                        "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(it.key)}",
+                        "myScript",
+                        "${it.key.substring(0, it.key.indexOf("."))}"
+                )
+
+                println("\u001B[38;5;155m[ok]\u001B[0m")
+            } else if (it.key.contains("\\")) {
+
+            } else if (it.key.contains("_") || it.key.contains("-")) {
+                val pathOfTargetScript = "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(it.key)}"
+
+                this.locateScript(
+                        it.key,
+                        pathOfTargetScript
+                )
+
+                val splitPartsByKebabCase = it.key.substring(0, it.key.indexOf(".")).split("_");
+
+                val splitPartsBySnakeCase = it.key.substring(0, it.key.indexOf(".")).split("-");
+
+                when {
+                    splitPartsBySnakeCase.isNotEmpty() -> {
+                        this.changeScriptVariable(splitPartsBySnakeCase, pathOfTargetScript)
+                    }
+                    splitPartsByKebabCase.isNotEmpty() -> {
+                        this.changeScriptVariable(splitPartsByKebabCase, pathOfTargetScript)
+                    }
+                    else -> {
+                        println("\n\u001B[31m The name used in your script file is malformed.\n")
+                    }
+                }
+
+            }
         }
 
         val processManager = properties["OPTIMIZED_PROCESS_MANAGER"]
@@ -246,6 +280,32 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         println("\u001B[38;5;155mScripts located.\u001B[0m")
 
         println("\u001B[38;5;155mBuilding done.\u001B[0m")
+    }
+
+    private fun changeScriptVariable(partsOfVariableName: List<String>, pathOfTargetScript: String): Boolean {
+        var finalValName = ""
+
+        if (partsOfVariableName.isNotEmpty()) {
+            partsOfVariableName.forEachIndexed lit@{ index, value ->
+                if (index != 0) {
+                    finalValName += value.substring(0, 1).toUpperCase().plus(value.substring(1))
+
+                    return@lit
+                }
+
+                finalValName += value
+            }
+
+            this.changeFileContent(
+                    pathOfTargetScript,
+                    "myScript",
+                    finalValName
+            )
+
+            return true
+        }
+
+        return false
     }
 
     private fun locateScript(scriptPath: String, destinationPath: String) {
