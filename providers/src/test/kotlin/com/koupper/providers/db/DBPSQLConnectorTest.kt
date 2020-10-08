@@ -27,7 +27,7 @@ class DBPSQLConnectorTest : AnnotationSpec() {
             val sql = Query().fields("*").from("someTable").where("field" eq "value").toSql()
 
             val connector = DBPSQLConnector()
-            connector.configUsing("jdbc:postgresql://localhost:5432/yourdatabase?user=youruser&password=yourpassword")
+            connector.configFromUrl("pathOfEnv")
 
             lateinit var rows: List<User>
 

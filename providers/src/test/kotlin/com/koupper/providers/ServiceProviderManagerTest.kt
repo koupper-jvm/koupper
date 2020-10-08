@@ -2,7 +2,7 @@ package com.koupper.providers
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.providers.db.DBServiceProvider
-import com.koupper.providers.despatch.SenderServiceProvider
+import com.koupper.providers.dispatch.SenderServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
 import com.koupper.providers.parsing.TextParserServiceProvider
 

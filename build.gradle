@@ -12,7 +12,6 @@ allprojects {
 
 subprojects {
     group = 'com.koupper'
-    version = '1.0'
 
     test {
         useJUnitPlatform()

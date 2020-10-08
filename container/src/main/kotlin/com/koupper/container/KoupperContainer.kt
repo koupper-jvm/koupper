@@ -10,9 +10,9 @@ import kotlin.reflect.KClass
 import kotlin.reflect.KType
 import kotlin.reflect.full.createInstance
 
-val app = KupContainer()
+val app = KoupperContainer()
 
-class KupContainer() : Container {
+class KoupperContainer() : Container {
     private var scope: String = ""
 
     constructor(scope: String) : this() {
@@ -30,8 +30,18 @@ class KupContainer() : Container {
     private var listeners: MutableMap<Any, Any> = mutableMapOf()
 
     override fun <T : Any> bind(abstractClass: T, callback: (container: Container) -> T, tag: String) {
-        if (this.bindings[abstractClass] != null && tag == "undefined") {
-            throw MultipleAbstractImplementationsException("Type[${(abstractClass as KClass<*>).simpleName}] has multiple instances, use tag for exclude the instance.")
+        if (this.bindings[abstractClass] != null) {
+            if (tag == "undefined") {
+                throw MultipleAbstractImplementationsException("Type[${(abstractClass as KClass<*>).simpleName}] has multiple instances, use tag for exclude the instance.")
+            }
+
+            if (this.bindings[abstractClass] is Map<*, *>) {
+                val value = this.bindings[abstractClass] as Map<String, () -> T>
+
+                if (value[tag] != null) {
+                    throw BindingException("Type[${(abstractClass as KClass<*>).simpleName}] exist in the container.")
+                }
+            }
         }
 
         if (this.bindings[abstractClass] != null && tag != "undefined") {
@@ -139,7 +149,7 @@ class KupContainer() : Container {
         this.singletons[abstractClass] = (concreteClass as KClass<*>).createInstance()
     }
 
-    override fun get(): KupContainer {
+    override fun get(): KoupperContainer {
         return this
     }
 

@@ -12,18 +12,26 @@ val isSingleFileName: (String) -> Boolean = {
 class TextParserHtmlEmailTemplate : TextParser {
     private lateinit var text: String
 
-    override fun readFromPath(path: String): StringBuilder {
+    override fun readFromPath(path: String): String {
         this.text = File(if (isSingleFileName(path)) {
             Paths.get("").toAbsolutePath().toString() + "/$path "
         } else {
             path
         }.trim()).readText(Charsets.UTF_8)
 
-        return StringBuilder(this.text)
+        return this.text
     }
 
     override fun readFromURL(path: String): String {
-        return URL(path).readText()
+        this.text = URL(path).readText()
+
+        return this.text
+    }
+
+    override fun readFromResource(path: String): String {
+        this.text = TextParserHtmlEmailTemplate::class.java.classLoader.getResource(path).readText()
+
+        return this.text
     }
 
     override fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder {

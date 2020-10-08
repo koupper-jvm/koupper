@@ -9,13 +9,35 @@ import io.zeko.db.sql.connections.*
 
 class DBSQLiteConnector : DBConnector {
     private lateinit var pool: SQLiteDBPool
+    private var parserHtmlTemplate = TextParserEnvPropertiesTemplate()
 
     override suspend fun session(): DBSession = HikariDBSession(pool, pool.createConnection())
 
-    override fun configUsing(configPath: String): DBConnector {
-        val parserHtmlTemplate = TextParserEnvPropertiesTemplate()
-        parserHtmlTemplate.readFromPath(configPath)
+    override fun configFromPath(configPath: String): DBConnector {
+        this.parserHtmlTemplate.readFromPath(configPath)
 
+        this.setup()
+
+        return this
+    }
+
+    override fun configFromUrl(configPath: String): DBConnector {
+        this.parserHtmlTemplate.readFromURL(configPath)
+
+        this.setup()
+
+        return this
+    }
+
+    override fun configFromResource(configPath: String): DBConnector {
+        this.parserHtmlTemplate.readFromResource(configPath)
+
+        this.setup()
+
+        return this
+    }
+
+    private fun setup() {
         val properties: Map<String?, String?> = parserHtmlTemplate.splitKeyValue("=".toRegex())
 
         val databaseName = properties["DB_DATABASE"]
@@ -25,7 +47,5 @@ class DBSQLiteConnector : DBConnector {
         )
 
         pool = SQLiteDBPool(config)
-
-        return this
     }
 }

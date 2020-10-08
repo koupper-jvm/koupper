@@ -13,6 +13,6 @@ class ConfigTest : AnnotationSpec() {
                 "user_id" to 1234
         ))
 
-        assertEquals(1234, config.listScripts()["init.kts"]?.get("user_id"))
+        assertEquals(1234, config.listScriptsToExecute()["init.kts"]?.get("user_id"))
     }
 }

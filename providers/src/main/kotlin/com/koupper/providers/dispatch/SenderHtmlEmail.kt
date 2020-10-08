@@ -1,51 +1,57 @@
-package com.koupper.providers.despatch
+package com.koupper.providers.dispatch
 
 import com.koupper.providers.logger.Logger
 import com.koupper.providers.parsing.TextParserEnvPropertiesTemplate
 import com.koupper.providers.parsing.extensions.splitKeyValue
-import java.net.URL
 import java.util.*
 import javax.mail.*
 import javax.mail.internet.InternetAddress
 import javax.mail.internet.MimeMessage
 
-class SenderHtmlEmail() : Sender {
-    var host: String? = ""
-    var port: String? = ""
-    var userName: String? = ""
-    var password: String? = ""
-    var targetEmail: String = ""
-    var subject: String = ""
-    var message: String = ""
-    lateinit var session: Session
-    var properties: Properties = Properties()
+class SenderHtmlEmail : Sender {
+    private var host: String? = ""
+    private var port: String? = ""
+    private var userName: String? = ""
+    private var password: String? = ""
+    private var targetEmail: String = ""
+    private var subject: String = ""
+    private var message: String = ""
+    private lateinit var session: Session
+    private var properties: Properties = Properties()
+    private val parserEnvProperties = TextParserEnvPropertiesTemplate()
+    private lateinit var text: String
 
     override fun configFromPath(configPath: String): Sender {
-        val parserEnvProperties = TextParserEnvPropertiesTemplate()
-        val content = parserEnvProperties.readFromPath(configPath)
+        this.parserEnvProperties.readFromPath(configPath)
 
-        val properties: Map<String?, String?> = TextParserEnvPropertiesTemplate(content.toString()).splitKeyValue("=".toRegex())
-
-        this.setupPropertiesFrom(properties)
+        this.setup()
 
         return this
     }
 
     override fun configFromUrl(configPath: String): Sender {
-        val content = URL(configPath).readText()
+        this.parserEnvProperties.readFromURL(configPath)
 
-        val properties: Map<String?, String?> = TextParserEnvPropertiesTemplate(content).splitKeyValue("=".toRegex())
-
-        this.setupPropertiesFrom(properties)
+        this.setup()
 
         return this
     }
 
-    private fun setupPropertiesFrom(properties: Map<String?, String?>) {
-        this.host = properties["MAIL_HOST"]
-        this.port = properties["MAIL_PORT"]
-        this.userName = properties["MAIL_USERNAME"]
-        this.password = properties["MAIL_PASSWORD"]
+    override fun configFromResource(configPath: String): Sender {
+        this.parserEnvProperties.readFromResource(configPath)
+
+        this.setup()
+
+        return this
+    }
+
+    private fun setup() {
+        val values: Map<String?, String?> = this.parserEnvProperties.splitKeyValue("=".toRegex())
+
+        this.host = values["MAIL_HOST"]
+        this.port = values["MAIL_PORT"]
+        this.userName = values["MAIL_USERNAME"]
+        this.password = values["MAIL_PASSWORD"]
     }
 
     override fun withContent(content: String) {
@@ -73,10 +79,10 @@ class SenderHtmlEmail() : Sender {
     }
 
     private fun configMailProperties() {
-        properties["mail.smtp.host"] = this.host
-        properties["mail.smtp.port"] = this.port
-        properties["mail.smtp.auth"] = "true"
-        properties["mail.smtp.starttls.enable"] = "true"
+        this.properties["mail.smtp.host"] = this.host
+        this.properties["mail.smtp.port"] = this.port
+        this.properties["mail.smtp.auth"] = "true"
+        this.properties["mail.smtp.starttls.enable"] = "true"
     }
 
     private fun createSession() {
@@ -98,5 +104,9 @@ class SenderHtmlEmail() : Sender {
         message.setContent(this.message, "text/html")
 
         return message
+    }
+
+    override fun properties(): Properties {
+        return this.properties
     }
 }

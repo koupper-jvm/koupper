@@ -9,14 +9,36 @@ import java.sql.Statement
 
 class DBPSQLConnector : DBConnector {
     private lateinit var pool: HikariDBPool
+    private val parser = TextParserEnvPropertiesTemplate()
 
     override suspend fun session(): DBSession = HikariDBSession(pool, pool.createConnection())
 
-    override fun configUsing(configPath: String): DBConnector {
-        val parserHtmlTemplate = TextParserEnvPropertiesTemplate()
-        parserHtmlTemplate.readFromPath(configPath)
+    override fun configFromPath(configPath: String): DBConnector {
+        this.parser.readFromPath(configPath)
 
-        val properties: Map<String?, String?> = parserHtmlTemplate.splitKeyValue("=".toRegex())
+        this.setup()
+
+        return this
+    }
+
+    override fun configFromUrl(configPath: String): DBConnector {
+        this.parser.readFromURL(configPath)
+
+        this.setup()
+
+        return this
+    }
+
+    override fun configFromResource(configPath: String): DBConnector {
+        this.parser.readFromResource(configPath)
+
+        this.setup()
+
+        return this
+    }
+
+    private fun setup() {
+        val properties: Map<String?, String?> = parser.splitKeyValue("=".toRegex())
 
         val host = properties["DB_HOST"]
         val port = properties["DB_PORT"]
@@ -31,7 +53,5 @@ class DBPSQLConnector : DBConnector {
 
         pool = HikariDBPool(config)
         pool.setInsertStatementMode(Statement.RETURN_GENERATED_KEYS)
-
-        return this
     }
 }
