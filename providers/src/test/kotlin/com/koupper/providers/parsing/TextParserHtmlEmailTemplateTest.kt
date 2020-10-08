@@ -1,6 +1,7 @@
 package com.koupper.providers.parsing
 
 import io.kotest.core.spec.style.AnnotationSpec
+import java.lang.StringBuilder
 import kotlin.test.assertTrue
 
 class TextParserHtmlEmailTemplateTest : AnnotationSpec() {
@@ -15,7 +16,7 @@ class TextParserHtmlEmailTemplateTest : AnnotationSpec() {
                         "name" to "Jacob",
                         "email" to "jacob.gacosta@gmail.com"
                 ),
-                htmlEmailTemplate.readFromPath("yuor-template.html")
+                StringBuilder(htmlEmailTemplate.readFromPath("yourPath"))
         )
 
         assertTrue {
