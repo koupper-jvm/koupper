@@ -291,8 +291,8 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         return name.replace(".kts", ".kt")
     }
 
-    override fun execute(callable: (container: Container, params: Map<String, Any>) -> Container, params: String) {
-        callable(container, this.buildParams(params))
+    override fun execute(callable: (container: Container, params: Map<String, Any>) -> Container, params: Map<String, String>) {
+        callable(container, params)
     }
 
     fun availableServiceProviders(): List<KClass<*>> {

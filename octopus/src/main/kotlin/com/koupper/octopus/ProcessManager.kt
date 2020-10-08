@@ -64,5 +64,5 @@ interface ProcessManager {
      * @param callable
      * @param params
      */
-    fun execute(callable: (container: Container, params: Map<String, Any>) -> Container, params: String)
+    fun execute(callable: (container: Container, params: Map<String, Any>) -> Container, params: Map<String, String>)
 }
