@@ -27,7 +27,7 @@ class DBLogger : Logger {
         configuration.setup().forEach { (key, value) ->
             if (key == "url") {
                 this.connector = DBPSQLConnector()
-                this.connector.configUsing(value as String)
+                this.connector.configFromUrl(value as String)
             }
 
             if (key == "tableName") {
