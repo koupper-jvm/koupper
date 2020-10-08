@@ -23,7 +23,7 @@ class Config : ScriptManager {
         return this.deployableName
     }
 
-    override fun toDeployableJar(name: String): ScriptManager {
+    override fun toDeployableProjectNamed(name: String): ScriptManager {
         this.deployableName = name
         this.deploymentType = DeploymentType.JAR
 
