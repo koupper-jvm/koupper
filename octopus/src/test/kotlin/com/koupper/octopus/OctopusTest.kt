@@ -7,9 +7,9 @@ import com.koupper.container.app
 import com.koupper.providers.db.DBConnector
 import com.koupper.providers.db.DBPSQLConnector
 import com.koupper.providers.db.DBServiceProvider
-import com.koupper.providers.despatch.Sender
-import com.koupper.providers.despatch.SenderHtmlEmail
-import com.koupper.providers.despatch.SenderServiceProvider
+import com.koupper.providers.dispatch.Sender
+import com.koupper.providers.dispatch.SenderHtmlEmail
+import com.koupper.providers.dispatch.SenderServiceProvider
 import com.koupper.providers.parsing.TextParser
 import com.koupper.providers.parsing.TextParserEnvPropertiesTemplate
 import com.koupper.providers.parsing.TextParserHtmlEmailTemplate

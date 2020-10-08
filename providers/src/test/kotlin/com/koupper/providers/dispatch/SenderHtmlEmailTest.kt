@@ -1,4 +1,4 @@
-package com.koupper.providers.despatch
+package com.koupper.providers.dispatch
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.providers.logger.Logger
@@ -6,33 +6,16 @@ import io.mockk.*
 import kotlin.test.assertTrue
 
 class SenderHtmlEmailTest : AnnotationSpec() {
+    @Ignore
     @Test
-    fun `should prepare the email sending object`() {
-        val host = "smtp.mailtrap.io"
-        val port = "2525"
-        val userName = "76a2d71e7dfc6f"
-        val password = "aded3b02e639e5"
-        val targetEmail = "dosek17@gmail.com"
-        val subject = "IMPORTANT"
-        val message = "<i>Greetings!</i><br>"
+    fun `should set the sender html email properties using a resource`() {
+        val htmlEmailSender = SenderHtmlEmail().configFromResource("resourceOfEnv")
 
-        mockkStatic("javax.mail.Session")
-
-        val htmlEmailSender = SenderHtmlEmail()
-        htmlEmailSender.host = host
-        htmlEmailSender.port = port
-        htmlEmailSender.userName = userName
-        htmlEmailSender.password = password
-        htmlEmailSender.subject = subject
-        htmlEmailSender.targetEmail = targetEmail
-        htmlEmailSender.message = message
-        htmlEmailSender.sendTo(targetEmail)
-
-        val properties = htmlEmailSender.properties
+        val properties = htmlEmailSender.properties()
 
         assertTrue {
-            properties["mail.smtp.host"]?.equals(host)
-            properties["mail.smtp.port"]?.equals(port)
+            properties["mail.smtp.host"]?.equals("host")
+            properties["mail.smtp.port"]?.equals("port")
             properties["mail.smtp.auth"]?.equals("true")
             properties["mail.smtp.starttls.enable"]?.equals("true")!!
         }
@@ -41,9 +24,9 @@ class SenderHtmlEmailTest : AnnotationSpec() {
     @Ignore
     @Test
     fun `should set the sender html email properties using a file`() {
-        val htmlEmailSender = SenderHtmlEmail().configFromPath(".your_env_properties") as SenderHtmlEmail
+        val htmlEmailSender = SenderHtmlEmail().configFromPath("pathOfEnv")
 
-        val properties = htmlEmailSender.properties
+        val properties = htmlEmailSender.properties()
 
         assertTrue {
             properties["mail.smtp.host"]?.equals("smtp.mailtrap.io")
@@ -56,9 +39,9 @@ class SenderHtmlEmailTest : AnnotationSpec() {
     @Ignore
     @Test
     fun `should set the sender html email properties using a url`() {
-        val htmlEmailSender = SenderHtmlEmail().configFromUrl("https://yourdomain.com/.your_env") as SenderHtmlEmail
+        val htmlEmailSender = SenderHtmlEmail().configFromUrl("urlOfEnv")
 
-        val properties = htmlEmailSender.properties
+        val properties = htmlEmailSender.properties()
 
         assertTrue {
             properties["mail.smtp.host"]?.equals("smtp.mailtrap.io")
@@ -69,7 +52,7 @@ class SenderHtmlEmailTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should invoke the log method for the logger object` () {
+    fun `should invoke the log method for the logger object`() {
         val loggerMock = mockkClass(Logger::class)
 
         every {
