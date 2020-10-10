@@ -9,5 +9,5 @@ interface ScriptManager : DeploymentManager {
 
     fun deployableName() : String
 
-    fun toDeployableProjectNamed(name: String): ScriptManager
+    override fun toDeployableProjectNamed(name: String): ScriptManager
 }
