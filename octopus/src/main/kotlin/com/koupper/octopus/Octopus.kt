@@ -270,7 +270,7 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 
         downloadFile(
                 URL(processManager),
-                "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/libs/octopus-1.0.jar"
+                "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/libs/${properties["OCTOPUS_VERSION"]}"
         )
 
         println("\u001B[38;5;155m✔\u001B[0m")
