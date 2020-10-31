@@ -2,9 +2,13 @@ package com.koupper.octopus
 
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
+import com.koupper.framework.ANSIColors
 import com.koupper.octopus.exceptions.InvalidScriptException
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
+import com.koupper.providers.http.Client
+import com.koupper.providers.parsing.JsonToObject
+import com.koupper.providers.parsing.TextJsonParser
 import com.koupper.providers.parsing.TextParser
 import com.koupper.providers.parsing.extensions.splitKeyValue
 import java.io.File
@@ -372,20 +376,70 @@ class Octopus(private var container: Container, private var config: Config) : Pr
             provider.up()
         }
     }
+
+    private fun downloadFile(url: URL, targetFileName: String) {
+        url.openStream().use { `in` -> Files.copy(`in`, Paths.get(targetFileName)) }
+    }
 }
 
 fun main(args: Array<String>) {
-    if (args.isEmpty()) print("No parameters provided.")
-
     val octopus = createDefaultConfiguration()
 
-    var params = ""
+    if (args.isNotEmpty() && args[0] == "UPDATING_CHECK") {
+        checkForUpdate()
+    } else {
+        var params = ""
 
-    if (args.size > 1) params = args[1]
+        if (args.size > 1) params = args[1]
 
-    octopus.runScriptFile(args[0], params) { result: Any ->
-        executeCallback(octopus, args[0], result)
+        octopus.runScriptFile(args[0], params) { result: Any ->
+            executeCallback(octopus, args[0], result)
+        }
     }
+
+    exitProcess(0)
+}
+
+fun checkForUpdate(): Boolean {
+    val parser = app.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
+    parser.readFromResource(".env")
+
+    val properties = parser.splitKeyValue("=".toRegex())
+
+    val checkForUpdateUrl = properties["CHECK_FOR_UPDATED_URL"]
+
+    val httpClient = app.createInstanceOf(Client::class)
+
+    val response = httpClient.get {
+        url = checkForUpdateUrl!!
+    }
+
+    val apps = response?.asString()!!
+
+    val textJsonParser = app.createInstanceOf(TextJsonParser::class) as JsonToObject<*>
+
+    textJsonParser.load(apps)
+
+    data class Versioning(val statusCode: String, val body: String)
+
+    val versioning = textJsonParser.toType<Versioning>()
+
+    textJsonParser.load(versioning.body)
+
+    data class Project(val name: String, val version: String)
+
+    data class Info(val apps: ArrayList<Project>)
+
+    textJsonParser.toType<Info>().apps.forEach { project ->
+        if ((project.name == "octopus" && project.version != properties["OCTOPUS_VERSION"]) ||
+                (project.name == "koupper-installer" && project.version != properties["KOUPPER_INSTALLER_VERSION"])) {
+            print("AVAILABLE_UPDATES")
+
+            exitProcess(0)
+        }
+    }
+
+    return false
 }
 
 fun runScriptFileFromUrl(context: ProcessManager, url: String, args: String) {
@@ -420,8 +474,4 @@ fun createDefaultConfiguration(): ProcessManager {
     octopus.registerBuildInServicesProvidersInContainer()
 
     return octopus
-}
-
-fun downloadFile(url: URL, targetFileName: String) {
-    url.openStream().use { `in` -> Files.copy(`in`, Paths.get(targetFileName)) }
 }
