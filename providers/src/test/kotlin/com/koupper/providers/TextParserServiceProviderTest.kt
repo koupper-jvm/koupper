@@ -2,10 +2,7 @@ package com.koupper.providers
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.app
-import com.koupper.providers.parsing.TextParserHtmlEmailTemplate
-import com.koupper.providers.parsing.TextParserServiceProvider
-import com.koupper.providers.parsing.TextParser
-import com.koupper.providers.parsing.TextParserEnvPropertiesTemplate
+import com.koupper.providers.parsing.*
 import com.koupper.providers.parsing.extensions.splitKeyValue
 import kotlin.test.assertTrue
 
