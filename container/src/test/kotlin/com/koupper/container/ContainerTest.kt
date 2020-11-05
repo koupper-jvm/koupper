@@ -4,6 +4,8 @@ import com.koupper.container.exceptions.BindingException
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.scope.*
 import com.koupper.container.exceptions.MultipleAbstractImplementationsException
+import com.koupper.container.extensions.get
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlin.test.*
 
 class ContainerTest : AnnotationSpec() {
@@ -225,6 +227,24 @@ class ContainerTest : AnnotationSpec() {
         assertTrue {
             exception.cause is BindingException
             "Type[class com.koupper.container.AbstractClass] is not bound in the container" == exception.message
+        }
+    }
+
+    @Test
+    fun `should bind a generic interface with a generic type`() {
+        val container = KoupperContainer()
+
+        class Example {}
+
+        container.bind(GenericAbstractClass::class, {
+            GenericConcreteClass<Any>()
+        })
+
+        val concreteClassOfContainer = container.createInstanceOf(GenericAbstractClass::class)
+
+        // this assert is unnecessary but it's used to identify the "toType" usage
+        assertTrue {
+            (concreteClassOfContainer as GenericConcreteClass<*>).toType<Example>() is Example
         }
     }
 }
