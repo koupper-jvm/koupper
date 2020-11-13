@@ -11,10 +11,11 @@ import javax.mail.internet.MimeMessage
 class SenderHtmlEmail : Sender {
     private var host: String? = ""
     private var port: String? = ""
+    private var from: String? = ""
     private var userName: String? = ""
     private var password: String? = ""
     private var targetEmail: String = ""
-    private var subject: String = ""
+    private var subject: String? = ""
     private var message: String = ""
     private lateinit var session: Session
     private var properties: Properties = Properties()
@@ -50,6 +51,8 @@ class SenderHtmlEmail : Sender {
 
         this.host = values["MAIL_HOST"]
         this.port = values["MAIL_PORT"]
+        this.from = values["MAIL_FROM_ADDRESS"]
+        this.subject = values["MAIL_FROM_NAME"]
         this.userName = values["MAIL_USERNAME"]
         this.password = values["MAIL_PASSWORD"]
     }
@@ -81,6 +84,7 @@ class SenderHtmlEmail : Sender {
     private fun configMailProperties() {
         this.properties["mail.smtp.host"] = this.host
         this.properties["mail.smtp.port"] = this.port
+        this.properties["mail.smtp.ssl.enable"] = "true"
         this.properties["mail.smtp.auth"] = "true"
         this.properties["mail.smtp.starttls.enable"] = "true"
     }
@@ -97,8 +101,8 @@ class SenderHtmlEmail : Sender {
 
     private fun buildMessage(): MimeMessage {
         val message = MimeMessage(this.session)
-        message.setFrom(InternetAddress(this.userName))
-        message.setRecipients(Message.RecipientType.TO, arrayOf(InternetAddress(this.targetEmail)))
+        message.setFrom(InternetAddress(this.from))
+        message.setRecipient(Message.RecipientType.TO, InternetAddress(this.targetEmail))
         message.subject = this.subject
         message.sentDate = Date()
         message.setContent(this.message, "text/html")
