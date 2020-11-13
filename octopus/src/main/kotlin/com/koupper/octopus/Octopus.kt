@@ -2,7 +2,8 @@ package com.koupper.octopus
 
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
-import com.koupper.framework.ANSIColors
+import com.koupper.framework.ANSIColors.ANSI_GREEN_155
+import com.koupper.framework.ANSIColors.ANSI_RESET
 import com.koupper.octopus.exceptions.InvalidScriptException
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
@@ -19,7 +20,7 @@ import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
 
-val isSingleFileName: (String) -> Boolean = {
+val isRelativeFile: (String) -> Boolean = {
     it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
 }
 
@@ -166,7 +167,7 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 
                 var finalInitPath = ""
 
-                finalInitPath += if (isSingleFileName(scriptPath)) {
+                finalInitPath += if (isRelativeFile(scriptPath)) {
                     Paths.get("").toAbsolutePath().toString() + "/$scriptPath "
                 } else {
                     scriptPath
@@ -192,10 +193,30 @@ class Octopus(private var container: Container, private var config: Config) : Pr
     }
 
     override fun buildFrom(scriptManager: ScriptManager) {
+        val path = "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}"
+
+        val deployableProject = File(path)
+
+        if (deployableProject.exists()) {
+            val scriptsToExecute = scriptManager.listScriptsToExecute()
+
+            scriptsToExecute.forEach { script ->
+                val executableName = convertToKtExtensionFor(script.key)
+
+                if (Files.notExists(Paths.get("${path}/src/main/kotlin/scripts/${executableName}"))) {
+                    println("The $ANSI_GREEN_155${script.key}$ANSI_RESET was added from the last time that the command was running.")
+
+                    this.locateInDeployable(script.key, scriptManager.deployableName())
+                }
+            }
+            return
+        }
+
         println("\u001B[38;5;155mPreparing deployable application This take a while...\u001B[0m")
 
         val parser = this.container.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
         parser.readFromResource(".env")
+
         val properties = parser.splitKeyValue("=".toRegex())
 
         val modelProjectUrl = properties["MODEL_PROJECT_URL"]
@@ -224,19 +245,10 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         )
 
         scriptManager.listScriptsToExecute().forEach {
-            if (isSingleFileName(it.key)) {
+            if (isRelativeFile(it.key)) {
                 print("${it.key} ...")
 
-                this.locateScript(
-                        it.key,
-                        "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(it.key)}"
-                )
-
-                this.changeFileContent(
-                        "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(it.key)}",
-                        "myScript",
-                        "${it.key.substring(0, it.key.indexOf("."))}"
-                )
+                this.locateInDeployable(it.key, scriptManager.deployableName())
 
                 println("\u001B[38;5;155m[ok]\u001B[0m")
             } else if (it.key.contains("\\")) {
@@ -284,6 +296,19 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         println("\u001B[38;5;155mScripts located.\u001B[0m")
 
         println("\u001B[38;5;155mBuilding done.\u001B[0m")
+    }
+
+    private fun locateInDeployable(scriptPath: String, deployableName: String) {
+        this.locateScript(
+                scriptPath,
+                "${Paths.get("").toAbsolutePath()}/${deployableName}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(scriptPath)}"
+        )
+
+        this.changeFileContent(
+                "${Paths.get("").toAbsolutePath()}/${deployableName}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(scriptPath)}",
+                "myScript",
+                "${scriptPath.substring(0, scriptPath.indexOf("."))}"
+        )
     }
 
     private fun changeScriptVariable(partsOfVariableName: List<String>, pathOfTargetScript: String): Boolean {
@@ -386,7 +411,7 @@ fun main(args: Array<String>) {
     val octopus = createDefaultConfiguration()
 
     if (args.isNotEmpty() && args[0] == "UPDATING_CHECK") {
-        checkForUpdate()
+        checkForUpdates()
     } else {
         var params = ""
 
@@ -400,7 +425,7 @@ fun main(args: Array<String>) {
     exitProcess(0)
 }
 
-fun checkForUpdate(): Boolean {
+fun checkForUpdates(): Boolean {
     val parser = app.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
     parser.readFromResource(".env")
 
