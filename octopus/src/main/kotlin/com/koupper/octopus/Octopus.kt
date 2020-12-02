@@ -3,8 +3,12 @@ package com.koupper.octopus
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.framework.ANSIColors.ANSI_GREEN_155
+import com.koupper.framework.ANSIColors.ANSI_RED
 import com.koupper.framework.ANSIColors.ANSI_RESET
 import com.koupper.octopus.exceptions.InvalidScriptException
+import com.koupper.octopus.managers.ProcessManager
+import com.koupper.octopus.managers.ProjectManager
+import com.koupper.octopus.managers.ScriptManager
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import com.koupper.providers.http.Client
@@ -24,7 +28,7 @@ val isRelativeFile: (String) -> Boolean = {
     it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
 }
 
-class Octopus(private var container: Container, private var config: Config) : ProcessManager {
+class Octopus(private var container: Container) : ProcessManager {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
     private val userHomePath = System.getProperty("user.home")
     //private val NULL_FILE = File(if (System.getProperty("os.name").startsWith("Windows")) "NUL" else "/dev/null")
@@ -64,12 +68,20 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 
                     val targetCallback = eval(valName) as (ScriptManager) -> ScriptManager
 
-                    result(targetCallback.invoke(config) as T)
+                    result(targetCallback.invoke(ScriptConfiguration()) as T)
                 }
-                isParameterized(sentence) -> {
-                    run(sentence, emptyMap()) { container: Container ->
-                        result(container as T)
-                    }
+                isBuilding(sentence) -> {
+                    eval(sentence)
+
+                    val endOfVariableNameInSentence = sentence.indexOf(":")
+
+                    val startOfSentence = sentence.indexOf("val")
+
+                    val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
+
+                    val targetCallback = eval(valName) as (ProjectManager) -> ProjectManager
+
+                    result(targetCallback.invoke(ProjectConfiguration()) as T)
                 }
                 else -> {
                     eval(sentence)
@@ -104,46 +116,59 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         }
     }
 
-    override fun <T> runScriptFile(scriptPath: String, args: String, result: (value: T) -> Unit) {
+    override fun <T> runScriptFile(scriptPath: String, params: String, result: (value: T) -> Unit) {
         val content = File(scriptPath).readText(Charsets.UTF_8)
 
-        this.runByType(scriptPath, args, content, result)
+        this.runScriptByType(scriptPath, params, content, result)
     }
 
-    override fun <T> runScriptFileFromUrl(scriptUrl: String, args: String, result: (value: T) -> Unit) {
+    override fun <T> runScriptFileFromUrl(scriptUrl: String, params: String, result: (value: T) -> Unit) {
         val content = URL(scriptUrl).readText()
 
-        this.runByType(scriptUrl, args, content, result)
+        this.runScriptByType(scriptUrl, params, content, result)
     }
 
-    private fun <T> runByType(scriptFile: String, args: String, content: String, result: (value: T) -> Unit) {
-        if ("init.kts" in scriptFile) {
-            this.run(content) { scriptManager: ScriptManager ->
-                result(scriptManager as T)
+    private fun <T> runScriptByType(scriptFile: String, params: String, content: String, result: (value: T) -> Unit) {
+        when {
+            "init.kts" in scriptFile -> {
+                this.run(content) { scriptManager: ScriptManager ->
+                    result(scriptManager as T)
+                }
             }
-
-            return
-        }
-
-        if (args == "EMPTY_PARAMS" || args.isEmpty()) {
-            this.run(content) { container: Container ->
-                result(container as T)
+            params == "EMPTY_PARAMS" || params.isEmpty() -> {
+                this.run(content) { container: Container ->
+                    result(container as T)
+                }
             }
+            "project-config.kts" in scriptFile -> {
+                val newContent = this.prepareProjectConfigurationScript(content, params)
 
-            return
-        }
-
-        this.run(content, this.buildParams(args)) { container: Container ->
-            result(container as T)
+                this.run(newContent) { projectManager: ProjectManager ->
+                    result(projectManager as T)
+                }
+            }
+            else -> {
+                this.run(content, this.convertStringParamsToListParams(params)) { container: Container ->
+                    result(container as T)
+                }
+            }
         }
     }
 
-    private fun buildParams(args: String): Map<String, Any> {
+    private fun prepareProjectConfigurationScript(content: String, params: String): String {
+        val projectProperties = this.convertStringParamsToListParams(params)
+
+        return content.replace("{PROJECT_NAME}", projectProperties["projectName"] as String)
+                .replace("{VERSION}", projectProperties["version"] as String)
+                .replace("{PACKAGE}", projectProperties["package"] as String)
+    }
+
+    private fun convertStringParamsToListParams(args: String): Map<String, Any> {
         if (args.isEmpty()) emptyMap<String, Any>()
 
         val params = mutableMapOf<String, Any>()
 
-        val input = args.split(",").forEach { arg ->
+        args.split(",").forEach { arg ->
             val keyValue = arg.split(":")
 
             val key = keyValue[0]
@@ -192,28 +217,124 @@ class Octopus(private var container: Container, private var config: Config) : Pr
         }
     }
 
-    override fun buildFrom(scriptManager: ScriptManager) {
-        val path = "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}"
+    override fun buildProjectFrom(projectManager: ProjectManager) {
+        val projectPath = File("${Paths.get("").toAbsolutePath()}/${projectManager.projectName()}")
 
-        val deployableProject = File(path)
+        if (projectPath.exists()) {
+            println("The $ANSI_RED ${projectManager.projectName()} already exist. $ANSI_RESET")
 
-        if (deployableProject.exists()) {
-            val scriptsToExecute = scriptManager.listScriptsToExecute()
+            this.locateScriptsInProject(
+                    projectManager.projectConstituents()["scripts"] as List<String>,
+                    "${Paths.get("").toAbsolutePath()}/${projectManager.projectName()}"
+            )
 
-            scriptsToExecute.forEach { script ->
-                val executableName = convertToKtExtensionFor(script.key)
-
-                if (Files.notExists(Paths.get("${path}/src/main/kotlin/scripts/${executableName}"))) {
-                    println("The $ANSI_GREEN_155${script.key}$ANSI_RESET was added from the last time that the command was running.")
-
-                    this.locateInDeployable(script.key, scriptManager.deployableName())
-                }
-            }
             return
         }
 
-        println("\u001B[38;5;155mPreparing deployable application This take a while...\u001B[0m")
+        println("\u001B[38;5;155mPreparing project This take a while...\u001B[0m")
 
+        this.createProjectWithName(
+                projectManager.projectName()
+        )
+
+        if (projectManager.projectConstituents()["scripts"] != null) {
+            this.locateScriptsInProject(
+                    projectManager.projectConstituents()["scripts"] as List<String>,
+                    "${Paths.get("").toAbsolutePath()}/${projectManager.projectName()}"
+            )
+        }
+
+        this.createPackageInProject(
+                projectManager.projectName(),
+                projectManager.projectConstituents()["package"] as String
+        )
+
+        this.createAppClassInProject(
+                projectManager.projectName(),
+                projectManager.projectConstituents()
+        )
+
+        this.changeFileContent(
+                "${Paths.get("").toAbsolutePath()}/${projectManager.projectName()}/settings.gradle",
+                "rootProject.name = '{UNNAMED}'",
+                "rootProject.name = '${projectManager.projectName()}'"
+        )
+
+        this.changeFileContent(
+                "${Paths.get("").toAbsolutePath()}/${projectManager.projectName()}/build.gradle",
+                "version = '{VERSION}",
+                "version =  '${projectManager.projectConstituents()["version"]}'"
+        )
+
+        this.addDependenciesInProject(
+                projectManager.projectName()
+        )
+
+        println("\u001B[38;5;155mBuilding done.\u001B[0m")
+    }
+
+    private fun addDependenciesInProject(projectName: String) {
+        val parser = this.container.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
+        parser.readFromResource(".env")
+
+        val properties = parser.splitKeyValue("=".toRegex())
+
+        val processManager = properties["OPTIMIZED_PROCESS_MANAGER_URL"]
+
+        print("\u001B[38;5;155mRequesting an optimized process manager... \u001B[0m")
+
+        downloadFile(
+                URL(processManager),
+                "${Paths.get("").toAbsolutePath()}/$projectName/libs/octopus-1.0.jar"
+        )
+
+        println("\u001B[38;5;155m✔\u001B[0m")
+
+        println("\u001B[38;5;155mProcess Manager located.\u001B[0m")
+
+        print("\u001B[38;5;155mRequesting bootstrapping... \u001B[0m")
+
+        val bootstrapping = properties["BOOTSTRAPPING_URL"]
+
+        downloadFile(
+                URL(bootstrapping),
+                "${Paths.get("").toAbsolutePath()}/$projectName/libs/bootstrap-1.0.0.jar"
+        )
+
+        println("\u001B[38;5;155m✔\u001B[0m")
+
+        println("\u001B[38;5;155mBootstrapping located.\u001B[0m")
+    }
+
+    private fun createAppClassInProject(projectName: String, constituents: Map<String, Any>) {
+        val packageLocation = "${Paths.get("").toAbsolutePath()}/$projectName/src/main/kotlin/"
+
+        val packagePath = (constituents["package"] as String).replace(".", "/")
+
+        val appKtFile = "$packageLocation$packagePath/App.kt"
+
+        this::class.java.classLoader.getResourceAsStream("templates/bootstrap/AppClass.txt").use { inputStream ->
+            File(appKtFile).outputStream().use {
+                inputStream?.copyTo(it)
+            }
+        }
+
+        this.changeFileContent(
+                appKtFile,
+                "package {PACKAGE_NAME}",
+                "package ${constituents["package"]}"
+        )
+    }
+
+    private fun createPackageInProject(projectName: String, `package`: String) {
+        val packageLocation = "${Paths.get("").toAbsolutePath()}/$projectName/src/main/kotlin/"
+
+        val packagePath = `package`.replace(".", "/")
+
+        File("$packageLocation$packagePath").mkdirs()
+    }
+
+    private fun createProjectWithName(projectName: String) {
         val parser = this.container.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
         parser.readFromResource(".env")
 
@@ -234,81 +355,60 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 
         File("${Paths.get("").toAbsolutePath()}/unnamed.zip").delete()
 
-        println("Locating scripts...")
+        File("${Paths.get("").toAbsolutePath()}/unnamed").renameTo(File(projectName))
+    }
 
-        File("${Paths.get("").toAbsolutePath()}/unnamed").renameTo(File(scriptManager.deployableName()))
+    private fun locateScriptsInProject(scripts: List<String>, targetProjectPath: String) {
+        if (scripts.isEmpty()) {
+            println("\u001B[38;5;229mNo scripts configured...\u001B[0m")
 
-        this.changeFileContent(
-                "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/settings.gradle",
-                "rootProject.name = 'unnamed'",
-                "rootProject.name = '${scriptManager.deployableName()}'"
-        )
+            return
+        }
 
-        scriptManager.listScriptsToExecute().forEach {
-            if (isRelativeFile(it.key)) {
-                print("${it.key} ...")
+        scripts.forEach { script ->
+            if (isRelativeFile(script)) {
+                print("$script ...")
 
-                this.locateInDeployable(it.key, scriptManager.deployableName())
+                if (Files.notExists(Paths.get("$targetProjectPath/src/main/kotlin/scripts/${convertToKtExtensionFor(script)}"))) {
+                    println("The $ANSI_GREEN_155$script$ANSI_RESET was added from the last time that the command was running.")
+
+                    this.locateScript(
+                            script,
+                            "$targetProjectPath/src/main/kotlin/scripts/${this.convertToKtExtensionFor(script)}"
+                    )
+
+                    this.changeFileContent(
+                            "$targetProjectPath/src/main/kotlin/scripts/${this.convertToKtExtensionFor(script)}",
+                            "myScript",
+                            script.substring(0, script.indexOf("."))
+                    )
+                }
 
                 println("\u001B[38;5;155m[ok]\u001B[0m")
-            } else if (it.key.contains("\\")) {
+            } else if (script.contains("_") || script.contains("-")) {
+                val scriptTargetPath = "$targetProjectPath/src/main/kotlin/scripts/${this.convertToKtExtensionFor(script)}"
 
-            } else if (it.key.contains("_") || it.key.contains("-")) {
-                val pathOfTargetScript = "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(it.key)}"
+                this.locateScript(script, scriptTargetPath)
 
-                this.locateScript(
-                        it.key,
-                        pathOfTargetScript
-                )
+                val splitPartsByKebabCase = script.substring(0, script.indexOf(".")).split("_")
 
-                val splitPartsByKebabCase = it.key.substring(0, it.key.indexOf(".")).split("_");
-
-                val splitPartsBySnakeCase = it.key.substring(0, it.key.indexOf(".")).split("-");
+                val splitPartsBySnakeCase = script.substring(0, script.indexOf(".")).split("-")
 
                 when {
                     splitPartsBySnakeCase.isNotEmpty() -> {
-                        this.changeScriptVariable(splitPartsBySnakeCase, pathOfTargetScript)
+                        this.changeScriptVariable(splitPartsBySnakeCase, scriptTargetPath)
                     }
                     splitPartsByKebabCase.isNotEmpty() -> {
-                        this.changeScriptVariable(splitPartsByKebabCase, pathOfTargetScript)
+                        this.changeScriptVariable(splitPartsByKebabCase, scriptTargetPath)
                     }
                     else -> {
                         println("\n\u001B[31m The name used in your script file is malformed.\n")
                     }
                 }
-
             }
         }
 
-        val processManager = properties["OPTIMIZED_PROCESS_MANAGER"]
-
-        print("\u001B[38;5;155mRequesting an optimized process manager... \u001B[0m")
-
-        downloadFile(
-                URL(processManager),
-                "${Paths.get("").toAbsolutePath()}/${scriptManager.deployableName()}/libs/octopus-1.0.jar"
-        )
-
-        println("\u001B[38;5;155m✔\u001B[0m")
-
-        println("\u001B[38;5;155mProcess Manager located.\u001B[0m")
-
         println("\u001B[38;5;155mScripts located.\u001B[0m")
-
-        println("\u001B[38;5;155mBuilding done.\u001B[0m")
-    }
-
-    private fun locateInDeployable(scriptPath: String, deployableName: String) {
-        this.locateScript(
-                scriptPath,
-                "${Paths.get("").toAbsolutePath()}/${deployableName}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(scriptPath)}"
-        )
-
-        this.changeFileContent(
-                "${Paths.get("").toAbsolutePath()}/${deployableName}/src/main/kotlin/scripts/${this.convertToKtExtensionFor(scriptPath)}",
-                "myScript",
-                "${scriptPath.substring(0, scriptPath.indexOf("."))}"
-        )
     }
 
     private fun changeScriptVariable(partsOfVariableName: List<String>, pathOfTargetScript: String): Boolean {
@@ -408,7 +508,7 @@ class Octopus(private var container: Container, private var config: Config) : Pr
 }
 
 fun main(args: Array<String>) {
-    val octopus = createDefaultConfiguration()
+    val processManager = createDefaultConfiguration()
 
     if (args.isNotEmpty() && args[0] == "UPDATING_CHECK") {
         checkForUpdates()
@@ -417,8 +517,10 @@ fun main(args: Array<String>) {
 
         if (args.size > 1) params = args[1]
 
-        octopus.runScriptFile(args[0], params) { result: Any ->
-            executeCallback(octopus, args[0], result)
+        val scriptPath = args[0]
+
+        processManager.runScriptFile(scriptPath, params) { result: Any ->
+            processCallback(processManager, scriptPath, result)
         }
     }
 
@@ -469,33 +571,32 @@ fun checkForUpdates(): Boolean {
 
 fun runScriptFileFromUrl(context: ProcessManager, url: String, args: String) {
     context.runScriptFileFromUrl(url, args) { result: Any ->
-        executeCallback(context, url, result)
+        processCallback(context, url, result)
     }
 }
 
-private fun executeCallback(context: ProcessManager, scriptName: String, result: Any) {
-    if (result is ScriptManager) {
-        val listScripts = result.listScriptsToExecute()
+private fun processCallback(context: ProcessManager, scriptName: String, result: Any) {
+    when (result) {
+        is ScriptManager -> {
+            val listScripts = result.listScriptsToExecute()
 
-        if (result.deployType() == DeploymentType.NONE) {
             context.runScriptFiles(listScripts) { _: Container, nameScript: String ->
                 println("script [$nameScript] ->\u001B[38;5;155m executed.\u001B[0m")
             }
-
-            return
         }
-
-        context.buildFrom(result)
-    } else if (result is Container) {
-        println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
+        is Container -> {
+            println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
+        }
+        is ProjectManager -> {
+            context.buildProjectFrom(result)
+        }
     }
 }
 
 fun createDefaultConfiguration(): ProcessManager {
-    val containerImplementation = app
+    val container = app
 
-    val octopus = Octopus(containerImplementation, Config())
-
+    val octopus = Octopus(container)
     octopus.registerBuildInServicesProvidersInContainer()
 
     return octopus

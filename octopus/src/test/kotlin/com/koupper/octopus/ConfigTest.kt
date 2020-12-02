@@ -7,9 +7,9 @@ class ConfigTest : AnnotationSpec() {
     @Ignore
     @Test
     fun `should add script for execution`() {
-        val config = Config()
+        val config = ScriptConfiguration()
 
-        config.runScript("init.kts", mapOf(
+        config.run("init.kts", mapOf(
                 "user_id" to 1234
         ))
 

@@ -1,4 +1,4 @@
-package com.koupper.octopus
+package com.koupper.octopus.managers
 
 import com.koupper.container.interfaces.Container
 
@@ -27,20 +27,20 @@ interface ProcessManager {
      * callback the resulting execution.
      *
      * @param scriptPath
-     * @param args the script arguments
+     * @param params the script params
      * @param result a callback
      */
-    fun <T> runScriptFile(scriptPath: String, args: String = "", result: (value: T) -> Unit)
+    fun <T> runScriptFile(scriptPath: String, params: String = "", result: (value: T) -> Unit)
 
     /**
      * Loads a script from URL, running it under ScriptEngineManager implementation and
      * callback the resulting execution.
      *
      * @param scriptUrl
-     * @param args the script arguments
+     * @param params the script params
      * @param result a callback
      */
-    fun <T> runScriptFileFromUrl(scriptUrl: String, args: String = "", result: (value: T) -> Unit)
+    fun <T> runScriptFileFromUrl(scriptUrl: String, params: String = "", result: (value: T) -> Unit)
 
     /**
      * Loads a script files from paths, running it under ScriptEngineManager implementation and
@@ -52,14 +52,14 @@ interface ProcessManager {
     fun <T> runScriptFiles(scripts: MutableMap<String, Map<String, Any>>, result: (value: T, scriptName: String) -> Unit)
 
     /**
-     * Build a deployable resource.
+     * Build a deployable project.
      *
      * @param scriptManager
      */
-    fun buildFrom(scriptManager: ScriptManager)
+    fun buildProjectFrom(projectManager: ProjectManager)
 
     /**
-     * Build a deployable resource.
+     * Execute a callable code passing a map of params.
      *
      * @param callable
      * @param params
