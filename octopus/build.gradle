@@ -7,7 +7,7 @@ application {
     mainClassName = 'com.koupper.octopus.OctopusKt'
 }
 
-version = '3.5.0'
+version = '3.5.1'
 
 jar {
     manifest {
