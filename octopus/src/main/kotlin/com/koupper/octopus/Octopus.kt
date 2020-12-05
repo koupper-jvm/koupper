@@ -285,7 +285,7 @@ class Octopus(private var container: Container) : ProcessManager {
 
         downloadFile(
                 URL(processManager),
-                "${Paths.get("").toAbsolutePath()}/$projectName/libs/octopus-1.0.jar"
+                "${Paths.get("").toAbsolutePath()}/$projectName/libs/octopus-3.5.1.jar"
         )
 
         println("\u001B[38;5;155m✔\u001B[0m")
@@ -344,18 +344,18 @@ class Octopus(private var container: Container) : ProcessManager {
 
         downloadFile(
                 URL(modelProjectUrl),
-                "${Paths.get("").toAbsolutePath()}/unnamed.zip"
+                "${Paths.get("").toAbsolutePath()}/model-project.zip"
         )
 
         ProcessBuilder()
-                .command("unzip", "-qq", "${Paths.get("").toAbsolutePath()}/unnamed.zip")
+                .command("unzip", "-qq", "${Paths.get("").toAbsolutePath()}/model-project.zip")
                 .redirectError(ProcessBuilder.Redirect.INHERIT)
                 .start()
                 .waitFor()
 
-        File("${Paths.get("").toAbsolutePath()}/unnamed.zip").delete()
+        File("${Paths.get("").toAbsolutePath()}/model-project.zip").delete()
 
-        File("${Paths.get("").toAbsolutePath()}/unnamed").renameTo(File(projectName))
+        File("${Paths.get("").toAbsolutePath()}/model-project").renameTo(File(projectName))
     }
 
     private fun locateScriptsInProject(scripts: List<String>, targetProjectPath: String) {
