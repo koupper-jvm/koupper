@@ -559,7 +559,7 @@ fun checkForUpdates(): Boolean {
 
     textJsonParser.toType<Info>().apps.forEach { project ->
         if ((project.name == "octopus" && project.version != properties["OCTOPUS_VERSION"]) ||
-                (project.name == "koupper-installer" && project.version != properties["KOUPPER_INSTALLER_VERSION"])) {
+                (project.name == "koupper-installer" && project.version != properties["KOUPPER_CLI_VERSION"])) {
             print("AVAILABLE_UPDATES")
 
             exitProcess(0)
