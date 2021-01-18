@@ -10,7 +10,7 @@ allprojects {
     }
 }
 
-version = '3.5.1'
+version = '3.7.0'
 
 subprojects {
     group = 'com.koupper'
@@ -41,7 +41,7 @@ subprojects {
     }
 }
 
-def jerseyVersion = "2.32"
+def jerseyVersion = "2.33"
 
 project(':bootstrap') {
     dependencies {

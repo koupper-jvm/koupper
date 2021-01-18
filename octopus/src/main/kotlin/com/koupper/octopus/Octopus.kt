@@ -285,7 +285,7 @@ class Octopus(private var container: Container) : ProcessManager {
 
         downloadFile(
                 URL(processManager),
-                "${Paths.get("").toAbsolutePath()}/$projectName/libs/octopus-3.5.1.jar"
+                "${Paths.get("").toAbsolutePath()}/$projectName/libs/octopus-3.7.0.jar"
         )
 
         println("\u001B[38;5;155m✔\u001B[0m")
