@@ -1,6 +1,6 @@
 package {PACKAGE_NAME}
 
-import com.koupper.framework.KoupperBootstrapper
+import com.koupper.web.KoupperBootstrapper
 
 class Application : KoupperBootstrapper() {
     // your implementation here
