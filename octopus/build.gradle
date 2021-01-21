@@ -13,30 +13,30 @@ jar {
     manifest {
         attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
     }
-    from {
-        configurations.runtimeClasspath.collect {
-            println("Adding -> ${it.name}")
-            it.isDirectory() ? it : zipTree(it)
-        }
-    }
-}
-
-task optimized(type: Jar) {
-    group = "custom-task"
-    description = "Generate an optimized Octopus jar."
-    manifest {
-        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
-    }
     from sourceSets.main.output
     from {
         configurations.runtimeClasspath.filter {
-            it.name.contains("container") || it.name.contains("providers") || it.name.contains("bootstrap")
+            it.name.contains("container") || it.name.contains("providers") || it.name.contains("configurations")
         }.collect {
-            println("including: ${it.name} to optimized Octopus process manager.")
+            println("Included: ${it.name} to optimized Octopus process manager.")
             it.isDirectory() ? it : zipTree(it)
         }
     }
     doLast {
         println("Optimized Octopus generated.")
+    }
+}
+
+task cliJar(type: Jar) {
+    group = "custom-task"
+    description = "Generate an optimized Octopus jar."
+    manifest {
+        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+    }
+    from {
+        configurations.runtimeClasspath.collect {
+            println("Included: ${it.name}")
+            it.isDirectory() ? it : zipTree(it)
+        }
     }
 }
