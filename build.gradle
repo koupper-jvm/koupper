@@ -45,6 +45,9 @@ def jerseyVersion = "2.32"
 
 project(':bootstrap') {
     dependencies {
+        implementation project(':octopus')
+        compileOnly project(':container')
+        compileOnly project(':providers')
         compileOnly project(':configurations')
         implementation "org.jetbrains.kotlin:kotlin-reflect"
         compile "org.glassfish.jersey.containers:jersey-container-grizzly2-http:${jerseyVersion}"
