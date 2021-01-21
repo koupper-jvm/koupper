@@ -1,4 +1,4 @@
-package com.koupper.framework
+package com.koupper.web
 
 fun Package.clearName(): String {
     val sourcePackage = this.toString()

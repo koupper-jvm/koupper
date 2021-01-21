@@ -1,4 +1,4 @@
-package com.koupper.framework.config
+package com.koupper.web.config
 
 import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
 import org.glassfish.jersey.server.ResourceConfig

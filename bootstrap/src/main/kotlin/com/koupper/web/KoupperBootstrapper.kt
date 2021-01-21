@@ -1,6 +1,6 @@
-package com.koupper.framework
+package com.koupper.web
 
-import com.koupper.framework.config.JAXRSLoader
+import com.koupper.web.config.JAXRSLoader
 
 open class KoupperBootstrapper : Bootstrapper {
     init {

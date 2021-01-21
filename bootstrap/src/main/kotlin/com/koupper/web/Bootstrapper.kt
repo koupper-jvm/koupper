@@ -1,4 +1,4 @@
-package com.koupper.framework
+package com.koupper.web
 
 interface Bootstrapper {
     fun registerJAXRSComponents()
