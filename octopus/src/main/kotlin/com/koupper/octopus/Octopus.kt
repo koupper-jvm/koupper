@@ -1,10 +1,10 @@
 package com.koupper.octopus
 
+import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
+import com.koupper.configurations.utilities.ANSIColors.ANSI_RED
+import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
-import com.koupper.framework.ANSIColors.ANSI_GREEN_155
-import com.koupper.framework.ANSIColors.ANSI_RED
-import com.koupper.framework.ANSIColors.ANSI_RESET
 import com.koupper.octopus.exceptions.InvalidScriptException
 import com.koupper.octopus.managers.ProcessManager
 import com.koupper.octopus.managers.ProjectManager

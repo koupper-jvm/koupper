@@ -1,6 +1,6 @@
 package com.koupper.framework.config
 
-import com.koupper.framework.ANSIColors.ANSI_GREEN_155
+import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
 import org.glassfish.jersey.server.ResourceConfig
 
 class JAXRSLoader : ResourceConfig() {
