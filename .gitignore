@@ -24,4 +24,4 @@ gradle-app.setting
 
 .env_notifications
 
-.env
+**/.env
