@@ -1,4 +1,4 @@
-package com.koupper.providers.dispatch
+package com.koupper.providers.mailing
 
 import com.koupper.providers.logger.Logger
 import java.util.*

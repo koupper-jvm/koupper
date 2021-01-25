@@ -1,4 +1,4 @@
-package com.koupper.providers.dispatch
+package com.koupper.providers.mailing
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.providers.logger.Logger

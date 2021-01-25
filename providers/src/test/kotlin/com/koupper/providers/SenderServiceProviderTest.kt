@@ -2,9 +2,9 @@ package com.koupper.providers
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.app
-import com.koupper.providers.dispatch.Sender
-import com.koupper.providers.dispatch.SenderHtmlEmail
-import com.koupper.providers.dispatch.SenderServiceProvider
+import com.koupper.providers.mailing.Sender
+import com.koupper.providers.mailing.SenderHtmlEmail
+import com.koupper.providers.mailing.SenderServiceProvider
 import kotlin.test.assertTrue
 
 class SenderServiceProviderTest : AnnotationSpec() {

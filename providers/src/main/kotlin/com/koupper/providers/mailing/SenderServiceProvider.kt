@@ -1,4 +1,4 @@
-package com.koupper.providers.dispatch
+package com.koupper.providers.mailing
 
 import com.koupper.container.app
 import com.koupper.providers.ServiceProvider
