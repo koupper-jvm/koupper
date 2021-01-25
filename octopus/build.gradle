@@ -18,12 +18,12 @@ jar {
         configurations.runtimeClasspath.filter {
             it.name.contains("container") || it.name.contains("providers") || it.name.contains("configurations")
         }.collect {
-            println("Included: ${it.name} to optimized Octopus process manager.")
+            println("Octopus dependency Included: ${it.name}")
             it.isDirectory() ? it : zipTree(it)
         }
     }
     doLast {
-        println("Optimized Octopus generated.")
+        println("Octopus generated.")
     }
 }
 
