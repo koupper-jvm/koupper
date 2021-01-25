@@ -49,11 +49,11 @@ project(':bootstrap') {
         compileOnly project(':container')
         compileOnly project(':providers')
         compileOnly project(':configurations')
-        implementation "org.jetbrains.kotlin:kotlin-reflect"
-        compile "org.glassfish.jersey.containers:jersey-container-grizzly2-http:${jerseyVersion}"
-        compile "org.glassfish.jersey.inject:jersey-hk2:${jerseyVersion}"
-        compile "org.glassfish.jersey.media:jersey-media-json-jackson:${jerseyVersion}"
-        compile "org.glassfish.jersey.ext:jersey-entity-filtering:${jerseyVersion}"
+        compileOnly "org.jetbrains.kotlin:kotlin-reflect"
+        compileOnly "org.glassfish.jersey.containers:jersey-container-grizzly2-http:${jerseyVersion}"
+        compileOnly "org.glassfish.jersey.inject:jersey-hk2:${jerseyVersion}"
+        compileOnly "org.glassfish.jersey.media:jersey-media-json-jackson:${jerseyVersion}"
+        compileOnly "org.glassfish.jersey.ext:jersey-entity-filtering:${jerseyVersion}"
     }
 }
 
