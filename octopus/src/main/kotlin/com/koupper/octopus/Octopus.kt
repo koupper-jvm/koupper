@@ -569,12 +569,6 @@ fun checkForUpdates(): Boolean {
     return false
 }
 
-fun runScriptFileFromUrl(context: ProcessManager, url: String, args: String) {
-    context.runScriptFileFromUrl(url, args) { result: Any ->
-        processCallback(context, url, result)
-    }
-}
-
 private fun processCallback(context: ProcessManager, scriptName: String, result: Any) {
     when (result) {
         is ScriptManager -> {
