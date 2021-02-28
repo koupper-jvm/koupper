@@ -1,8 +1,9 @@
 package com.koupper.octopus.managers
 
 import com.koupper.container.interfaces.Container
+import com.koupper.octopus.process.ProjectProcess
 
-interface ProcessManager {
+interface ProcessExecutionManager {
     /**
      * Runs a sentence without params under ScriptEngineManager implementation and
      * callback the resulting execution.
@@ -56,7 +57,7 @@ interface ProcessManager {
      *
      * @param scriptManager
      */
-    fun buildProjectFrom(projectManager: ProjectManager)
+    fun buildProjectFrom(projectProcess: ProjectProcess)
 
     /**
      * Execute a callable code passing a map of params.
