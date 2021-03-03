@@ -1,7 +1,7 @@
 package com.koupper.octopus.managers
 
 import com.koupper.container.interfaces.Container
-import com.koupper.octopus.process.ProjectProcess
+import com.koupper.octopus.process.ModuleProcess
 
 interface ProcessExecutionManager {
     /**
@@ -57,7 +57,7 @@ interface ProcessExecutionManager {
      *
      * @param scriptManager
      */
-    fun buildProjectFrom(projectProcess: ProjectProcess)
+    fun buildProjectFrom(moduleProcess: ModuleProcess)
 
     /**
      * Execute a callable code passing a map of params.

@@ -1,6 +1,6 @@
 package com.koupper.octopus
 
-import com.koupper.octopus.process.ProjectProcess
+import com.koupper.octopus.process.ModuleProcess
 import com.koupper.octopus.process.ScriptProcess
 
 class ScriptConfiguration : ScriptProcess {
@@ -16,8 +16,8 @@ class ScriptConfiguration : ScriptProcess {
         return this.params
     }
 
-    override fun buildFrom(projectName: String, resources: Map<String, Any>): ProjectProcess {
-        return ProjectConfiguration().buildFrom(projectName, mapOf(
+    override fun buildFrom(projectName: String, resources: Map<String, Any>): ModuleProcess {
+        return ModuleConfiguration().buildFrom(projectName, mapOf(
                 "scripts" to params
         ))
     }

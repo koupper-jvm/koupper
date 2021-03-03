@@ -7,7 +7,7 @@ import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.exceptions.InvalidScriptException
 import com.koupper.octopus.managers.ProcessExecutionManager
-import com.koupper.octopus.process.ProjectProcess
+import com.koupper.octopus.process.ModuleProcess
 import com.koupper.octopus.process.ScriptProcess
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
@@ -79,9 +79,9 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
 
                     val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
 
-                    val targetCallback = eval(valName) as (ProjectProcess) -> ProjectProcess
+                    val targetCallback = eval(valName) as (ModuleProcess) -> ModuleProcess
 
-                    result(targetCallback.invoke(ProjectConfiguration()) as T)
+                    result(targetCallback.invoke(ModuleConfiguration()) as T)
                 }
                 else -> {
                     eval(sentence)
@@ -143,8 +143,8 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
             "project-config.kts" in scriptFile -> {
                 val newContent = this.prepareProjectConfigurationScript(content, params)
 
-                this.run(newContent) { projectProcess: ProjectProcess ->
-                    result(projectProcess as T)
+                this.run(newContent) { moduleProcess: ModuleProcess ->
+                    result(moduleProcess as T)
                 }
             }
             else -> {
@@ -217,15 +217,15 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
         }
     }
 
-    override fun buildProjectFrom(projectProcess: ProjectProcess) {
-        val projectPath = File("${Paths.get("").toAbsolutePath()}/${projectProcess.projectName()}")
+    override fun buildProjectFrom(moduleProcess: ModuleProcess) {
+        val projectPath = File("${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}")
 
         if (projectPath.exists()) {
-            println("The $ANSI_RED ${projectProcess.projectName()} already exist. $ANSI_RESET")
+            println("The $ANSI_RED ${moduleProcess.projectName()} already exist. $ANSI_RESET")
 
             this.locateScriptsInProject(
-                    projectProcess.projectConstituents()["scripts"] as List<String>,
-                    "${Paths.get("").toAbsolutePath()}/${projectProcess.projectName()}"
+                    moduleProcess.projectConstituents()["scripts"] as List<String>,
+                    "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}"
             )
 
             return
@@ -234,40 +234,40 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
         println("\u001B[38;5;155mPreparing project This take a while...\u001B[0m")
 
         this.createProjectWithName(
-                projectProcess.projectName()
+                moduleProcess.projectName()
         )
 
-        if (projectProcess.projectConstituents()["scripts"] != null) {
+        if (moduleProcess.projectConstituents()["scripts"] != null) {
             this.locateScriptsInProject(
-                    projectProcess.projectConstituents()["scripts"] as List<String>,
-                    "${Paths.get("").toAbsolutePath()}/${projectProcess.projectName()}"
+                    moduleProcess.projectConstituents()["scripts"] as List<String>,
+                    "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}"
             )
         }
 
         this.createPackageInProject(
-                projectProcess.projectName(),
-                projectProcess.projectConstituents()["package"] as String
+                moduleProcess.projectName(),
+                moduleProcess.projectConstituents()["package"] as String
         )
 
         this.createAppClassInProject(
-                projectProcess.projectName(),
-                projectProcess.projectConstituents()
+                moduleProcess.projectName(),
+                moduleProcess.projectConstituents()
         )
 
         this.changeFileContent(
-                "${Paths.get("").toAbsolutePath()}/${projectProcess.projectName()}/settings.gradle",
+                "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}/settings.gradle",
                 "rootProject.name = '{UNNAMED}'",
-                "rootProject.name = '${projectProcess.projectName()}'"
+                "rootProject.name = '${moduleProcess.projectName()}'"
         )
 
         this.changeFileContent(
-                "${Paths.get("").toAbsolutePath()}/${projectProcess.projectName()}/build.gradle",
+                "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}/build.gradle",
                 "version = '{VERSION}",
-                "version =  '${projectProcess.projectConstituents()["version"]}'"
+                "version =  '${moduleProcess.projectConstituents()["version"]}'"
         )
 
         this.addDependenciesInProject(
-                projectProcess.projectName()
+                moduleProcess.projectName()
         )
 
         println("\u001B[38;5;155mBuilding done.\u001B[0m")
@@ -581,7 +581,7 @@ private fun processCallback(context: ProcessExecutionManager, scriptName: String
         is Container -> {
             println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
         }
-        is ProjectProcess -> {
+        is ModuleProcess -> {
             context.buildProjectFrom(result)
         }
     }

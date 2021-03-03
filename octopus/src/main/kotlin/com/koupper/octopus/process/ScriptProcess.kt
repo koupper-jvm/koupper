@@ -5,5 +5,5 @@ interface ScriptProcess {
 
     fun listScriptsToExecute() : MutableMap<String, Map<String, Any>>
 
-    fun buildFrom(projectName: String, resources: Map<String, Any> = emptyMap()) : ProjectProcess
+    fun buildFrom(projectName: String, resources: Map<String, Any> = emptyMap()) : ModuleProcess
 }
