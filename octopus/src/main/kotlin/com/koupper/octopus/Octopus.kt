@@ -6,9 +6,9 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.exceptions.InvalidScriptException
-import com.koupper.octopus.managers.ProcessManager
-import com.koupper.octopus.managers.ProjectManager
-import com.koupper.octopus.managers.ScriptManager
+import com.koupper.octopus.managers.ProcessExecutionManager
+import com.koupper.octopus.process.ModuleProcess
+import com.koupper.octopus.process.ScriptProcess
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import com.koupper.providers.http.Client
@@ -28,7 +28,7 @@ val isRelativeFile: (String) -> Boolean = {
     it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
 }
 
-class Octopus(private var container: Container) : ProcessManager {
+class Octopus(private var container: Container) : ProcessExecutionManager {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
     private val userHomePath = System.getProperty("user.home")
     //private val NULL_FILE = File(if (System.getProperty("os.name").startsWith("Windows")) "NUL" else "/dev/null")
@@ -66,7 +66,7 @@ class Octopus(private var container: Container) : ProcessManager {
 
                     val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
 
-                    val targetCallback = eval(valName) as (ScriptManager) -> ScriptManager
+                    val targetCallback = eval(valName) as (ScriptProcess) -> ScriptProcess
 
                     result(targetCallback.invoke(ScriptConfiguration()) as T)
                 }
@@ -79,9 +79,9 @@ class Octopus(private var container: Container) : ProcessManager {
 
                     val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
 
-                    val targetCallback = eval(valName) as (ProjectManager) -> ProjectManager
+                    val targetCallback = eval(valName) as (ModuleProcess) -> ModuleProcess
 
-                    result(targetCallback.invoke(ProjectConfiguration()) as T)
+                    result(targetCallback.invoke(ModuleConfiguration()) as T)
                 }
                 else -> {
                     eval(sentence)
@@ -131,8 +131,8 @@ class Octopus(private var container: Container) : ProcessManager {
     private fun <T> runScriptByType(scriptFile: String, params: String, content: String, result: (value: T) -> Unit) {
         when {
             "init.kts" in scriptFile -> {
-                this.run(content) { scriptManager: ScriptManager ->
-                    result(scriptManager as T)
+                this.run(content) { scriptProcess: ScriptProcess ->
+                    result(scriptProcess as T)
                 }
             }
             params == "EMPTY_PARAMS" || params.isEmpty() -> {
@@ -143,8 +143,8 @@ class Octopus(private var container: Container) : ProcessManager {
             "project-config.kts" in scriptFile -> {
                 val newContent = this.prepareProjectConfigurationScript(content, params)
 
-                this.run(newContent) { projectManager: ProjectManager ->
-                    result(projectManager as T)
+                this.run(newContent) { moduleProcess: ModuleProcess ->
+                    result(moduleProcess as T)
                 }
             }
             else -> {
@@ -217,15 +217,15 @@ class Octopus(private var container: Container) : ProcessManager {
         }
     }
 
-    override fun buildProjectFrom(projectManager: ProjectManager) {
-        val projectPath = File("${Paths.get("").toAbsolutePath()}/${projectManager.projectName()}")
+    override fun buildProjectFrom(moduleProcess: ModuleProcess) {
+        val projectPath = File("${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}")
 
         if (projectPath.exists()) {
-            println("The $ANSI_RED ${projectManager.projectName()} already exist. $ANSI_RESET")
+            println("The $ANSI_RED ${moduleProcess.projectName()} already exist. $ANSI_RESET")
 
             this.locateScriptsInProject(
-                    projectManager.projectConstituents()["scripts"] as List<String>,
-                    "${Paths.get("").toAbsolutePath()}/${projectManager.projectName()}"
+                    moduleProcess.projectConstituents()["scripts"] as List<String>,
+                    "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}"
             )
 
             return
@@ -234,40 +234,40 @@ class Octopus(private var container: Container) : ProcessManager {
         println("\u001B[38;5;155mPreparing project This take a while...\u001B[0m")
 
         this.createProjectWithName(
-                projectManager.projectName()
+                moduleProcess.projectName()
         )
 
-        if (projectManager.projectConstituents()["scripts"] != null) {
+        if (moduleProcess.projectConstituents()["scripts"] != null) {
             this.locateScriptsInProject(
-                    projectManager.projectConstituents()["scripts"] as List<String>,
-                    "${Paths.get("").toAbsolutePath()}/${projectManager.projectName()}"
+                    moduleProcess.projectConstituents()["scripts"] as List<String>,
+                    "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}"
             )
         }
 
         this.createPackageInProject(
-                projectManager.projectName(),
-                projectManager.projectConstituents()["package"] as String
+                moduleProcess.projectName(),
+                moduleProcess.projectConstituents()["package"] as String
         )
 
         this.createAppClassInProject(
-                projectManager.projectName(),
-                projectManager.projectConstituents()
+                moduleProcess.projectName(),
+                moduleProcess.projectConstituents()
         )
 
         this.changeFileContent(
-                "${Paths.get("").toAbsolutePath()}/${projectManager.projectName()}/settings.gradle",
+                "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}/settings.gradle",
                 "rootProject.name = '{UNNAMED}'",
-                "rootProject.name = '${projectManager.projectName()}'"
+                "rootProject.name = '${moduleProcess.projectName()}'"
         )
 
         this.changeFileContent(
-                "${Paths.get("").toAbsolutePath()}/${projectManager.projectName()}/build.gradle",
+                "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}/build.gradle",
                 "version = '{VERSION}",
-                "version =  '${projectManager.projectConstituents()["version"]}'"
+                "version =  '${moduleProcess.projectConstituents()["version"]}'"
         )
 
         this.addDependenciesInProject(
-                projectManager.projectName()
+                moduleProcess.projectName()
         )
 
         println("\u001B[38;5;155mBuilding done.\u001B[0m")
@@ -569,15 +569,9 @@ fun checkForUpdates(): Boolean {
     return false
 }
 
-fun runScriptFileFromUrl(context: ProcessManager, url: String, args: String) {
-    context.runScriptFileFromUrl(url, args) { result: Any ->
-        processCallback(context, url, result)
-    }
-}
-
-private fun processCallback(context: ProcessManager, scriptName: String, result: Any) {
+private fun processCallback(context: ProcessExecutionManager, scriptName: String, result: Any) {
     when (result) {
-        is ScriptManager -> {
+        is ScriptProcess -> {
             val listScripts = result.listScriptsToExecute()
 
             context.runScriptFiles(listScripts) { _: Container, nameScript: String ->
@@ -587,13 +581,13 @@ private fun processCallback(context: ProcessManager, scriptName: String, result:
         is Container -> {
             println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
         }
-        is ProjectManager -> {
+        is ModuleProcess -> {
             context.buildProjectFrom(result)
         }
     }
 }
 
-fun createDefaultConfiguration(): ProcessManager {
+fun createDefaultConfiguration(): ProcessExecutionManager {
     val container = app
 
     val octopus = Octopus(container)
