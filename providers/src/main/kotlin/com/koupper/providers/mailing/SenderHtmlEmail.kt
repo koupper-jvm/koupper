@@ -1,7 +1,7 @@
 package com.koupper.providers.mailing
 
 import com.koupper.providers.logger.Logger
-import com.koupper.providers.parsing.TextParserEnvPropertiesTemplate
+import com.koupper.providers.parsing.TextReader
 import com.koupper.providers.parsing.extensions.splitKeyValue
 import java.util.*
 import javax.mail.*
@@ -19,11 +19,11 @@ class SenderHtmlEmail : Sender {
     private var message: String = ""
     private lateinit var session: Session
     private var properties: Properties = Properties()
-    private val parserEnvProperties = TextParserEnvPropertiesTemplate()
+    private val textReader = TextReader()
     private lateinit var text: String
 
     override fun configFromPath(configPath: String): Sender {
-        this.parserEnvProperties.readFromPath(configPath)
+        this.textReader.readFromPath(configPath)
 
         this.setup()
 
@@ -31,7 +31,7 @@ class SenderHtmlEmail : Sender {
     }
 
     override fun configFromUrl(configPath: String): Sender {
-        this.parserEnvProperties.readFromURL(configPath)
+        this.textReader.readFromURL(configPath)
 
         this.setup()
 
@@ -39,7 +39,7 @@ class SenderHtmlEmail : Sender {
     }
 
     override fun configFromResource(configPath: String): Sender {
-        this.parserEnvProperties.readFromResource(configPath)
+        this.textReader.readFromResource(configPath)
 
         this.setup()
 
@@ -47,7 +47,7 @@ class SenderHtmlEmail : Sender {
     }
 
     private fun setup() {
-        val values: Map<String?, String?> = this.parserEnvProperties.splitKeyValue("=".toRegex())
+        val values: Map<String?, String?> = this.textReader.splitKeyValue("=".toRegex())
 
         this.host = values["MAIL_HOST"]
         this.port = values["MAIL_PORT"]

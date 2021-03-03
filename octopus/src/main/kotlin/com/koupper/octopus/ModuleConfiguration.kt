@@ -6,18 +6,18 @@ class ModuleConfiguration : ModuleProcess {
     lateinit var name: String
     private val constituents: MutableMap<String, Any> = mutableMapOf()
 
-    override fun buildFrom(name: String, constituents: Map<String, Any>): ModuleProcess {
+    override fun setup(name: String, metadata: Map<String, Any>): ModuleProcess {
         this.name = name
         this.constituents.putAll(constituents)
 
         return this
     }
 
-    override fun projectName(): String {
+    override fun moduleName(): String {
         return this.name
     }
 
-    override fun projectConstituents(): Map<String, Any> {
-        return constituents
+    override fun build() {
+        print("ahuevo perras");
     }
 }

@@ -5,15 +5,6 @@ import com.koupper.octopus.process.ModuleProcess
 
 interface ProcessExecutionManager {
     /**
-     * Runs a sentence without params under ScriptEngineManager implementation and
-     * callback the resulting execution.
-     *
-     * @param sentence the script sentence
-     * @param result a callback
-     */
-    fun <T> run(sentence: String, result: (value: T) -> Unit)
-
-    /**
      * Runs a sentence with params under ScriptEngineManager implementation and
      * callback the resulting execution.
      *
@@ -21,7 +12,7 @@ interface ProcessExecutionManager {
      * @param params the script params
      * @param result a callback
      */
-    fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit)
+    fun <T> run(sentence: String, params: Map<String, Any> = emptyMap(), result: (value: T) -> Unit)
 
     /**
      * Loads a script from file, running it under ScriptEngineManager implementation and
@@ -57,7 +48,7 @@ interface ProcessExecutionManager {
      *
      * @param scriptManager
      */
-    fun buildProjectFrom(moduleProcess: ModuleProcess)
+    fun buildModule(moduleProcess: ModuleProcess)
 
     /**
      * Execute a callable code passing a map of params.

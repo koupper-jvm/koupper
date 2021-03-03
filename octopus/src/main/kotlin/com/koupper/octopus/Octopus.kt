@@ -1,6 +1,5 @@
 package com.koupper.octopus
 
-import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
 import com.koupper.configurations.utilities.ANSIColors.ANSI_RED
 import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
@@ -33,7 +32,7 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
     private val userHomePath = System.getProperty("user.home")
     //private val NULL_FILE = File(if (System.getProperty("os.name").startsWith("Windows")) "NUL" else "/dev/null")
 
-    override fun <T> run(sentence: String, result: (value: T) -> Unit) {
+    override fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
         System.setProperty("kotlin.script.classpath", currentClassPath)
 
         with(ScriptEngineManager().getEngineByExtension("kts")) {
@@ -53,11 +52,18 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
 
                     val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
 
-                    val targetCallback = eval(valName) as (Container) -> T
+                    if (params.isEmpty()) {
+                        val targetCallback = eval(valName) as (Container) -> T
 
-                    result(targetCallback.invoke(container) as T)
+                        result(targetCallback.invoke(container))
+                    } else {
+                        val targetCallback = eval(valName) as (Container, Map<String, Any>) -> T
+
+                        result(targetCallback.invoke(container, params))
+                    }
+
                 }
-                isConFigType(sentence) -> {
+                isScriptProcess(sentence) -> {
                     eval(sentence)
 
                     val endOfVariableNameInSentence = sentence.indexOf(":")
@@ -66,11 +72,17 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
 
                     val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
 
-                    val targetCallback = eval(valName) as (ScriptProcess) -> ScriptProcess
+                    if (params.isEmpty()) {
+                        val targetCallback = eval(valName) as (ScriptProcess) -> T
 
-                    result(targetCallback.invoke(ScriptConfiguration()) as T)
+                        result(targetCallback.invoke(ScriptConfiguration()))
+                    } else {
+                        val targetCallback = eval(valName) as (ScriptProcess, Map<String, Any>) -> T
+
+                        result(targetCallback.invoke(ScriptConfiguration(), params))
+                    }
                 }
-                isBuilding(sentence) -> {
+                isModuleProcess(sentence) -> {
                     eval(sentence)
 
                     val endOfVariableNameInSentence = sentence.indexOf(":")
@@ -79,9 +91,15 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
 
                     val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
 
-                    val targetCallback = eval(valName) as (ModuleProcess) -> ModuleProcess
+                    if (params.isEmpty()) {
+                        val targetCallback = eval(valName) as (ModuleProcess) -> T
 
-                    result(targetCallback.invoke(ModuleConfiguration()) as T)
+                        result(targetCallback.invoke(ModuleConfiguration()))
+                    } else {
+                        val targetCallback = eval(valName) as (ModuleProcess, Map<String, Any>) -> T
+
+                        result(targetCallback.invoke(ModuleConfiguration(), params))
+                    }
                 }
                 else -> {
                     eval(sentence)
@@ -93,26 +111,6 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
                     result(eval(valName) as T)
                 }
             }
-        }
-    }
-
-    override fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
-        with(ScriptEngineManager().getEngineByExtension("kts")) {
-            if (!isValidSentence(sentence)) {
-                throw InvalidScriptException("The script is invalid.")
-            }
-
-            eval(sentence)
-
-            val endOfVariableNameInSentence = sentence.indexOf(":")
-
-            val startOfSentence = sentence.indexOf("val")
-
-            val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
-
-            val targetCallback = eval(valName) as (Container, Map<String, Any>) -> T
-
-            result(targetCallback.invoke(container, params))
         }
     }
 
@@ -131,8 +129,8 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
     private fun <T> runScriptByType(scriptFile: String, params: String, content: String, result: (value: T) -> Unit) {
         when {
             "init.kts" in scriptFile -> {
-                this.run(content) { scriptProcess: ScriptProcess ->
-                    result(scriptProcess as T)
+                this.run(content) { scriptManager: ScriptProcess ->
+                    result(scriptManager as T)
                 }
             }
             params == "EMPTY_PARAMS" || params.isEmpty() -> {
@@ -140,10 +138,8 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
                     result(container as T)
                 }
             }
-            "project-config.kts" in scriptFile -> {
-                val newContent = this.prepareProjectConfigurationScript(content, params)
-
-                this.run(newContent) { moduleProcess: ModuleProcess ->
+            "module-config.kts" in scriptFile -> {
+                this.run(content, this.convertStringParamsToListParams(params)) { moduleProcess: ModuleProcess ->
                     result(moduleProcess as T)
                 }
             }
@@ -153,14 +149,6 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
                 }
             }
         }
-    }
-
-    private fun prepareProjectConfigurationScript(content: String, params: String): String {
-        val projectProperties = this.convertStringParamsToListParams(params)
-
-        return content.replace("{PROJECT_NAME}", projectProperties["projectName"] as String)
-                .replace("{VERSION}", projectProperties["version"] as String)
-                .replace("{PACKAGE}", projectProperties["package"] as String)
     }
 
     private fun convertStringParamsToListParams(args: String): Map<String, Any> {
@@ -217,246 +205,20 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
         }
     }
 
-    override fun buildProjectFrom(moduleProcess: ModuleProcess) {
-        val projectPath = File("${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}")
+    override fun buildModule(moduleProcess: ModuleProcess) {
+        val modulePath = File("${Paths.get("").toAbsolutePath()}/${moduleProcess.moduleName()}")
 
-        if (projectPath.exists()) {
-            println("The $ANSI_RED ${moduleProcess.projectName()} already exist. $ANSI_RESET")
-
-            this.locateScriptsInProject(
-                    moduleProcess.projectConstituents()["scripts"] as List<String>,
-                    "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}"
-            )
+        if (modulePath.exists()) {
+            println("The $ANSI_RED ${moduleProcess.moduleName()} already exist. $ANSI_RESET")
 
             return
         }
 
-        println("\u001B[38;5;155mPreparing project This take a while...\u001B[0m")
+        println("\u001B[38;5;155mPreparing module This take a while...\u001B[0m")
 
-        this.createProjectWithName(
-                moduleProcess.projectName()
-        )
+        moduleProcess.build()
 
-        if (moduleProcess.projectConstituents()["scripts"] != null) {
-            this.locateScriptsInProject(
-                    moduleProcess.projectConstituents()["scripts"] as List<String>,
-                    "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}"
-            )
-        }
-
-        this.createPackageInProject(
-                moduleProcess.projectName(),
-                moduleProcess.projectConstituents()["package"] as String
-        )
-
-        this.createAppClassInProject(
-                moduleProcess.projectName(),
-                moduleProcess.projectConstituents()
-        )
-
-        this.changeFileContent(
-                "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}/settings.gradle",
-                "rootProject.name = '{UNNAMED}'",
-                "rootProject.name = '${moduleProcess.projectName()}'"
-        )
-
-        this.changeFileContent(
-                "${Paths.get("").toAbsolutePath()}/${moduleProcess.projectName()}/build.gradle",
-                "version = '{VERSION}",
-                "version =  '${moduleProcess.projectConstituents()["version"]}'"
-        )
-
-        this.addDependenciesInProject(
-                moduleProcess.projectName()
-        )
-
-        println("\u001B[38;5;155mBuilding done.\u001B[0m")
-    }
-
-    private fun addDependenciesInProject(projectName: String) {
-        val parser = this.container.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
-        parser.readFromResource(".env")
-
-        val properties = parser.splitKeyValue("=".toRegex())
-
-        val processManager = properties["OPTIMIZED_PROCESS_MANAGER_URL"]
-
-        print("\u001B[38;5;155mRequesting an optimized process manager... \u001B[0m")
-
-        downloadFile(
-                URL(processManager),
-                "${Paths.get("").toAbsolutePath()}/$projectName/libs/octopus-3.7.0.jar"
-        )
-
-        println("\u001B[38;5;155m✔\u001B[0m")
-
-        println("\u001B[38;5;155mProcess Manager located.\u001B[0m")
-
-        print("\u001B[38;5;155mRequesting bootstrapping... \u001B[0m")
-
-        val bootstrapping = properties["BOOTSTRAPPING_URL"]
-
-        downloadFile(
-                URL(bootstrapping),
-                "${Paths.get("").toAbsolutePath()}/$projectName/libs/bootstrap-1.0.0.jar"
-        )
-
-        println("\u001B[38;5;155m✔\u001B[0m")
-
-        println("\u001B[38;5;155mBootstrapping located.\u001B[0m")
-    }
-
-    private fun createAppClassInProject(projectName: String, constituents: Map<String, Any>) {
-        val packageLocation = "${Paths.get("").toAbsolutePath()}/$projectName/src/main/kotlin/"
-
-        val packagePath = (constituents["package"] as String).replace(".", "/")
-
-        val appKtFile = "$packageLocation$packagePath/App.kt"
-
-        this::class.java.classLoader.getResourceAsStream("templates/bootstrap/AppClass.txt").use { inputStream ->
-            File(appKtFile).outputStream().use {
-                inputStream?.copyTo(it)
-            }
-        }
-
-        this.changeFileContent(
-                appKtFile,
-                "package {PACKAGE_NAME}",
-                "package ${constituents["package"]}"
-        )
-    }
-
-    private fun createPackageInProject(projectName: String, `package`: String) {
-        val packageLocation = "${Paths.get("").toAbsolutePath()}/$projectName/src/main/kotlin/"
-
-        val packagePath = `package`.replace(".", "/")
-
-        File("$packageLocation$packagePath").mkdirs()
-    }
-
-    private fun createProjectWithName(projectName: String) {
-        val parser = this.container.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
-        parser.readFromResource(".env")
-
-        val properties = parser.splitKeyValue("=".toRegex())
-
-        val modelProjectUrl = properties["MODEL_PROJECT_URL"]
-
-        downloadFile(
-                URL(modelProjectUrl),
-                "${Paths.get("").toAbsolutePath()}/model-project.zip"
-        )
-
-        ProcessBuilder()
-                .command("unzip", "-qq", "${Paths.get("").toAbsolutePath()}/model-project.zip")
-                .redirectError(ProcessBuilder.Redirect.INHERIT)
-                .start()
-                .waitFor()
-
-        File("${Paths.get("").toAbsolutePath()}/model-project.zip").delete()
-
-        File("${Paths.get("").toAbsolutePath()}/model-project").renameTo(File(projectName))
-    }
-
-    private fun locateScriptsInProject(scripts: List<String>, targetProjectPath: String) {
-        if (scripts.isEmpty()) {
-            println("\u001B[38;5;229mNo scripts configured...\u001B[0m")
-
-            return
-        }
-
-        scripts.forEach { script ->
-            if (isRelativeFile(script)) {
-                print("$script ...")
-
-                if (Files.notExists(Paths.get("$targetProjectPath/src/main/kotlin/scripts/${convertToKtExtensionFor(script)}"))) {
-                    println("The $ANSI_GREEN_155$script$ANSI_RESET was added from the last time that the command was running.")
-
-                    this.locateScript(
-                            script,
-                            "$targetProjectPath/src/main/kotlin/scripts/${this.convertToKtExtensionFor(script)}"
-                    )
-
-                    this.changeFileContent(
-                            "$targetProjectPath/src/main/kotlin/scripts/${this.convertToKtExtensionFor(script)}",
-                            "myScript",
-                            script.substring(0, script.indexOf("."))
-                    )
-                }
-
-                println("\u001B[38;5;155m[ok]\u001B[0m")
-            } else if (script.contains("_") || script.contains("-")) {
-                val scriptTargetPath = "$targetProjectPath/src/main/kotlin/scripts/${this.convertToKtExtensionFor(script)}"
-
-                this.locateScript(script, scriptTargetPath)
-
-                val splitPartsByKebabCase = script.substring(0, script.indexOf(".")).split("_")
-
-                val splitPartsBySnakeCase = script.substring(0, script.indexOf(".")).split("-")
-
-                when {
-                    splitPartsBySnakeCase.isNotEmpty() -> {
-                        this.changeScriptVariable(splitPartsBySnakeCase, scriptTargetPath)
-                    }
-                    splitPartsByKebabCase.isNotEmpty() -> {
-                        this.changeScriptVariable(splitPartsByKebabCase, scriptTargetPath)
-                    }
-                    else -> {
-                        println("\n\u001B[31m The name used in your script file is malformed.\n")
-                    }
-                }
-            }
-        }
-
-        println("\u001B[38;5;155mScripts located.\u001B[0m")
-    }
-
-    private fun changeScriptVariable(partsOfVariableName: List<String>, pathOfTargetScript: String): Boolean {
-        var finalValName = ""
-
-        if (partsOfVariableName.isNotEmpty()) {
-            partsOfVariableName.forEachIndexed lit@{ index, value ->
-                if (index != 0) {
-                    finalValName += value.substring(0, 1).toUpperCase().plus(value.substring(1))
-
-                    return@lit
-                }
-
-                finalValName += value
-            }
-
-            this.changeFileContent(
-                    pathOfTargetScript,
-                    "myScript",
-                    finalValName
-            )
-
-            return true
-        }
-
-        return false
-    }
-
-    private fun locateScript(scriptPath: String, destinationPath: String) {
-        val file = File(scriptPath)
-
-        val tempFile = createTempFile()
-
-        tempFile.printWriter().use { writer ->
-            var lineNumber = 0
-
-            file.forEachLine { line ->
-                if (lineNumber == 0) {
-                    writer.println("package scripts\n\n$line")
-                } else {
-                    writer.println(line)
-                }
-
-                lineNumber++
-            }
-        }
-
-        tempFile.renameTo(File(destinationPath))
+        println("\u001B[38;5;155mBuild done.\u001B[0m")
     }
 
     private fun changeFileContent(filePath: String, oldContent: String, newContent: String) {
@@ -528,7 +290,7 @@ fun main(args: Array<String>) {
 }
 
 fun checkForUpdates(): Boolean {
-    val parser = app.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
+    val parser = app.createInstanceOf(TextParser::class)
     parser.readFromResource(".env")
 
     val properties = parser.splitKeyValue("=".toRegex())
@@ -569,6 +331,12 @@ fun checkForUpdates(): Boolean {
     return false
 }
 
+fun runScriptFileFromUrl(context: ProcessExecutionManager, url: String, args: String) {
+    context.runScriptFileFromUrl(url, args) { result: Any ->
+        processCallback(context, url, result)
+    }
+}
+
 private fun processCallback(context: ProcessExecutionManager, scriptName: String, result: Any) {
     when (result) {
         is ScriptProcess -> {
@@ -582,7 +350,7 @@ private fun processCallback(context: ProcessExecutionManager, scriptName: String
             println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
         }
         is ModuleProcess -> {
-            context.buildProjectFrom(result)
+            context.buildModule(result)
         }
     }
 }

@@ -1,9 +1,9 @@
 package com.koupper.octopus.process
 
 interface ModuleProcess {
-    fun buildFrom(name: String, constituents: Map<String, Any>) : ModuleProcess
+    fun setup(name: String, metadata: Map<String, Any>) : ModuleProcess
 
-    fun projectName() : String
+    fun moduleName() : String
 
-    fun projectConstituents() : Map<String, Any>
+    fun build()
 }

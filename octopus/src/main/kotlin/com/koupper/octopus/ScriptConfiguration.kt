@@ -17,7 +17,7 @@ class ScriptConfiguration : ScriptProcess {
     }
 
     override fun buildFrom(projectName: String, resources: Map<String, Any>): ModuleProcess {
-        return ModuleConfiguration().buildFrom(projectName, mapOf(
+        return ModuleConfiguration().setup(projectName, mapOf(
                 "scripts" to params
         ))
     }

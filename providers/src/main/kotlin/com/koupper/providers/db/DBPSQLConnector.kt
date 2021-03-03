@@ -1,6 +1,6 @@
 package com.koupper.providers.db
 
-import com.koupper.providers.parsing.TextParserEnvPropertiesTemplate
+import com.koupper.providers.parsing.TextReader
 import com.koupper.providers.parsing.extensions.splitKeyValue
 import io.vertx.kotlin.core.json.Json
 import io.vertx.kotlin.core.json.obj
@@ -9,7 +9,7 @@ import java.sql.Statement
 
 class DBPSQLConnector : DBConnector {
     private lateinit var pool: HikariDBPool
-    private val parser = TextParserEnvPropertiesTemplate()
+    private val parser = TextReader()
 
     override suspend fun session(): DBSession = HikariDBSession(pool, pool.createConnection())
 

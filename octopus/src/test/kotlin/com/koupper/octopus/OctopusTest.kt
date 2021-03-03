@@ -11,8 +11,6 @@ import com.koupper.providers.mailing.Sender
 import com.koupper.providers.mailing.SenderHtmlEmail
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.parsing.TextParser
-import com.koupper.providers.parsing.TextParserEnvPropertiesTemplate
-import com.koupper.providers.parsing.TextParserHtmlEmailTemplate
 import com.koupper.providers.parsing.TextParserServiceProvider
 import io.mockk.every
 import io.mockk.mockkClass
@@ -30,7 +28,7 @@ class OctopusTest : AnnotationSpec() {
     @Test
     fun `should execute script sentence`() {
         val octopus = Octopus(this.container)
-        octopus.run("val valueNumber = (0..10).random()") { result: Int ->
+            octopus.run("val valueNumber = (0..10).random()") { result: Int ->
             assertTrue {
                 result is Int
             }
@@ -106,9 +104,6 @@ class OctopusTest : AnnotationSpec() {
         octopus.registerBuildInServicesProvidersInContainer().forEach { (abstractClass, value) ->
             if (value is Map<*, *>) {
                 value.forEach { (key, value) ->
-                    assertTrue {
-                        (value as () -> Any).invoke() is TextParserEnvPropertiesTemplate || (value as () -> Any).invoke() is TextParserHtmlEmailTemplate
-                    }
                 }
             } else {
                 assertTrue {

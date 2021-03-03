@@ -5,16 +5,12 @@ import com.koupper.providers.ServiceProvider
 
 class TextParserServiceProvider : ServiceProvider() {
     override fun up() {
-        this.registerHtmlEmailTemplate()
+        this.registerTextParser()
     }
 
-    private fun registerHtmlEmailTemplate() {
+    private fun registerTextParser() {
         app.bind(TextParser::class, {
-            TextParserHtmlEmailTemplate()
-        }, "TextParserHtmlEmailTemplate")
-
-        app.bind(TextParser::class, {
-            TextParserEnvPropertiesTemplate()
-        }, "TextParserEnvPropertiesTemplate")
+            TextReader()
+        })
     }
 }

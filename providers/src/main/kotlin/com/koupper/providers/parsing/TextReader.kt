@@ -5,12 +5,12 @@ import java.lang.StringBuilder
 import java.net.URL
 import java.nio.file.Paths
 
-class TextParserEnvPropertiesTemplate(content: String = "NO_CONTENT") : TextParser {
-    private var text: String
+val isSingleFileName: (String) -> Boolean = {
+    it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
+}
 
-    init {
-        this.text = content
-    }
+class TextReader : TextParser {
+    private lateinit var text: String
 
     override fun readFromPath(path: String): String {
         this.text = File(if (isSingleFileName(path)) {
@@ -29,16 +29,27 @@ class TextParserEnvPropertiesTemplate(content: String = "NO_CONTENT") : TextPars
     }
 
     override fun readFromResource(path: String): String {
-        this.text = TextParserEnvPropertiesTemplate::class.java.classLoader.getResource(path).readText()
+        this.text = TextReader::class.java.classLoader.getResource(path).readText()
 
         return this.text
     }
 
     override fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder {
-        TODO("Not yet implemented")
+        data.forEach { (key, value) ->
+            if (content.contains("\\{\\{\\s*\\$${key}\\s*\\}\\}".toRegex())) {
+                val parsedVariable = content.replace("\\{\\{\\s*\\$${key}\\s*\\}\\}".toRegex(), value.toString())
+
+                content.clear()
+
+                content.append(parsedVariable)
+            }
+        }
+
+        return content
     }
 
     override fun getText(): String {
         return this.text
     }
+
 }

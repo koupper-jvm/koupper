@@ -13,6 +13,17 @@ jar {
     manifest {
         attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
     }
+    from {
+        configurations.runtimeClasspath.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+}
+
+task cliJar(type: Jar) {
+    manifest {
+        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+    }
     from sourceSets.main.output
     from {
         configurations.runtimeClasspath.filter {
@@ -24,19 +35,5 @@ jar {
     }
     doLast {
         println("Octopus generated.")
-    }
-}
-
-task cliJar(type: Jar) {
-    group = "custom-task"
-    description = "Generate an optimized Octopus jar."
-    manifest {
-        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
-    }
-    from {
-        configurations.runtimeClasspath.collect {
-            println("Included: ${it.name}")
-            it.isDirectory() ? it : zipTree(it)
-        }
     }
 }
