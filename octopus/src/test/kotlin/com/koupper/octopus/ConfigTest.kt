@@ -1,5 +1,6 @@
 package com.koupper.octopus
 
+import com.koupper.octopus.process.ScriptConfiguration
 import io.kotest.core.spec.style.AnnotationSpec
 import kotlin.test.assertEquals
 

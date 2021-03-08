@@ -1,7 +1,4 @@
-package com.koupper.octopus
-
-import com.koupper.octopus.process.ModuleProcess
-import com.koupper.octopus.process.ScriptProcess
+package com.koupper.octopus.process
 
 class ScriptConfiguration : ScriptProcess {
     private val params: MutableMap<String, Map<String, Any>> = mutableMapOf()
