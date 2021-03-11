@@ -34,7 +34,6 @@ subprojects {
         testImplementation project(':assertions')
         // Use the Kotlin test library.
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
-        testImplementation 'org.jetbrains.kotlin:kotlin-test-junit'
         // Use the Kotlin JUnit integration.
         testImplementation 'org.jetbrains.kotlin:kotlin-test-junit'
         testImplementation "io.kotest:kotest-runner-junit5:${kotestVersion}"

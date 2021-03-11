@@ -10,7 +10,7 @@ class HttpServiceProviderTest : AnnotationSpec() {
         HttpServiceProvider().up()
 
         assertTrue {
-            app.createInstanceOf(Client::class) is HttpClient
+            app.createInstanceOf(HtppClient::class) is HttpClient
         }
     }
 }

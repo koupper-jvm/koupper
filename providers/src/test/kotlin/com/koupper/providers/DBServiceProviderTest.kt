@@ -10,8 +10,6 @@ import kotlin.test.assertTrue
 class DBServiceProviderTest : AnnotationSpec() {
     @Test
     fun `should bind psql connector`() {
-        System.setProperty("user.dir", "/Users/jacobacosta/Code/koupper/providers/src/test/resources")
-
         DBServiceProvider().up()
 
         assertTrue {

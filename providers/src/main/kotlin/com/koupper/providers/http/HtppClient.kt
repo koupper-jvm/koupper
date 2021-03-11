@@ -1,6 +1,6 @@
 package com.koupper.providers.http
 
-interface Client {
+interface HtppClient {
     fun post(init: Post.() -> Unit): HttpResponse
     fun get(init: Get.() -> Unit): HttpResponse?
     fun put(init: Put.() -> Unit): HttpResponse

@@ -1,47 +1,50 @@
 package com.koupper.octopus
 
-import com.koupper.configurations.utilities.ANSIColors.ANSI_RED
-import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
-import com.koupper.octopus.exceptions.InvalidScriptException
-import com.koupper.octopus.managers.ProcessExecutionManager
-import com.koupper.octopus.process.ModuleProcess
-import com.koupper.octopus.process.ScriptProcess
+import com.koupper.octopus.process.SetupModule
+import com.koupper.octopus.process.Process
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
-import com.koupper.providers.http.Client
+import com.koupper.providers.http.HtppClient
 import com.koupper.providers.parsing.JsonToObject
 import com.koupper.providers.parsing.TextJsonParser
 import com.koupper.providers.parsing.TextParser
 import com.koupper.providers.parsing.extensions.splitKeyValue
 import java.io.File
 import java.net.URL
-import java.nio.file.Files
 import java.nio.file.Paths
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
 
-val isRelativeFile: (String) -> Boolean = {
+val isRelativeScriptFile: (String) -> Boolean = {
     it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
 }
 
-class Octopus(private var container: Container) : ProcessExecutionManager {
+class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
-    private val userHomePath = System.getProperty("user.home")
-    //private val NULL_FILE = File(if (System.getProperty("os.name").startsWith("Windows")) "NUL" else "/dev/null")
+
+    override fun <T> runFromScriptFile(scriptPath: String, params: String, result: (value: T) -> Unit) {
+        val content = File(scriptPath).readText(Charsets.UTF_8)
+
+        this.run(content, this.convertStringParamsToListParams(params)) { process: T ->
+            result(process)
+        }
+    }
+
+    override fun <T> runFromUrl(scriptUrl: String, params: String, result: (value: T) -> Unit) {
+        val content = URL(scriptUrl).readText()
+
+        this.run(content, this.convertStringParamsToListParams(params)) { process: T ->
+            result(process)
+        }
+    }
 
     override fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
         System.setProperty("kotlin.script.classpath", currentClassPath)
 
         with(ScriptEngineManager().getEngineByExtension("kts")) {
-            if (!isValidSentence(sentence)) {
-                throw InvalidScriptException("The script is invalid. $sentence")
-            }
-
-            val firstSpaceInSentence = sentence.indexOf(" ")
-
             when {
                 isContainerType(sentence) -> {
                     eval(sentence)
@@ -63,25 +66,6 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
                     }
 
                 }
-                isScriptProcess(sentence) -> {
-                    eval(sentence)
-
-                    val endOfVariableNameInSentence = sentence.indexOf(":")
-
-                    val startOfSentence = sentence.indexOf("val")
-
-                    val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
-
-                    if (params.isEmpty()) {
-                        val targetCallback = eval(valName) as (ScriptProcess) -> T
-
-                        result(targetCallback.invoke(ScriptConfiguration()))
-                    } else {
-                        val targetCallback = eval(valName) as (ScriptProcess, Map<String, Any>) -> T
-
-                        result(targetCallback.invoke(ScriptConfiguration(), params))
-                    }
-                }
                 isModuleProcess(sentence) -> {
                     eval(sentence)
 
@@ -92,13 +76,13 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
                     val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
 
                     if (params.isEmpty()) {
-                        val targetCallback = eval(valName) as (ModuleProcess) -> T
+                        val targetCallback = eval(valName) as (Process) -> T
 
-                        result(targetCallback.invoke(ModuleConfiguration()))
+                        result(targetCallback.invoke(SetupModule(container)))
                     } else {
-                        val targetCallback = eval(valName) as (ModuleProcess, Map<String, Any>) -> T
+                        val targetCallback = eval(valName) as (Process, Map<String, Any>) -> T
 
-                        result(targetCallback.invoke(ModuleConfiguration(), params))
+                        result(targetCallback.invoke(SetupModule(container), params))
                     }
                 }
                 else -> {
@@ -106,7 +90,7 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
 
                     val endOfVariableNameInSentence = sentence.indexOf("=") - 1
 
-                    val valName = sentence.substring(firstSpaceInSentence, endOfVariableNameInSentence).trim()
+                    val valName = sentence.substring(sentence.indexOf(" "), endOfVariableNameInSentence).trim()
 
                     result(eval(valName) as T)
                 }
@@ -114,45 +98,8 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
         }
     }
 
-    override fun <T> runScriptFile(scriptPath: String, params: String, result: (value: T) -> Unit) {
-        val content = File(scriptPath).readText(Charsets.UTF_8)
-
-        this.runScriptByType(scriptPath, params, content, result)
-    }
-
-    override fun <T> runScriptFileFromUrl(scriptUrl: String, params: String, result: (value: T) -> Unit) {
-        val content = URL(scriptUrl).readText()
-
-        this.runScriptByType(scriptUrl, params, content, result)
-    }
-
-    private fun <T> runScriptByType(scriptFile: String, params: String, content: String, result: (value: T) -> Unit) {
-        when {
-            "init.kts" in scriptFile -> {
-                this.run(content) { scriptManager: ScriptProcess ->
-                    result(scriptManager as T)
-                }
-            }
-            params == "EMPTY_PARAMS" || params.isEmpty() -> {
-                this.run(content) { container: Container ->
-                    result(container as T)
-                }
-            }
-            "module-config.kts" in scriptFile -> {
-                this.run(content, this.convertStringParamsToListParams(params)) { moduleProcess: ModuleProcess ->
-                    result(moduleProcess as T)
-                }
-            }
-            else -> {
-                this.run(content, this.convertStringParamsToListParams(params)) { container: Container ->
-                    result(container as T)
-                }
-            }
-        }
-    }
-
     private fun convertStringParamsToListParams(args: String): Map<String, Any> {
-        if (args.isEmpty()) emptyMap<String, Any>()
+        if (args.isEmpty() || args == "EMPTY_PARAMS") return emptyMap()
 
         val params = mutableMapOf<String, Any>()
 
@@ -180,7 +127,7 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
 
                 var finalInitPath = ""
 
-                finalInitPath += if (isRelativeFile(scriptPath)) {
+                finalInitPath += if (isRelativeScriptFile(scriptPath)) {
                     Paths.get("").toAbsolutePath().toString() + "/$scriptPath "
                 } else {
                     scriptPath
@@ -191,7 +138,7 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
                 val scriptName = File(finalInitPath).name
 
                 if (params.isEmpty()) {
-                    this.run(scriptContent) { container: Container ->
+                    this.run(scriptContent, emptyMap()) { container: Container ->
                         result(container as T, scriptName)
                     }
 
@@ -205,47 +152,6 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
         }
     }
 
-    override fun buildModule(moduleProcess: ModuleProcess) {
-        val modulePath = File("${Paths.get("").toAbsolutePath()}/${moduleProcess.moduleName()}")
-
-        if (modulePath.exists()) {
-            println("The $ANSI_RED ${moduleProcess.moduleName()} already exist. $ANSI_RESET")
-
-            return
-        }
-
-        println("\u001B[38;5;155mPreparing module This take a while...\u001B[0m")
-
-        moduleProcess.build()
-
-        println("\u001B[38;5;155mBuild done.\u001B[0m")
-    }
-
-    private fun changeFileContent(filePath: String, oldContent: String, newContent: String) {
-        val file = File(filePath)
-
-        val tempFile = createTempFile()
-
-        tempFile.printWriter().use { writer ->
-            file.forEachLine { line ->
-                writer.println(when {
-                    line.contains(oldContent) -> line.replace(oldContent, newContent)
-                    else -> line
-                })
-            }
-        }
-
-        check(file.delete() && tempFile.renameTo(file)) { "failed to replace file." }
-    }
-
-    private fun convertToKtExtensionFor(name: String): String {
-        return name.replace(".kts", ".kt")
-    }
-
-    override fun execute(callable: (container: Container, params: Map<String, Any>) -> Container, params: Map<String, String>) {
-        callable(container, params)
-    }
-
     fun availableServiceProviders(): List<KClass<*>> {
         return this.registeredServiceProviders
     }
@@ -256,16 +162,6 @@ class Octopus(private var container: Container) : ProcessExecutionManager {
         }
 
         return this.container.getBindings() as Map<KClass<*>, Any>
-    }
-
-    fun registerExternalServiceProviders(providers: List<ServiceProvider>) {
-        providers.forEach { provider ->
-            provider.up()
-        }
-    }
-
-    private fun downloadFile(url: URL, targetFileName: String) {
-        url.openStream().use { `in` -> Files.copy(`in`, Paths.get(targetFileName)) }
     }
 }
 
@@ -281,7 +177,7 @@ fun main(args: Array<String>) {
 
         val scriptPath = args[0]
 
-        processManager.runScriptFile(scriptPath, params) { result: Any ->
+        processManager.runFromScriptFile(scriptPath, params) { result: Any ->
             processCallback(processManager, scriptPath, result)
         }
     }
@@ -297,7 +193,7 @@ fun checkForUpdates(): Boolean {
 
     val checkForUpdateUrl = properties["CHECK_FOR_UPDATED_URL"]
 
-    val httpClient = app.createInstanceOf(Client::class)
+    val httpClient = app.createInstanceOf(HtppClient::class)
 
     val response = httpClient.get {
         url = checkForUpdateUrl!!
@@ -331,31 +227,11 @@ fun checkForUpdates(): Boolean {
     return false
 }
 
-fun runScriptFileFromUrl(context: ProcessExecutionManager, url: String, args: String) {
-    context.runScriptFileFromUrl(url, args) { result: Any ->
-        processCallback(context, url, result)
-    }
+private fun processCallback(context: ScriptExecutor, scriptName: String, result: Any) {
+    println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
 }
 
-private fun processCallback(context: ProcessExecutionManager, scriptName: String, result: Any) {
-    when (result) {
-        is ScriptProcess -> {
-            val listScripts = result.listScriptsToExecute()
-
-            context.runScriptFiles(listScripts) { _: Container, nameScript: String ->
-                println("script [$nameScript] ->\u001B[38;5;155m executed.\u001B[0m")
-            }
-        }
-        is Container -> {
-            println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
-        }
-        is ModuleProcess -> {
-            context.buildModule(result)
-        }
-    }
-}
-
-fun createDefaultConfiguration(): ProcessExecutionManager {
+fun createDefaultConfiguration(): ScriptExecutor {
     val container = app
 
     val octopus = Octopus(container)

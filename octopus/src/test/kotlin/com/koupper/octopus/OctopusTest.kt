@@ -28,7 +28,7 @@ class OctopusTest : AnnotationSpec() {
     @Test
     fun `should execute script sentence`() {
         val octopus = Octopus(this.container)
-            octopus.run("val valueNumber = (0..10).random()") { result: Int ->
+            octopus.run("val valueNumber = (0..10).random()", emptyMap()) { result: Int ->
             assertTrue {
                 result is Int
             }
@@ -59,7 +59,7 @@ class OctopusTest : AnnotationSpec() {
 
         octopus.registerBuildInServicesProvidersInContainer()
 
-        octopus.runScriptFileFromUrl("https://yourdomain.com/script.kt") { result: Container ->
+        octopus.runFromUrl("https://yourdomain.com/script.kt") { result: Container ->
             // validate here
         }
     }
@@ -73,7 +73,7 @@ class OctopusTest : AnnotationSpec() {
 
         octopus.registerBuildInServicesProvidersInContainer()
 
-        octopus.runScriptFileFromUrl("script.kt") { result: Container ->
+        octopus.runFromUrl("script.kt") { result: Container ->
             // validate here
         }
     }

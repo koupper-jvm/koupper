@@ -65,7 +65,7 @@ class Patch : HttpClient()
 
 class Delete : HttpClient()
 
-class HttpInvoker : HttpClient(), Client {
+class HttpInvoker : HttpClient(), HtppClient {
     private lateinit var response: Response
 
     override fun post(init: Post.() -> Unit): HttpResponse {

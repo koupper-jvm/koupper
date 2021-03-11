@@ -1,6 +1,8 @@
 package com.koupper.providers
 
 import com.koupper.providers.db.DBServiceProvider
+import com.koupper.providers.files.FileHandler
+import com.koupper.providers.files.FileServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
@@ -16,7 +18,8 @@ class ServiceProviderManager {
                 SenderServiceProvider::class,
                 LoggerServiceProvider::class,
                 HttpServiceProvider::class,
-                TextJsonParserServiceProvider::class
+                TextJsonParserServiceProvider::class,
+                FileServiceProvider::class
         )
     }
 }

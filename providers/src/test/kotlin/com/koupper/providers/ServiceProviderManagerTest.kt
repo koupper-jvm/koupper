@@ -2,6 +2,7 @@ package com.koupper.providers
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.providers.db.DBServiceProvider
+import com.koupper.providers.files.FileServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
@@ -22,7 +23,8 @@ class ServiceProviderManagerTest : AnnotationSpec() {
                             SenderServiceProvider::class,
                             LoggerServiceProvider::class,
                             HttpServiceProvider::class,
-                            TextJsonParserServiceProvider::class
+                            TextJsonParserServiceProvider::class,
+                            FileServiceProvider::class
                     )
             )
         }

@@ -9,7 +9,7 @@ class HttpServiceProvider : ServiceProvider() {
     }
 
     private fun registerHttpClient() {
-        app.bind(Client::class, {
+        app.bind(HtppClient::class, {
             HttpInvoker()
         })
     }
