@@ -5,10 +5,15 @@ import com.koupper.providers.ServiceProvider
 
 class FileServiceProvider : ServiceProvider() {
     override fun up() {
-        this.registerFile()
+        this.registerFileHandler()
+        this.registerTextFileHandler()
     }
 
-    private fun registerFile() {
-        app.bind(FileHandler::class, { FileHandlerImpl() })
+    private fun registerFileHandler() {
+        app.bind(FileHandler::class, { FileHandlerImpl() }, "FileHandlerImpl")
+    }
+
+    private fun registerTextFileHandler() {
+        app.bind(TextFileHandler::class, { TextFileHandlerImpl() }, "TextFileHandlerImpl")
     }
 }

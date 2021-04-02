@@ -1,7 +1,6 @@
 package com.koupper.providers
 
 import com.koupper.providers.db.DBServiceProvider
-import com.koupper.providers.files.FileHandler
 import com.koupper.providers.files.FileServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.http.HttpServiceProvider

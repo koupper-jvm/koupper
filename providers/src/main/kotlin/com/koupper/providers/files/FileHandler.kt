@@ -10,7 +10,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 
-val zipFile: (String, String, List<String>) -> File = { file, targetLocation, filesToIgnore ->
+val buildZipFile: (String, String, List<String>) -> File = { file, targetLocation, filesToIgnore ->
     val inputDirectory = File(file)
 
     val outputZipFile = File(targetLocation)
@@ -51,15 +51,25 @@ val downloadFile: (url: URL, targetFileName: String) -> File = { url, targetFile
 }
 
 val unzipFile: (String, List<String>, String) -> File = { zipName, filesToIgnore, targetLocation ->
-    val path = if (targetLocation.isNotEmpty()) "$targetLocation/" else targetLocation
+    val path = if (targetLocation.isNotEmpty() && targetLocation != "N/A") {
+        val path = "$targetLocation/"
+        File(path).mkdir()
+        path
+    } else {
+        ""
+    }
     var unzippedFolderName = ""
 
     ZipFile(zipName).use { zip ->
-        unzippedFolderName = zip.name
+        unzippedFolderName = zip.name.slice(0 until zipName.indexOf("."))
 
-        zip.entries().asSequence().forEach { entry ->
+        zip.entries().asSequence().forEach lit@{ entry ->
             filesToIgnore.forEach lit@{
                 if (it.contains(entry.name)) return@lit
+            }
+
+            if (entry.name.contains("__MACOSX/*".toRegex())) {
+                return@lit
             }
 
             if (entry.isDirectory) {
@@ -90,23 +100,11 @@ val listContentOfZippedFile: (String) -> List<String> = {
 }
 
 interface FileHandler {
-    fun readFileFromPath(filePath: String): File
+    fun load(filePath: String, targetPath: String = "N/A"): File
 
-    fun readFileFromUrl(fileUrl: String, downloadPath: String = ""): File
+    fun zipFile(filePath: String = "", targetPath: String = "N/A", filesToIgnore: List<String> = emptyList()): File
 
-    fun readFileFromResource(filePath: String): File
+    fun unzipFile(filePath: String, targetPath: String = "N/A", filesToIgnore: List<String> = emptyList()): File
 
-    fun zipFileFromPath(filePath: String = "", downloadPath: String = "", filesToIgnore: List<String> = emptyList()): File
-
-    fun zipFileFromUrl(fileUrl: String = "", downloadPath: String = "", filesToIgnore: List<String> = emptyList()): File
-
-    fun zipFileFromResource(fileName: String, downloadPath: String = "", filesToIgnore: List<String> = emptyList()): File
-
-    fun unzipFileFromPath(zipPath: String): File
-
-    fun unzipFileFromUrl(zipUrl: String, downloadPath: String = ""): File
-
-    fun unzipFileFromResource(zipName: String, ignoring: List<String>): File
-
-    fun signFile(filename: String, metadata: Map<String, String>): File
+    fun signFile(filePath: String, metadata: Map<String, String>): File
 }

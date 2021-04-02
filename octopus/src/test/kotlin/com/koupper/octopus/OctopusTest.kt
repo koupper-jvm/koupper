@@ -25,6 +25,7 @@ class OctopusTest : AnnotationSpec() {
         this.container = mockkClass(KoupperContainer::class)
     }
 
+    @Ignore
     @Test
     fun `should execute script sentence`() {
         val octopus = Octopus(this.container)

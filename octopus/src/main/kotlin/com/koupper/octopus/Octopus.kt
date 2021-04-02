@@ -45,16 +45,15 @@ class Octopus(private var container: Container) : ScriptExecutor {
         System.setProperty("kotlin.script.classpath", currentClassPath)
 
         with(ScriptEngineManager().getEngineByExtension("kts")) {
+            val endOfVariableNameInSentence = sentence.indexOf(":")
+
+            val startOfSentence = sentence.indexOf("val")
+
+            val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
+
             when {
                 isContainerType(sentence) -> {
                     eval(sentence)
-
-                    val endOfVariableNameInSentence = sentence.indexOf(":")
-
-                    val startOfSentence = sentence.indexOf("val")
-
-                    val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
-
                     if (params.isEmpty()) {
                         val targetCallback = eval(valName) as (Container) -> T
 
@@ -69,12 +68,6 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 isModuleProcess(sentence) -> {
                     eval(sentence)
 
-                    val endOfVariableNameInSentence = sentence.indexOf(":")
-
-                    val startOfSentence = sentence.indexOf("val")
-
-                    val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
-
                     if (params.isEmpty()) {
                         val targetCallback = eval(valName) as (Process) -> T
 
@@ -88,11 +81,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 else -> {
                     eval(sentence)
 
-                    val endOfVariableNameInSentence = sentence.indexOf("=") - 1
-
-                    val valName = sentence.substring(sentence.indexOf(" "), endOfVariableNameInSentence).trim()
-
-                    result(eval(valName) as T)
+                    result(eval(sentence.substring(sentence.indexOf(" "), sentence.indexOf("=") - 1).trim()) as T)
                 }
             }
         }
