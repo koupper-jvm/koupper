@@ -3,7 +3,7 @@ package com.koupper.octopus.process
 import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
 import com.koupper.container.interfaces.Container
-import com.koupper.providers.files.FileFileHandler
+import com.koupper.providers.files.FileHandler
 import java.io.File
 import kotlin.system.exitProcess
 
@@ -32,7 +32,7 @@ class SetupModule(private val container: Container) : Process {
         val moduleType = this.metadata["moduleType"]
 
         if (moduleType != null && (moduleType as String).equals("FRONT", true)) {
-            val fileHandler = this.container.createInstanceOf(FileFileHandler::class)
+            val fileHandler = this.container.createInstanceOf(FileHandler::class, "FileHandlerImpl")
 
             fileHandler.unzipFile("https://lib-installer.s3.amazonaws.com/front-module.zip", this.name)
 
