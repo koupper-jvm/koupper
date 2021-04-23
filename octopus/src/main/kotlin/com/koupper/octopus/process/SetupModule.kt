@@ -4,6 +4,7 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
 import com.koupper.container.interfaces.Container
 import com.koupper.providers.files.FileHandler
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import kotlin.system.exitProcess
 
@@ -23,7 +24,7 @@ class SetupModule(private val container: Container) : Process {
     }
 
     override fun run() {
-        if (File(this.name).exists()) {
+        if (File(name).exists()) {
             println("\n$ANSI_YELLOW_229 A module named '$name' already exist. $ANSI_RESET \n")
 
             exitProcess(0)
@@ -36,9 +37,7 @@ class SetupModule(private val container: Container) : Process {
 
             fileHandler.unzipFile("https://lib-installer.s3.amazonaws.com/front-module.zip", this.name)
 
-            File("front-module.zip").delete()
-
-            return
+            File(this.name).delete()
         }
     }
 }

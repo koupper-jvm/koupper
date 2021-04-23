@@ -1,9 +1,13 @@
 package com.koupper.octopus
 
+import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
+import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
+import com.koupper.configurations.utilities.ANSIColors.ANSI_WHITE
+import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
-import com.koupper.octopus.process.SetupModule
 import com.koupper.octopus.process.Process
+import com.koupper.octopus.process.SetupModule
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import com.koupper.providers.http.HtppClient
@@ -11,7 +15,8 @@ import com.koupper.providers.parsing.JsonToObject
 import com.koupper.providers.parsing.TextJsonParser
 import com.koupper.providers.parsing.TextParser
 import com.koupper.providers.parsing.extensions.splitKeyValue
-import java.io.File
+import kotlinx.coroutines.*
+import java.io.*
 import java.net.URL
 import java.nio.file.Paths
 import javax.script.ScriptEngineManager
@@ -54,6 +59,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             when {
                 isContainerType(sentence) -> {
                     eval(sentence)
+
                     if (params.isEmpty()) {
                         val targetCallback = eval(valName) as (Container) -> T
 
@@ -170,8 +176,6 @@ fun main(args: Array<String>) {
             processCallback(processManager, scriptPath, result)
         }
     }
-
-    exitProcess(0)
 }
 
 fun checkForUpdates(): Boolean {
@@ -217,7 +221,11 @@ fun checkForUpdates(): Boolean {
 }
 
 private fun processCallback(context: ScriptExecutor, scriptName: String, result: Any) {
-    println("\nscript [$scriptName] ->\u001B[38;5;155m executed.\u001B[0m")
+    if (result is Container) {
+        println("\nscript [$scriptName] ->\u001B[38;5;155m was executed.\u001B[0m")
+    } else if (result is SetupModule) {
+        println("\r${ANSI_GREEN_155}📦 module ${ANSI_WHITE}${result.moduleName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
+    }
 }
 
 fun createDefaultConfiguration(): ScriptExecutor {

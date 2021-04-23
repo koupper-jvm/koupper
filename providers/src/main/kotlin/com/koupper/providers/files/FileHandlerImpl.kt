@@ -1,8 +1,6 @@
 package com.koupper.providers.files
 
 import java.io.File
-import java.io.FileWriter
-import java.lang.StringBuilder
 import java.net.URL
 
 enum class PathType {
@@ -49,12 +47,10 @@ class FileHandlerImpl : FileHandler {
     }
 
     private fun loadFileFromUrl(fileUrl: String, targetPath: String): File {
-        val fileName = fileUrl.substring(fileUrl.lastIndexOf("/") + 1)
-
         return if (targetPath === "N/A") {
-            downloadFile(URL(fileUrl), fileName) // Download the file in the current location.
+            downloadFile(URL(fileUrl), fileUrl.substring(fileUrl.lastIndexOf("/") + 1)) // Download the file in the current location.
         } else {
-            downloadFile(URL(fileUrl), "$targetPath/${fileName}")
+            downloadFile(URL(fileUrl), "$targetPath.zip")
         }
     }
 
@@ -123,7 +119,11 @@ class FileHandlerImpl : FileHandler {
     private fun unzipFileFromUrl(zipPath: String, targetPath: String, ignoring: List<String>): File {
         val zipFile = this.loadFileFromUrl(zipPath, targetPath)
 
-        return unzipFile(zipFile.path, ignoring, targetPath)
+        val unzippedFile = unzipFile(zipFile.path, ignoring, targetPath)
+
+        zipFile.delete()
+
+        return unzippedFile
     }
 
     private fun unzipFileFromResource(zipPath: String, targetPath: String, ignoring: List<String>): File {

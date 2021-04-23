@@ -1,5 +1,6 @@
 package com.koupper.providers.files
 
+import com.koupper.providers.launchProcess
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -52,39 +53,47 @@ val downloadFile: (url: URL, targetFileName: String) -> File = { url, targetFile
 
 val unzipFile: (String, List<String>, String) -> File = { zipName, filesToIgnore, targetLocation ->
     val path = if (targetLocation.isNotEmpty() && targetLocation != "N/A") {
-        val path = "$targetLocation/"
-        File(path).mkdir()
-        path
+        targetLocation
     } else {
         ""
     }
-    var unzippedFolderName = ""
+    var unzippedFolderName: String? = null
 
-    ZipFile(zipName).use { zip ->
-        unzippedFolderName = zip.name.slice(0 until zipName.indexOf("."))
+    launchProcess {
+        ZipFile(zipName).use { zip ->
+            unzippedFolderName = zip.name.slice(zip.name.lastIndexOf("/") + 1 until zipName.indexOf("."))
 
-        zip.entries().asSequence().forEach lit@{ entry ->
-            filesToIgnore.forEach lit@{
-                if (it.contains(entry.name)) return@lit
-            }
+            zip.entries().asSequence().forEach lit@{ entry ->
+                filesToIgnore.forEach filesToIgnore@{
+                    if (it.contains(entry.name)) return@filesToIgnore
+                }
 
-            if (entry.name.contains("__MACOSX/*".toRegex())) {
-                return@lit
-            }
+                if (entry.name.contains("__MACOSX/*".toRegex())) {
+                    return@lit
+                }
 
-            if (entry.isDirectory) {
-                File("$path${entry.name}").mkdir()
-            } else {
-                zip.getInputStream(entry).use { input ->
-                    File("$path${entry.name}").outputStream().use { output ->
-                        input.copyTo(output)
+                var finalPath = path
+
+                finalPath = if (finalPath.isNotEmpty()) {
+                    "$path/${entry.name.substring(entry.name.indexOf("/") + 1)}"
+                } else {
+                    entry.name
+                }
+
+                if (entry.isDirectory) {
+                    File(finalPath).mkdir()
+                } else {
+                    zip.getInputStream(entry).use { input ->
+                        File(finalPath).outputStream().use { output ->
+                            input.copyTo(output)
+                        }
                     }
                 }
             }
         }
-    }
+    }.join()
 
-    File("$path${unzippedFolderName}")
+    File(if (path.isEmpty()) unzippedFolderName else path)
 }
 
 val listContentOfZippedFile: (String) -> List<String> = {
