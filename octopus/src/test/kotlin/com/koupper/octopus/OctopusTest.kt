@@ -7,12 +7,10 @@ import com.koupper.container.app
 import com.koupper.providers.db.DBConnector
 import com.koupper.providers.db.DBPSQLConnector
 import com.koupper.providers.db.DBServiceProvider
-import com.koupper.providers.dispatch.Sender
-import com.koupper.providers.dispatch.SenderHtmlEmail
-import com.koupper.providers.dispatch.SenderServiceProvider
+import com.koupper.providers.mailing.Sender
+import com.koupper.providers.mailing.SenderHtmlEmail
+import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.parsing.TextParser
-import com.koupper.providers.parsing.TextParserEnvPropertiesTemplate
-import com.koupper.providers.parsing.TextParserHtmlEmailTemplate
 import com.koupper.providers.parsing.TextParserServiceProvider
 import io.mockk.every
 import io.mockk.mockkClass
@@ -27,10 +25,11 @@ class OctopusTest : AnnotationSpec() {
         this.container = mockkClass(KoupperContainer::class)
     }
 
+    @Ignore
     @Test
     fun `should execute script sentence`() {
-        val octopus = Octopus(this.container, Config())
-        octopus.run("val valueNumber = (0..10).random()") { result: Int ->
+        val octopus = Octopus(this.container)
+            octopus.run("val valueNumber = (0..10).random()", emptyMap()) { result: Int ->
             assertTrue {
                 result is Int
             }
@@ -39,7 +38,7 @@ class OctopusTest : AnnotationSpec() {
 
     @Test
     fun `should inject container to callback script variable`() {
-        val octopus = Octopus(this.container, Config())
+        val octopus = Octopus(this.container)
 
         every {
             container.createInstanceOf(Any::class)
@@ -57,11 +56,11 @@ class OctopusTest : AnnotationSpec() {
     fun `should read script from url`() {
         val containerImplementation = app
 
-        val octopus = Octopus(containerImplementation, Config())
+        val octopus = Octopus(containerImplementation)
 
         octopus.registerBuildInServicesProvidersInContainer()
 
-        octopus.runScriptFileFromUrl("https://yourdomain.com/script.kt") { result: Container ->
+        octopus.runFromUrl("https://yourdomain.com/script.kt") { result: Container ->
             // validate here
         }
     }
@@ -71,18 +70,18 @@ class OctopusTest : AnnotationSpec() {
     fun `should read script from file`() {
         val containerImplementation = app
 
-        val octopus = Octopus(containerImplementation, Config())
+        val octopus = Octopus(containerImplementation)
 
         octopus.registerBuildInServicesProvidersInContainer()
 
-        octopus.runScriptFileFromUrl("script.kt") { result: Container ->
+        octopus.runFromUrl("script.kt") { result: Container ->
             // validate here
         }
     }
 
     @Test
     fun `should return the available service providers`() {
-        val octopus = Octopus(KoupperContainer(), Config())
+        val octopus = Octopus(KoupperContainer())
 
         val availableServiceProviders = octopus.availableServiceProviders()
 
@@ -101,14 +100,11 @@ class OctopusTest : AnnotationSpec() {
     fun `should bind the available service providers in container`() {
         val containerImplementation = KoupperContainer()
 
-        val octopus = Octopus(containerImplementation, Config())
+        val octopus = Octopus(containerImplementation)
 
         octopus.registerBuildInServicesProvidersInContainer().forEach { (abstractClass, value) ->
             if (value is Map<*, *>) {
                 value.forEach { (key, value) ->
-                    assertTrue {
-                        (value as () -> Any).invoke() is TextParserEnvPropertiesTemplate || (value as () -> Any).invoke() is TextParserHtmlEmailTemplate
-                    }
                 }
             } else {
                 assertTrue {

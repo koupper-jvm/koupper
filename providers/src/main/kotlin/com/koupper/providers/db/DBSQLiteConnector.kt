@@ -1,7 +1,7 @@
 package com.koupper.providers.db
 
 import com.koupper.providers.db.connections.SQLiteDBPool
-import com.koupper.providers.parsing.TextParserEnvPropertiesTemplate
+import com.koupper.providers.parsing.TextReader
 import com.koupper.providers.parsing.extensions.splitKeyValue
 import io.vertx.kotlin.core.json.Json
 import io.vertx.kotlin.core.json.obj
@@ -9,12 +9,12 @@ import io.zeko.db.sql.connections.*
 
 class DBSQLiteConnector : DBConnector {
     private lateinit var pool: SQLiteDBPool
-    private var parserHtmlTemplate = TextParserEnvPropertiesTemplate()
+    private var textReader = TextReader()
 
     override suspend fun session(): DBSession = HikariDBSession(pool, pool.createConnection())
 
     override fun configFromPath(configPath: String): DBConnector {
-        this.parserHtmlTemplate.readFromPath(configPath)
+        this.textReader.readFromPath(configPath)
 
         this.setup()
 
@@ -22,7 +22,7 @@ class DBSQLiteConnector : DBConnector {
     }
 
     override fun configFromUrl(configPath: String): DBConnector {
-        this.parserHtmlTemplate.readFromURL(configPath)
+        this.textReader.readFromURL(configPath)
 
         this.setup()
 
@@ -30,7 +30,7 @@ class DBSQLiteConnector : DBConnector {
     }
 
     override fun configFromResource(configPath: String): DBConnector {
-        this.parserHtmlTemplate.readFromResource(configPath)
+        this.textReader.readFromResource(configPath)
 
         this.setup()
 
@@ -38,7 +38,7 @@ class DBSQLiteConnector : DBConnector {
     }
 
     private fun setup() {
-        val properties: Map<String?, String?> = parserHtmlTemplate.splitKeyValue("=".toRegex())
+        val properties: Map<String?, String?> = textReader.splitKeyValue("=".toRegex())
 
         val databaseName = properties["DB_DATABASE"]
 

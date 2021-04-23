@@ -3,14 +3,26 @@ plugins {
     id "org.jetbrains.kotlin.jvm"
 }
 
-version = '1.0.0'
-
 application {
-    mainClassName = 'com.koupper.container.framework.KoupperBootstrapper'
+    mainClassName = 'com.koupper.web.KoupperBootstrapperKt'
 }
+
+version = '1.0.0'
 
 jar {
     manifest {
-        attributes 'Main-Class': 'com.koupper.container.framework.KoupperBootstrapper'
+        attributes 'Main-Class': 'com.koupper.web.KoupperBootstrapper'
+    }
+    from sourceSets.main.output
+    from {
+        configurations.runtimeClasspath.filter {
+            it.name.contains("octopus")
+        }.collect {
+            println("Bootstrap dependency Included: ${it.name}")
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+    doLast {
+        println("Bootstrap generated.")
     }
 }

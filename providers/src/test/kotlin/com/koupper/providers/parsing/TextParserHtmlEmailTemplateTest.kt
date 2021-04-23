@@ -8,7 +8,7 @@ class TextParserHtmlEmailTemplateTest : AnnotationSpec() {
     @Ignore
     @Test
     fun `should bind data in html template using a map`() {
-        val htmlEmailTemplate = TextParserHtmlEmailTemplate()
+        val htmlEmailTemplate = TextReader()
 
         val finalBinding = htmlEmailTemplate.bind(
                 mapOf(

@@ -13,17 +13,17 @@ class TextParserServiceProviderTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should bind the html email template parser`() {
+    fun `should bind the text parser`() {
         assertTrue {
-            app.createInstanceOf(TextParser::class, "TextParserHtmlEmailTemplate") is TextParserHtmlEmailTemplate
-            app.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate") is TextParserEnvPropertiesTemplate
+            app.createInstanceOf(TextParser::class) is TextReader
         }
     }
 
     @Ignore
     @Test
     fun `should get an env properties from resources`() {
-        val parser = app.createInstanceOf(TextParser::class, "TextParserEnvPropertiesTemplate")
+        val parser = app.createInstanceOf(TextParser::class)
+
         val properties = parser.readFromResource(".env")
 
         assertTrue {
