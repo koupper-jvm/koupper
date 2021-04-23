@@ -13,7 +13,7 @@ allprojects {
     }
 }
 
-version = '3.7.0'
+version = '4.0.0'
 
 def kotestVersion = '4.4.0'
 
