@@ -3,6 +3,10 @@ plugins {
     id "org.jetbrains.kotlin.jvm"
 }
 
+application {
+    mainClassName = 'com.koupper.configurations.ConfigurationHandlerKt'
+}
+
 version = '1.0.0'
 
 mainClassName = 'com.koupper.configurations.ConfigurationHandler'
