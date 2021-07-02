@@ -72,19 +72,25 @@ val unzipFile: (String, List<String>, String) -> File = { zipName, filesToIgnore
                     return@lit
                 }
 
-                var finalPath = path
+                var directoryLocation = path
 
-                finalPath = if (finalPath.isNotEmpty()) {
-                    "$path/${entry.name.substring(entry.name.indexOf("/") + 1)}"
+                directoryLocation = if (directoryLocation.isNotEmpty()) {
+                    val location = File(directoryLocation)
+
+                    if (!location.exists()) {
+                        location.mkdir()
+                    }
+
+                    "${location.path}/${entry.name}"
                 } else {
                     entry.name
                 }
 
                 if (entry.isDirectory) {
-                    File(finalPath).mkdir()
+                    File(directoryLocation).mkdir()
                 } else {
                     zip.getInputStream(entry).use { input ->
-                        File(finalPath).outputStream().use { output ->
+                        File(directoryLocation).outputStream().use { output ->
                             input.copyTo(output)
                         }
                     }
