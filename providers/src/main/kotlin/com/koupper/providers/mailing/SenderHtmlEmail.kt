@@ -20,7 +20,6 @@ class SenderHtmlEmail : Sender {
     private lateinit var session: Session
     private var properties: Properties = Properties()
     private val textReader = TextReader()
-    private lateinit var text: String
 
     override fun configFromPath(configPath: String): Sender {
         this.textReader.readFromPath(configPath)
