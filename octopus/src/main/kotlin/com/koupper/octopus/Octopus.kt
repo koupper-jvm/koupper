@@ -1,9 +1,7 @@
 package com.koupper.octopus
 
 import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
-import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.configurations.utilities.ANSIColors.ANSI_WHITE
-import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.process.Process
@@ -15,7 +13,6 @@ import com.koupper.providers.parsing.JsonToObject
 import com.koupper.providers.parsing.TextJsonParser
 import com.koupper.providers.parsing.TextParser
 import com.koupper.providers.parsing.extensions.splitKeyValue
-import kotlinx.coroutines.*
 import java.io.*
 import java.net.URL
 import java.nio.file.Paths
@@ -84,6 +81,13 @@ class Octopus(private var container: Container) : ScriptExecutor {
                         result(targetCallback.invoke(SetupModule(container), params))
                     }
                 }
+                isParameterized(sentence) -> {
+                    eval(sentence)
+
+                    val targetCallback = eval(valName) as (Container, Map<String, Any>) -> T
+
+                    result(targetCallback.invoke(container, params))
+                }
                 else -> {
                     eval(sentence)
 
@@ -91,6 +95,13 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 }
             }
         }
+    }
+
+    override fun execute(
+        callable: (container: Container, params: Map<String, Any>) -> Container,
+        params: Map<String, String>
+    ) {
+        callable(container, params)
     }
 
     private fun convertStringParamsToListParams(args: String): Map<String, Any> {
