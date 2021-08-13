@@ -6,6 +6,10 @@ import java.lang.StringBuilder
 import java.net.URL
 
 class TextFileHandlerImpl : TextFileHandler {
+    override fun read(filePath: String): String {
+        return StringBuilder(this.load(filePath).readText(Charsets.UTF_8)).toString()
+    }
+
     override fun load(filePath: String, targetPath: String): File {
         return when {
             checkByPathType(filePath) === PathType.URL -> this.loadFileFromUrl(filePath, targetPath)

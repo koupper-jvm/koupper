@@ -3,6 +3,8 @@ package com.koupper.providers.files
 import java.io.File
 
 interface TextFileHandler : FileHandler {
+    fun read(filePath: String): String
+
     fun getContentBetweenContent(firstContent: String, secondContent: String, inOccurrenceNumber: Int = 1, filePath: String): List<String>
 
     fun getNumberLineFor(contentToFind: String, filePath: String): Long
