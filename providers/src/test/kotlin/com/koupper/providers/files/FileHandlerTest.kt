@@ -1,9 +1,11 @@
 package com.koupper.providers.files
 
 import io.kotest.core.spec.style.AnnotationSpec
+import java.io.File
 import kotlin.test.assertTrue
 
 class FileHandlerTest : AnnotationSpec() {
+    @Ignore
     @Test
     fun `should load from url`() {
         val fileHandler = FileHandlerImpl()
@@ -23,8 +25,10 @@ class FileHandlerTest : AnnotationSpec() {
     fun `should load from resource`() {
         val fileHandler = FileHandlerImpl()
 
+        val loadedFile = fileHandler.load("resource://.env_notifications.example")
+
         assertTrue {
-            fileHandler.load("resource://.env_notifications.example").exists()
+            loadedFile.exists()
         }
     }
 
@@ -32,7 +36,7 @@ class FileHandlerTest : AnnotationSpec() {
     fun `should unzip file from path`() {
         val fileHandler = FileHandlerImpl()
 
-        val unzippedFile = fileHandler.unzipFile("/Users/jacobacosta/Code/koupper/providers/src/test/resources/zipFolder.zip", filesToIgnore = emptyList())
+        val unzippedFile = fileHandler.unzipFile("resource://zipFolder.zip", filesToIgnore = emptyList())
 
         val listOfZippedFiles = listOf("subdirectory1", "subfile1.txt", "file1.txt")
 
@@ -55,11 +59,16 @@ class FileHandlerTest : AnnotationSpec() {
         }
     }
 
+    @Ignore
     @Test
     fun `should unzip file from url`() {
         val fileHandler = FileHandlerImpl()
 
         val unzippedFile = fileHandler.unzipFile("https://lib-installer.s3.amazonaws.com/model-project.zip")
+
+        assertTrue {
+            File("${unzippedFile.absolutePath}.zip").delete()
+        }
 
         assertTrue {
             unzippedFile.exists()
@@ -74,11 +83,16 @@ class FileHandlerTest : AnnotationSpec() {
         }
     }
 
+    @Ignore
     @Test
     fun `should unzip file from url specifying a target name`() {
         val fileHandler = FileHandlerImpl()
 
-        val unzippedFile = fileHandler.unzipFile("https://lib-installer.s3.amazonaws.com/model-project.zip", "aname")
+        val unzippedFile = fileHandler.unzipFile("https://lib-installer.s3.amazonaws.com/model-project.zip")
+
+        assertTrue {
+            File("${unzippedFile.absolutePath}.zip").delete()
+        }
 
         assertTrue {
             unzippedFile.exists()
@@ -100,9 +114,19 @@ class FileHandlerTest : AnnotationSpec() {
         val zippedFile = fileHandler.zipFile("https://lib-installer.s3.amazonaws.com/koupper.txt")
 
         assertTrue {
-            zippedFile.exists() &&
-                    listContentOfZippedFile(zippedFile.path).contains("koupper.txt") &&
-                    zippedFile.delete()
+            File("koupper.txt").delete()
+        }
+
+        assertTrue {
+            zippedFile.exists()
+        }
+
+        assertTrue {
+            listContentOfZippedFile(zippedFile.path).contains("koupper.txt")
+        }
+
+        assertTrue {
+            zippedFile.delete()
         }
     }
 
@@ -159,8 +183,11 @@ class FileHandlerTest : AnnotationSpec() {
         val zippedFile = fileHandler.zipFile("/Users/jacobacosta/Code/front-module", filesToIgnore = listOf(".idea", "README.md", ".git", ".DS_Store", "front-module"))
 
         assertTrue {
-            zippedFile.exists() &&
-                    zippedFile.name == "front-module.zip"
+            zippedFile.exists()
+        }
+
+        assertTrue {
+            zippedFile.name == "front-module.zip"
         }
 
         val contentOfZippedFile = listContentOfZippedFile(zippedFile.path)
@@ -170,8 +197,11 @@ class FileHandlerTest : AnnotationSpec() {
             !contentOfZippedFile.contains("README.md") &&
                     !contentOfZippedFile.contains(".idea") &&
                     !contentOfZippedFile.contains(".git") &&
-                    !contentOfZippedFile.contains(".DS_Store") &&
-                    zippedFile.delete()
+                    !contentOfZippedFile.contains(".DS_Store")
+        }
+
+        assertTrue {
+            zippedFile.delete()
         }
     }
 }

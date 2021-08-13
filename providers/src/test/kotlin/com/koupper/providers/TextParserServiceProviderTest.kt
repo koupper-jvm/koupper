@@ -27,7 +27,7 @@ class TextParserServiceProviderTest : AnnotationSpec() {
         val properties = parser.readFromResource(".env")
 
         assertTrue {
-            parser.splitKeyValue("=".toRegex())["MODEL_PROJECT_URL"].equals("localhost:8080")
+            parser.splitKeyValue("=".toRegex())["MODEL_BACK_PROJECT_URL"].equals("localhost:8080")
         }
     }
 }

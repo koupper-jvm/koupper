@@ -10,10 +10,12 @@ class FileServiceProvider : ServiceProvider() {
     }
 
     private fun registerFileHandler() {
-        app.bind(FileHandler::class, { FileHandlerImpl() }, "FileHandlerImpl")
+        app.bind(FileHandler::class, { FileHandlerImpl() })
     }
 
     private fun registerTextFileHandler() {
-        app.bind(TextFileHandler::class, { TextFileHandlerImpl() }, "TextFileHandlerImpl")
+        app.bind(TextFileHandler::class, {
+            TextFileHandlerImpl(it)
+        })
     }
 }
