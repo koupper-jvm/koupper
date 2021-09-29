@@ -1,13 +1,26 @@
 package com.koupper.providers.files
 
+import com.koupper.container.app
+import com.koupper.container.interfaces.Container
+import com.koupper.providers.ServiceProvider
+import com.koupper.providers.ServiceProviderManager
+import io.kotest.core.spec.Spec
 import io.kotest.core.spec.style.AnnotationSpec
+import io.kotest.core.test.TestCase
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TextFileHandlerTest : AnnotationSpec() {
+    private lateinit var container: Container
+
+    override fun beforeSpec(spec: Spec) {
+        super.beforeSpec(spec)
+        this.container = app
+    }
+
     @Test
     fun `should get the number line for specific content`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val numberOfLine = fileHandler.getNumberLineFor(
                 "<link rel=\"stylesheet\" href=\"css/styles.css?v=1.0\">",
@@ -26,7 +39,7 @@ class TextFileHandlerTest : AnnotationSpec() {
 
     @Test
     fun `should get the number lines for specific content`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val numberOfLines = fileHandler.getNumberLinesFor(
                 "<meta",
@@ -38,7 +51,7 @@ class TextFileHandlerTest : AnnotationSpec() {
 
     @Test
     fun `should put a line before to specific line`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val file = fileHandler.putLineBefore(1, "<!--this is a comment-->", "resource://index.html")
 
@@ -49,7 +62,7 @@ class TextFileHandlerTest : AnnotationSpec() {
 
     @Test
     fun `should put a line after to specific line`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val file = fileHandler.putLineAfter(1, "<!--this is a comment-->", "resource://index.html")
 
@@ -60,31 +73,29 @@ class TextFileHandlerTest : AnnotationSpec() {
 
     @Test
     fun `should append content before other specified content`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val file = fileHandler.appendContentBefore(">This", contentToAdd = " class=\"font-weight-bold\"", filePath = "resource://index.html")
 
         assertTrue {
-            fileHandler.getNumberLineFor("<span class=\"font-weight-bold\">This", file.path).compareTo(14) == 0 &&
-                    file.delete()
+            fileHandler.getNumberLineFor("<span class=\"font-weight-bold\">This", file.path).compareTo(14) == 0
         }
     }
 
     @Test
     fun `should append content after other specified content`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val file = fileHandler.appendContentAfter(">This", contentToAdd = " example", filePath = "resource://index.html")
 
         assertTrue {
-            fileHandler.getNumberLineFor("pan>This example is for a ko", file.path).compareTo(14) == 0 &&
-                    file.delete()
+            fileHandler.getNumberLineFor("pan>This example is for a ko", file.path).compareTo(14) == 0
         }
     }
 
     @Test
     fun `should replace line in specific number`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val file = fileHandler.replaceLine(1, "<!--this is a comment-->", "resource://index.html")
 
@@ -95,7 +106,7 @@ class TextFileHandlerTest : AnnotationSpec() {
 
     @Test
     fun `should get the content for specified line`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val content = fileHandler.getContentForLine(1, "resource://index.html")
 
@@ -104,7 +115,7 @@ class TextFileHandlerTest : AnnotationSpec() {
 
     @Test
     fun `should get the content between lines`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val content = fileHandler.getContentBetweenLines(1, 3, "resource://index.html")
 
@@ -119,7 +130,7 @@ class TextFileHandlerTest : AnnotationSpec() {
 
     @Test
     fun `should get the content between either content in different line`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val content = fileHandler.getContentBetweenContent("<span>", "</span>", 3, "resource://index.html")
 
@@ -128,7 +139,7 @@ class TextFileHandlerTest : AnnotationSpec() {
 
     @Test
     fun `should get the content between either content in the same line`() {
-        val fileHandler = TextFileHandlerImpl()
+        val fileHandler = TextFileHandlerImpl(this.container)
 
         val content = fileHandler.getContentBetweenContent("This is", "koupper test.", 1, "resource://index.html")
 

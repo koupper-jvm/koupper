@@ -197,6 +197,10 @@ class KoupperContainer() : Container {
         }
     }
 
+    override fun env(variableName: String): String {
+        return System.getenv(variableName)
+    }
+
     @Throws(Exception::class)
     fun getClasses(classLoader: ClassLoader, `package`: String): List<KClass<*>>? {
         val resourceLocation = classLoader.getResource(`package`.replace(".", "/"))

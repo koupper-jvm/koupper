@@ -10,9 +10,13 @@ interface Sender {
 
     fun configFromResource(configPath: String): Sender
 
+    fun configFromEnvs(): Sender
+
     fun withContent(content: String)
 
     fun sendTo(targetEmail: String): Boolean
+
+    fun subject(subject: String)
 
     fun trackUsing(logger: Logger): Boolean
 

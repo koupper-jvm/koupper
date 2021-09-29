@@ -21,7 +21,7 @@ import kotlin.reflect.KClass
 import kotlin.system.exitProcess
 
 val isRelativeScriptFile: (String) -> Boolean = {
-    it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
+    it.matches("^[a-zA-Z0-9]+.kts$".toRegex())
 }
 
 class Octopus(private var container: Container) : ScriptExecutor {
@@ -122,7 +122,10 @@ class Octopus(private var container: Container) : ScriptExecutor {
         return params
     }
 
-    override fun <T> runScriptFiles(scripts: MutableMap<String, Map<String, Any>>, result: (value: T, scriptName: String) -> Unit) {
+    override fun <T> runScriptFiles(
+        scripts: MutableMap<String, Map<String, Any>>,
+        result: (value: T, scriptName: String) -> Unit
+    ) {
         scripts.forEach { (scriptPath, params) ->
             if (scriptPath.isNotEmpty()) {
                 if (".kts" !in scriptPath) {
@@ -221,7 +224,8 @@ fun checkForUpdates(): Boolean {
 
     textJsonParser.toType<Info>().apps.forEach { project ->
         if ((project.name == "octopus" && project.version != properties["OCTOPUS_VERSION"]) ||
-                (project.name == "koupper-installer" && project.version != properties["KOUPPER_CLI_VERSION"])) {
+            (project.name == "koupper-installer" && project.version != properties["KOUPPER_CLI_VERSION"])
+        ) {
             print("AVAILABLE_UPDATES")
 
             exitProcess(0)
@@ -234,8 +238,8 @@ fun checkForUpdates(): Boolean {
 private fun processCallback(context: ScriptExecutor, scriptName: String, result: Any) {
     if (result is Container) {
         println("\nscript [$scriptName] ->\u001B[38;5;155m was executed.\u001B[0m")
-    } else if (result is SetupModule) {
-        //println("\r${ANSI_GREEN_155}📦 module ${ANSI_WHITE}${result.processName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
+    } else if (result is Process) {
+        println("\r${ANSI_GREEN_155}📦 module ${ANSI_WHITE}${result.processName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
     }
 }
 

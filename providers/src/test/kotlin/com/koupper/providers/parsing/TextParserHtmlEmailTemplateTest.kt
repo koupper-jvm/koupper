@@ -11,12 +11,11 @@ class TextParserHtmlEmailTemplateTest : AnnotationSpec() {
         val htmlEmailTemplate = TextReader()
 
         val finalBinding = htmlEmailTemplate.bind(
-                mapOf(
-                        "logo" to "/images/logo.png",
-                        "name" to "Jacob",
-                        "email" to "jacob.gacosta@gmail.com"
-                ),
-                StringBuilder(htmlEmailTemplate.readFromPath("yourPath"))
+            mapOf(
+                "%user%" to "@user",
+                "%password%" to "secret"
+            ),
+            StringBuilder(htmlEmailTemplate.readFromURL("https://iglyemailtemplates.s3.amazonaws.com/welcome-igly.html"))
         )
 
         assertTrue {

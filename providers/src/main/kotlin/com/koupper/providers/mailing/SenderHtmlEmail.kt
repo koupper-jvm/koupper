@@ -45,13 +45,22 @@ class SenderHtmlEmail : Sender {
         return this
     }
 
+    override fun configFromEnvs(): Sender {
+        this.host = System.getenv("MAIL_HOST")
+        this.port = System.getenv("MAIL_PORT")
+        this.from = System.getenv("MAIL_USERNAME")
+        this.userName = System.getenv("MAIL_USERNAME")
+        this.password = System.getenv("MAIL_PASSWORD")
+
+        return this
+    }
+
     private fun setup() {
         val values: Map<String?, String?> = this.textReader.splitKeyValue("=".toRegex())
 
         this.host = values["MAIL_HOST"]
         this.port = values["MAIL_PORT"]
-        this.from = values["MAIL_FROM_ADDRESS"]
-        this.subject = values["MAIL_FROM_NAME"]
+        this.from = values["MAIL_USERNAME"]
         this.userName = values["MAIL_USERNAME"]
         this.password = values["MAIL_PASSWORD"]
     }
@@ -72,6 +81,10 @@ class SenderHtmlEmail : Sender {
         Transport.send(message)
 
         return true
+    }
+
+    override fun subject(subject: String) {
+        this.subject = subject
     }
 
     override fun trackUsing(logger: Logger): Boolean {
