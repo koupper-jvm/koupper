@@ -77,15 +77,10 @@ class TextFileHandlerImpl(container: Container) : TextFileHandler {
         for ((lineNumber, content) in lines.iterator().withIndex()) {
             when {
                 (lineNumber + 1).toLong() == linePosition && !replaceLine -> {
-                    newContent.append(newLine)
-                    if (content.isEmpty()) {
-                        newContent.append("\n")
-                    } else {
-                        newContent.append(content)
-                    }
+                    newContent.append("\n")
                 }
                 (lineNumber + 1).toLong() == linePosition && replaceLine -> {
-                    newContent.append(newLine)
+                    newContent.append("$newLine\n")
                 }
                 lineNumber == lines.size -> {
                     newContent.append(content)

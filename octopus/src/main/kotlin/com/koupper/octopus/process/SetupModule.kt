@@ -65,14 +65,14 @@ class SetupModule(private val container: Container) : Process {
 
                 this.textFileHandler.replaceLine(
                     2,
-                    "\"name\": \"${modelProject.name}\"",
+                    "  \"name\": \"${this.name}\",",
                     "${modelProject.absolutePath}/package.json",
                     true
                 )
 
                 this.textFileHandler.replaceLine(
                     3,
-                    "\"version\": \"${this.metadata["version"]}\"",
+                    "  \"version\": \"${this.metadata["moduleVersion"]}\",",
                     "${modelProject.absolutePath}/package.json",
                     true
                 )
@@ -89,14 +89,14 @@ class SetupModule(private val container: Container) : Process {
 
                 //val processManager = textFileHandler.read("resource://.env").getProperty("MODEL_BACK_PROJECT_URL")
             }
-            this.moduletype.equals("DEPLOYABLE", true) -> {
+            this.moduletype.equals("DEPLOYABLE_SCRIPT", true) -> {
                 val modelProject = fileHandler.unzipFile(app.env("MODEL_BACK_PROJECT_URL"))
 
                 File("${modelProject.name}.zip").delete()
 
                 this.textFileHandler.replaceLine(
                     50,
-                    "version = '${this.metadata["version"]}'",
+                    "version = '${this.metadata["moduleVersion"]}'",
                     "${modelProject.absolutePath}/build.gradle",
                     true
                 )
