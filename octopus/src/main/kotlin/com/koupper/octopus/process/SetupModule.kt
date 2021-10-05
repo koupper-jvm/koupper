@@ -146,10 +146,8 @@ class SetupModule(private val container: Container) : Process {
                 script
             }
 
-            print("$scriptName...")
-
-            if (Files.notExists(Paths.get("$targetProjectPath/src/main/kotlin/scripts/$scriptName"))) {
-                val scriptTargetPath = "$targetProjectPath/src/main/kotlin/scripts/$scriptName"
+            if (Files.notExists(Paths.get("$targetProjectPath/src/main/kotlin/scripts/${scriptName.replace(".kts", ".kt")}"))) {
+                val scriptTargetPath = "$targetProjectPath/src/main/kotlin/scripts/${scriptName.replace(".kts", ".kt")}"
 
                 this.locateScript(script, scriptTargetPath)
 
@@ -169,10 +167,10 @@ class SetupModule(private val container: Container) : Process {
                     }
                 }
 
-                print("The $ANSI_GREEN_155$script$ANSI_RESET was added.")
+                print("$ANSI_GREEN_155$script$ANSI_RESET")
             }
 
-            println("\u001B[38;5;155m..[ok]\u001B[0m")
+            println("\u001B[38;5;155m...[ok]\u001B[0m")
         }
 
         println("\u001B[38;5;155mScripts located.\u001B[0m")
