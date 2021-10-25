@@ -23,7 +23,7 @@ interface TextFileHandler {
      * @property filePath the resource file path.
      * @return List of strings between the string chunks.
      */
-    fun getContentBetweenContent(firstContent: String, secondContent: String, inOccurrenceNumber: Int = 1, filePath: String): List<String>
+    fun getContentBetweenContent(firstContent: String, secondContent: String, onOccurrenceNumber: Int = 1, filePath: String): MutableList<List<String>>
 
     /**
      * Get the line number for a specific chunk string

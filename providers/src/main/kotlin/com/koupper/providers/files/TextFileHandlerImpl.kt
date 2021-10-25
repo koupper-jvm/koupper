@@ -177,9 +177,9 @@ class TextFileHandlerImpl(container: Container) : TextFileHandler {
         return this.replaceLine(matching.key.toLong(), finalLine, file.path, overrideOriginal)
     }
 
-    private fun getRangeOfOccurrence(file: File, contentToMatch: String, inOccurrenceNumber: Int): Map<Long, IntRange> {
+    private fun getRangeOfOccurrence(file: File, contentToMatch: String, onOccurrenceNumber: Int): Map<Long, IntRange> {
         var numberOfLine = 0
-        var numberOfMatching = 0
+        var numberOfMatchings = 0
         val matchingInfo = mutableMapOf<Long, IntRange>()
 
         file.forEachLine lit@{ line ->
@@ -189,9 +189,9 @@ class TextFileHandlerImpl(container: Container) : TextFileHandler {
                 val matches = contentToMatch.toRegex().findAll(line)
 
                 matches.iterator().forEach { matching ->
-                    numberOfMatching++
+                    numberOfMatchings++
 
-                    if (inOccurrenceNumber == numberOfMatching) {
+                    if (numberOfMatchings == onOccurrenceNumber) {
                         matchingInfo[numberOfLine.toLong()] = matching.range
 
                         return@lit
@@ -225,30 +225,62 @@ class TextFileHandlerImpl(container: Container) : TextFileHandler {
     override fun getContentBetweenContent(
         firstContent: String,
         secondContent: String,
-        inOccurrenceNumber: Int,
+        onOccurrenceNumber: Int,
         filePath: String
-    ): List<String> {
+    ): MutableList<List<String>> {
         val file = this.fileHandler.load(filePath)
+        val result = mutableListOf<List<String>>()
+        var occurrenceIndex = onOccurrenceNumber
 
-        val lineNumberForFirstMatch =
-            this.getRangeOfOccurrence(file, firstContent, inOccurrenceNumber).entries.first().key
+        if (occurrenceIndex < 0) {
+            occurrenceIndex += 2
 
-        val lineNumberForSecondMatch =
-            this.getRangeOfOccurrence(file, secondContent, inOccurrenceNumber).entries.first().key
+            while (true) {
+                val lineNumberForFirstMatch =
+                    this.getRangeOfOccurrence(file, firstContent, occurrenceIndex).entries
 
-        return if (lineNumberForFirstMatch < lineNumberForSecondMatch) {
-            this.getContentBetweenLines(lineNumberForFirstMatch, lineNumberForSecondMatch, file.path)
+                val lineNumberForSecondMatch =
+                    this.getRangeOfOccurrence(file, secondContent, occurrenceIndex).entries
+
+                if (lineNumberForFirstMatch.isNotEmpty() && lineNumberForSecondMatch.isNotEmpty()) {
+                    result.add(
+                        this.getContentBetweenLines(
+                            lineNumberForFirstMatch.first().key,
+                            lineNumberForSecondMatch.first().key,
+                            file.path
+                        )
+                    )
+                } else {
+                    break
+                }
+
+                occurrenceIndex++
+            }
         } else {
-            val rangeOfFirstMatching =
-                this.getRangeOfOccurrence(file, firstContent, inOccurrenceNumber).entries.first().value
+            val lineNumberForFirstMatch =
+                this.getRangeOfOccurrence(file, firstContent, onOccurrenceNumber).entries
 
-            val rangeOfSecondMatching =
-                this.getRangeOfOccurrence(file, secondContent, inOccurrenceNumber).entries.first().value
+            val lineNumberForSecondMatch =
+                this.getRangeOfOccurrence(file, secondContent, onOccurrenceNumber).entries
 
-            val originalLine = this.getContentForLine(lineNumberForFirstMatch, file.path)
+            if (lineNumberForFirstMatch.isNotEmpty() && lineNumberForSecondMatch.isNotEmpty()) {
+                if (lineNumberForFirstMatch.first().key == lineNumberForSecondMatch.first().key) {
+                    val content = this.getContentForLine(lineNumberForFirstMatch.first().key, file.path)
 
-            listOf(originalLine.substring(rangeOfFirstMatching.last + 1, rangeOfSecondMatching.first))
+                    result.add(listOf(content.substring(lineNumberForFirstMatch.first().value.last + 1, lineNumberForSecondMatch.first().value.first)))
+                } else {
+                    result.add(
+                        this.getContentBetweenLines(
+                            lineNumberForFirstMatch.first().key,
+                            lineNumberForSecondMatch.first().key,
+                            file.path
+                        )
+                    )
+                }
+            }
         }
+
+        return result
     }
 
     override fun getContentForLine(linePosition: Long, filePath: String): String {

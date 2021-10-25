@@ -192,11 +192,11 @@ class SetupModule(private val container: Container) : Process {
 
             val callableName = this.textFileHandler.getContentBetweenContent("val", ":", filePath = scriptTargetPath)
 
-            val callableLine = this.textFileHandler.getNumberLineFor("val${callableName[0]}: (", scriptTargetPath)
+            val callableLine = this.textFileHandler.getNumberLineFor("val${callableName[0][0]}: (", scriptTargetPath)
 
             val callableLineContent = this.textFileHandler.getContentForLine(callableLine, scriptTargetPath)
 
-            val renamedCallable = callableLineContent.replace(callableName[0], " $finalValName")
+            val renamedCallable = callableLineContent.replace(callableName[0][0], " $finalValName")
 
             this.textFileHandler.replaceLine(callableLine, renamedCallable, scriptTargetPath, true);
         }
