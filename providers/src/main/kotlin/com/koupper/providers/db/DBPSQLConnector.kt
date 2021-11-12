@@ -38,7 +38,7 @@ class DBPSQLConnector : DBConnector {
     }
 
     private fun setup() {
-        val properties: Map<String?, String?> = parser.splitKeyValue("=".toRegex())
+        val properties: Map<String?, String?> = parser.splitKeyValue("=")
 
         val host = properties["DB_HOST"]
         val port = properties["DB_PORT"]

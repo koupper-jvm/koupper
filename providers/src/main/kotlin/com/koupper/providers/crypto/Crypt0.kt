@@ -1,7 +1,7 @@
 package com.koupper.providers.crypto
 
 interface Crypt0 {
-    fun encrypt()
+    fun encrypt(rawText: ByteArray, authData: ByteArray): ByteArray
 
-    fun decrypt()
+    fun decrypt(ciphertext: ByteArray, IVbytes: ByteArray, authData: ByteArray): ByteArray
 }
