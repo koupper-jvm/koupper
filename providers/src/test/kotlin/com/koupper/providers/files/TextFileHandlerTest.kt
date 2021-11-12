@@ -1,13 +1,17 @@
 package com.koupper.providers.files
 
+import com.koupper.container.KoupperContainer
 import com.koupper.container.app
+import com.koupper.container.exceptions.MultipleAbstractImplementationsException
 import com.koupper.container.interfaces.Container
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import io.kotest.core.spec.Spec
 import io.kotest.core.spec.style.AnnotationSpec
 import io.kotest.core.test.TestCase
+import java.io.FileNotFoundException
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class TextFileHandlerTest : AnnotationSpec() {
@@ -26,7 +30,6 @@ class TextFileHandlerTest : AnnotationSpec() {
                 "<link rel=\"stylesheet\" href=\"css/styles.css?v=1.0\">",
                 "resource://index.html"
         )
-
 
         assertTrue {
             numberOfLine > 0
@@ -144,5 +147,18 @@ class TextFileHandlerTest : AnnotationSpec() {
         val content = fileHandler.getContentBetweenContent("This is", "koupper test.", 1, "resource://index.html")
 
         assertEquals("for a", content[0][0].trim())
+    }
+
+    @Test
+    fun `should throws exception if a non existent file`() {
+        val exception = assertFailsWith<FileNotFoundException> {
+            val fileHandler = TextFileHandlerImpl(this.container)
+
+            fileHandler.read("env:nonexistent")
+        }
+
+        assertTrue {
+            exception is FileNotFoundException
+        }
     }
 }

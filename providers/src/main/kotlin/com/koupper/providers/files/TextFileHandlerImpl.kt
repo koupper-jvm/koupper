@@ -130,7 +130,7 @@ class TextFileHandlerImpl(container: Container) : TextFileHandler {
 
         val matching = matchingInfo.entries.first()
 
-        val line = this.getContentForLine(matching.key.toLong(), file.path)
+        val line = this.getContentForLine(matching.key, file.path)
 
         val finalLine = line.substring(0, matching.value.first).plus(contentToAdd.plus(line.substring(matching.value)))
             .plus(line.substring(matching.value.last + 1))

@@ -16,9 +16,11 @@ import com.koupper.providers.parsing.extensions.splitKeyValue
 import java.io.*
 import java.net.URL
 import java.nio.file.Paths
+import java.util.*
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
+
 
 val isRelativeScriptFile: (String) -> Boolean = {
     it.matches("^[a-zA-Z0-9]+.kts$".toRegex())
@@ -196,7 +198,7 @@ fun checkForUpdates(): Boolean {
     val parser = app.createInstanceOf(TextParser::class)
     parser.readFromResource(".env")
 
-    val properties = parser.splitKeyValue("=".toRegex())
+    val properties = parser.splitKeyValue("=")
 
     val checkForUpdateUrl = properties["CHECK_FOR_UPDATED_URL"]
 

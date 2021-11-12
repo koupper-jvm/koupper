@@ -56,7 +56,7 @@ class SenderHtmlEmail : Sender {
     }
 
     private fun setup() {
-        val values: Map<String?, String?> = this.textReader.splitKeyValue("=".toRegex())
+        val values: Map<String?, String?> = this.textReader.splitKeyValue("=")
 
         this.host = values["MAIL_HOST"]
         this.port = values["MAIL_PORT"]

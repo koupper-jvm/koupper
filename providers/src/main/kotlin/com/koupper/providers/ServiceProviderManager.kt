@@ -1,7 +1,9 @@
 package com.koupper.providers
 
+import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBServiceProvider
 import com.koupper.providers.files.FileServiceProvider
+import com.koupper.providers.jwt.JWTServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
@@ -40,13 +42,15 @@ val waitFor: (Thread) -> Thread = { thread ->
 class ServiceProviderManager {
     fun listProviders(): List<KClass<*>> {
         return listOf(
-                TextParserServiceProvider::class,
-                DBServiceProvider::class,
-                SenderServiceProvider::class,
-                LoggerServiceProvider::class,
-                HttpServiceProvider::class,
-                TextJsonParserServiceProvider::class,
-                FileServiceProvider::class
+            TextParserServiceProvider::class,
+            DBServiceProvider::class,
+            SenderServiceProvider::class,
+            LoggerServiceProvider::class,
+            HttpServiceProvider::class,
+            TextJsonParserServiceProvider::class,
+            FileServiceProvider::class,
+            JWTServiceProvider::class,
+            CryptoServiceProvider::class
         )
     }
 }

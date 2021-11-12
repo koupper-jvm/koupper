@@ -38,7 +38,7 @@ class DBSQLiteConnector : DBConnector {
     }
 
     private fun setup() {
-        val properties: Map<String?, String?> = textReader.splitKeyValue("=".toRegex())
+        val properties: Map<String?, String?> = textReader.splitKeyValue("=")
 
         val databaseName = properties["DB_DATABASE"]
 

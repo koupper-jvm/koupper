@@ -14,14 +14,16 @@ enum class PathType {
     RESOURCE,
     LOCATION,
     ENV,
+    MALFORMED,
 }
 
 val checkByPathType: (String) -> PathType = { path ->
     when {
         path.contains("(http|https)://".toRegex()) -> PathType.URL
         path.contains("resource://".toRegex()) -> PathType.RESOURCE
-        path.contains("env://".toRegex()) -> PathType.ENV
-        else -> PathType.LOCATION
+        path.contains("env:".toRegex()) -> PathType.ENV
+        path.startsWith("/") -> PathType.LOCATION
+        else -> PathType.MALFORMED
     }
 }
 
@@ -42,6 +44,10 @@ class FileHandlerImpl : FileHandler {
                     buildResourcePathName(filePath)
                 ).path
             )
+            checkByPathType(filePath) === PathType.ENV -> File(
+                ".${filePath.substring(filePath.lastIndexOf("/") + 1)}"
+            )
+            checkByPathType(filePath) === PathType.LOCATION -> File(filePath)
             else -> File(filePath)
         }
     }
@@ -97,7 +103,9 @@ class FileHandlerImpl : FileHandler {
 
         launchProcess {
             ZipFile(zipFile.absolutePath).use { zip ->
-                unzippedFolderName = zipFile.absolutePath.slice(zipFile.absolutePath.lastIndexOf("/") + 1 until zipFile.absolutePath.indexOf("."))
+                unzippedFolderName = zipFile.absolutePath.slice(
+                    zipFile.absolutePath.lastIndexOf("/") + 1 until zipFile.absolutePath.indexOf(".")
+                )
 
                 zip.entries().asSequence().forEach lit@{ entry ->
                     filesToIgnore.forEach filesToIgnore@{

@@ -198,7 +198,7 @@ class KoupperContainer() : Container {
     }
 
     override fun env(variableName: String): String {
-        return System.getenv(variableName)
+        return System.getenv(variableName) ?: "undefined"
     }
 
     @Throws(Exception::class)
