@@ -5,14 +5,10 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.interfaces.DecodedJWT
 import com.beust.klaxon.JsonObject
 import com.beust.klaxon.Parser
-import com.koupper.container.app
 import com.koupper.container.interfaces.Container
-import com.koupper.providers.extensions.getProperty
-import com.koupper.providers.parsing.JsonToObject
-import com.koupper.providers.parsing.TextJsonParser
+import com.koupper.shared.getProperty
 import java.io.File
 import java.lang.StringBuilder
-import java.util.*
 
 enum  class JWTAgentEnum {
     HMAC256

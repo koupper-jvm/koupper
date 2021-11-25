@@ -1,4 +1,4 @@
-package com.koupper.providers.extensions
+package com.koupper.shared
 
 import java.io.File
 import java.io.InputStream
@@ -23,6 +23,8 @@ fun File.getProperty(propertyName: String) : String {
     return name
 }
 
-fun ArrayList<Int>.getProperty(propertyName: String) : ByteArray {
+fun ArrayList<Int>.toByteArray() : ByteArray {
     return this.foldIndexed(ByteArray(this.size)) { i, a, v -> a.apply { set(i, v.toByte()) } }
 }
+
+class Extensions {}

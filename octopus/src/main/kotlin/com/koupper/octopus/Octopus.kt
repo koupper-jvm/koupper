@@ -101,7 +101,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
     override fun execute(
         callable: (container: Container, params: Map<String, Any>) -> Container,
-        params: Map<String, String>
+        params: Map<String, Any>
     ) {
         callable(container, params)
     }

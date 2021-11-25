@@ -19,6 +19,7 @@ class AESGCM128Test : AnnotationSpec() {
         CryptoServiceProvider().up()
     }
 
+    @Ignore
     @Test
     fun `should encrypt an decrypt text`() {
         withEnvironment("SHARED_SECRET", "A?D(G+KbPeShVmYq") {

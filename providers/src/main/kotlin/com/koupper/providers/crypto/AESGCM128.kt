@@ -1,7 +1,7 @@
 package com.koupper.providers.crypto
 
 import com.koupper.container.interfaces.Container
-import com.koupper.providers.extensions.getProperty
+import com.koupper.shared.getProperty
 import java.io.File
 import java.security.SecureRandom
 import javax.crypto.Cipher
