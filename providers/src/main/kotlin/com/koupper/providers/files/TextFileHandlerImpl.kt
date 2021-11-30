@@ -1,11 +1,10 @@
 package com.koupper.providers.files
 
-import com.koupper.container.interfaces.Container
 import java.io.File
 import java.lang.StringBuilder
 
-class TextFileHandlerImpl(container: Container) : TextFileHandler {
-    private var fileHandler: FileHandler = container.createInstanceOf(FileHandler::class)
+class TextFileHandlerImpl : TextFileHandler {
+    private var fileHandler: FileHandler = FileHandlerImpl()
 
     override fun getNumberLineFor(contentToFind: String, filePath: String): Long {
         return this.getNumberLinesFor(contentToFind, filePath)[0]
@@ -267,7 +266,14 @@ class TextFileHandlerImpl(container: Container) : TextFileHandler {
                 if (lineNumberForFirstMatch.first().key == lineNumberForSecondMatch.first().key) {
                     val content = this.getContentForLine(lineNumberForFirstMatch.first().key, file.path)
 
-                    result.add(listOf(content.substring(lineNumberForFirstMatch.first().value.last + 1, lineNumberForSecondMatch.first().value.first)))
+                    result.add(
+                        listOf(
+                            content.substring(
+                                lineNumberForFirstMatch.first().value.last + 1,
+                                lineNumberForSecondMatch.first().value.first
+                            )
+                        )
+                    )
                 } else {
                     result.add(
                         this.getContentBetweenLines(
@@ -296,6 +302,20 @@ class TextFileHandlerImpl(container: Container) : TextFileHandler {
                 content += line
 
                 return@lit
+            }
+        }
+
+        return content
+    }
+
+    override fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder {
+        data.forEach { (key, value) ->
+            if (content.contains(key.toRegex())) {
+                val parsedVariable = content.replace(key.toRegex(), value.toString())
+
+                content.clear()
+
+                content.append(parsedVariable)
             }
         }
 

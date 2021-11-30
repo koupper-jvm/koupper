@@ -7,8 +7,6 @@ import com.koupper.providers.jwt.JWTServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
-import com.koupper.providers.parsing.TextJsonParserServiceProvider
-import com.koupper.providers.parsing.TextParserServiceProvider
 import kotlin.reflect.KClass
 
 val launchProcess: (() -> Unit) -> Thread = { callback ->
@@ -42,12 +40,10 @@ val waitFor: (Thread) -> Thread = { thread ->
 class ServiceProviderManager {
     fun listProviders(): List<KClass<*>> {
         return listOf(
-            TextParserServiceProvider::class,
             DBServiceProvider::class,
             SenderServiceProvider::class,
             LoggerServiceProvider::class,
             HttpServiceProvider::class,
-            TextJsonParserServiceProvider::class,
             FileServiceProvider::class,
             JWTServiceProvider::class,
             CryptoServiceProvider::class

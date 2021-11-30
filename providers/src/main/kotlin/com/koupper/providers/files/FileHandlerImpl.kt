@@ -38,7 +38,7 @@ class FileHandlerImpl : FileHandler {
             checkByPathType(filePath) === PathType.URL -> downloadFile(
                 URL(filePath),
                 filePath.substring(filePath.lastIndexOf("/") + 1)
-            ) // Download the file in the current location.
+            )
             checkByPathType(filePath) === PathType.RESOURCE -> File(
                 FileHandlerImpl::class.java.classLoader.getResource(
                     buildResourcePathName(filePath)
@@ -47,7 +47,7 @@ class FileHandlerImpl : FileHandler {
             checkByPathType(filePath) === PathType.ENV -> File(
                 ".${filePath.substring(filePath.lastIndexOf("/") + 1)}"
             )
-            checkByPathType(filePath) === PathType.LOCATION -> File(filePath)
+            checkByPathType(filePath) === PathType.LOCATION -> File(filePath) // Download the file in the current location.
             else -> File(filePath)
         }
     }

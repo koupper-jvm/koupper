@@ -26,10 +26,9 @@ task optimized(type: Jar) {
     manifest {
         attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
     }
-    from sourceSets.main.output
     from {
         configurations.runtimeClasspath.filter {
-            it.name.contains("container") || it.name.contains("providers") || it.name.contains("configurations") || it.name.contains("shared")
+            it.name.contains("container") || it.name.contains("providers") || it.name.contains("configurations") || it.name.contains("shared") || it.name.contains("os")
         }.collect {
             println("Octopus dependency Included: ${it.name}")
             it.isDirectory() ? it : zipTree(it)

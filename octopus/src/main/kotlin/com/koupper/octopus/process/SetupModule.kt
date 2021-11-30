@@ -3,9 +3,9 @@ package com.koupper.octopus.process
 import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
 import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
-import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.isRelativeScriptFile
+import com.koupper.os.env
 import com.koupper.providers.files.FileHandler
 import com.koupper.providers.files.TextFileHandler
 import com.koupper.providers.files.downloadFile
@@ -59,7 +59,7 @@ class SetupModule(private val container: Container) : Process {
     private fun buildByType() {
         when {
             this.moduletype.equals("FRONT", true) -> {
-                val modelProject = fileHandler.unzipFile(app.env("MODEL_FRONT_PROJECT_URL"))
+                val modelProject = fileHandler.unzipFile(env("MODEL_FRONT_PROJECT_URL"))
 
                 File("${modelProject.name}.zip").delete()
 
@@ -90,7 +90,7 @@ class SetupModule(private val container: Container) : Process {
                 //val processManager = textFileHandler.read("resource://.env").getProperty("MODEL_BACK_PROJECT_URL")
             }
             this.moduletype.equals("DEPLOYABLE_SCRIPT", true) -> {
-                val modelProject = fileHandler.unzipFile(app.env("MODEL_BACK_PROJECT_URL"))
+                val modelProject = fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
 
                 File("${modelProject.name}.zip").delete()
 
@@ -123,8 +123,8 @@ class SetupModule(private val container: Container) : Process {
         File("$projectName/libs").mkdir()
 
         downloadFile(
-            URL(app.env("OPTIMIZED_PROCESS_MANAGER_URL")),
-            "$projectName/libs/octopus-${app.env("OCTOPUS_VERSION")}.jar"
+            URL(env("OPTIMIZED_PROCESS_MANAGER_URL")),
+            "$projectName/libs/octopus-${env("OCTOPUS_VERSION")}.jar"
         )
 
         println("\u001B[38;5;155m✔\u001B[0m")

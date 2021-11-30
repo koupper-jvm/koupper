@@ -8,8 +8,6 @@ import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.jwt.JWTServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
-import com.koupper.providers.parsing.TextJsonParserServiceProvider
-import com.koupper.providers.parsing.TextParserServiceProvider
 import kotlin.test.assertTrue
 
 class ServiceProviderManagerTest : AnnotationSpec() {
@@ -20,15 +18,13 @@ class ServiceProviderManagerTest : AnnotationSpec() {
         assertTrue {
             serviceProviderManager.listProviders().containsAll(
                 listOf(
-                    TextParserServiceProvider::class,
+                    CryptoServiceProvider::class,
                     DBServiceProvider::class,
-                    SenderServiceProvider::class,
-                    LoggerServiceProvider::class,
-                    HttpServiceProvider::class,
-                    TextJsonParserServiceProvider::class,
                     FileServiceProvider::class,
+                    HttpServiceProvider::class,
                     JWTServiceProvider::class,
-                    CryptoServiceProvider::class
+                    LoggerServiceProvider::class,
+                    SenderServiceProvider::class,
                 )
             )
         }

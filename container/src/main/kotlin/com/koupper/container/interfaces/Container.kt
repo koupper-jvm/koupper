@@ -2,7 +2,7 @@ package com.koupper.container.interfaces
 
 import kotlin.reflect.KClass
 
-interface Container : Environment {
+interface Container {
     fun <T : Any> bind(abstractClass: T, callback: (container: Container) -> T, tag: String = "undefined")
 
     fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V, tag: String = "undefined")

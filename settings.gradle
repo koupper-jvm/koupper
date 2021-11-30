@@ -8,4 +8,4 @@
  */
 
 rootProject.name = 'koupper'
-include 'octopus', 'container', 'providers', 'assertions', 'bootstrap', 'configurations', 'shared'
+include 'octopus', 'container', 'providers', 'assertions', 'bootstrap', 'configurations', 'shared', 'os'

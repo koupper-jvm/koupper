@@ -68,8 +68,10 @@ project(':container') {
 project(':octopus') {
     dependencies {
         implementation project(':container')
+        implementation project(':shared')
         implementation project(':providers')
         implementation project(':configurations')
+        implementation project(':os')
         implementation "org.jetbrains.kotlin:kotlin-reflect"
         implementation "org.jetbrains.kotlin:kotlin-script-util"
         implementation "org.jetbrains.kotlin:kotlin-script-runtime"
@@ -87,8 +89,9 @@ project(':shared') {
 
 project(':providers') {
     dependencies {
-        implementation project(':container')
         implementation project(':shared')
+        implementation project(':container')
+        implementation project(':os')
         implementation 'javax.mail:mail:1.4.1'
         implementation 'io.zeko:zeko-sql-builder:1.2.4'
         implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.3'
@@ -101,5 +104,11 @@ project(':providers') {
         implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.12.0'
         implementation 'com.auth0:java-jwt:3.18.1'
         implementation 'com.beust:klaxon:5.5'
+    }
+}
+
+project(':os') {
+    dependencies {
+        implementation project(':shared')
     }
 }

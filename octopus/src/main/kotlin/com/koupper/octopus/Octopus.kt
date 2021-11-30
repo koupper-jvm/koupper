@@ -6,13 +6,12 @@ import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.process.Process
 import com.koupper.octopus.process.SetupModule
+import com.koupper.os.env
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
+import com.koupper.providers.files.*
 import com.koupper.providers.http.HtppClient
-import com.koupper.providers.parsing.JsonToObject
-import com.koupper.providers.parsing.TextJsonParser
-import com.koupper.providers.parsing.TextParser
-import com.koupper.providers.parsing.extensions.splitKeyValue
+import com.koupper.shared.getProperty
 import java.io.*
 import java.net.URL
 import java.nio.file.Paths
@@ -195,12 +194,7 @@ fun main(args: Array<String>) {
 }
 
 fun checkForUpdates(): Boolean {
-    val parser = app.createInstanceOf(TextParser::class)
-    parser.readFromResource(".env")
-
-    val properties = parser.splitKeyValue("=")
-
-    val checkForUpdateUrl = properties["CHECK_FOR_UPDATED_URL"]
+    val checkForUpdateUrl = env("CHECK_FOR_UPDATED_URL")
 
     val httpClient = app.createInstanceOf(HtppClient::class)
 
@@ -208,25 +202,23 @@ fun checkForUpdates(): Boolean {
         url = checkForUpdateUrl!!
     }
 
-    val apps = response?.asString()!!
+    val textJsonParser = app.createInstanceOf(JSONFileHandler::class) as JSONFileHandlerImpl<*>
 
-    val textJsonParser = app.createInstanceOf(TextJsonParser::class) as JsonToObject<*>
-
-    textJsonParser.load(apps)
+    textJsonParser.read(response?.asString()!!)
 
     data class Versioning(val statusCode: String, val body: String)
 
-    val versioning = textJsonParser.toType<Versioning>()
+    val versioning = textJsonParser.toType() as Versioning
 
-    textJsonParser.load(versioning.body)
+    textJsonParser.read(versioning.body)
 
     data class Project(val name: String, val version: String)
 
     data class Info(val apps: ArrayList<Project>)
 
-    textJsonParser.toType<Info>().apps.forEach { project ->
-        if ((project.name == "octopus" && project.version != properties["OCTOPUS_VERSION"]) ||
-            (project.name == "koupper-installer" && project.version != properties["KOUPPER_CLI_VERSION"])
+    (textJsonParser.toType() as Info).apps.forEach { project ->
+        if ((project.name == "octopus" && project.version != env("OCTOPUS_VERSION")) ||
+            (project.name == "koupper-installer" && project.version != env("KOUPPER_CLI_VERSION"))
         ) {
             print("AVAILABLE_UPDATES")
 

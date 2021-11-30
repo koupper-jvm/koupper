@@ -1,68 +1,31 @@
 package com.koupper.providers.mailing
 
-import com.koupper.providers.logger.Logger
-import com.koupper.providers.parsing.TextReader
-import com.koupper.providers.parsing.extensions.splitKeyValue
+import com.koupper.os.env
+import com.koupper.providers.files.FileHandlerImpl
+import java.io.File
 import java.util.*
 import javax.mail.*
 import javax.mail.internet.InternetAddress
 import javax.mail.internet.MimeMessage
 
 class SenderHtmlEmail : Sender {
-    private var host: String? = ""
-    private var port: String? = ""
     private var from: String? = ""
-    private var userName: String? = ""
-    private var password: String? = ""
     private var targetEmail: String = ""
     private var subject: String? = ""
     private var message: String = ""
     private lateinit var session: Session
     private var properties: Properties = Properties()
-    private val textReader = TextReader()
+    private val fileHandler = FileHandlerImpl()
+    private lateinit var configs: File
 
-    override fun configFromPath(configPath: String): Sender {
-        this.textReader.readFromPath(configPath)
-
-        this.setup()
-
-        return this
+    init {
+        this.configMailProperties()
     }
 
-    override fun configFromUrl(configPath: String): Sender {
-        this.textReader.readFromURL(configPath)
-
-        this.setup()
+    override fun configFrom(configPath: String): Sender {
+        this.configs = this.fileHandler.load(configPath)
 
         return this
-    }
-
-    override fun configFromResource(configPath: String): Sender {
-        this.textReader.readFromResource(configPath)
-
-        this.setup()
-
-        return this
-    }
-
-    override fun configFromEnvs(): Sender {
-        this.host = System.getenv("MAIL_HOST")
-        this.port = System.getenv("MAIL_PORT")
-        this.from = System.getenv("MAIL_USERNAME")
-        this.userName = System.getenv("MAIL_USERNAME")
-        this.password = System.getenv("MAIL_PASSWORD")
-
-        return this
-    }
-
-    private fun setup() {
-        val values: Map<String?, String?> = this.textReader.splitKeyValue("=")
-
-        this.host = values["MAIL_HOST"]
-        this.port = values["MAIL_PORT"]
-        this.from = values["MAIL_USERNAME"]
-        this.userName = values["MAIL_USERNAME"]
-        this.password = values["MAIL_PASSWORD"]
     }
 
     override fun withContent(content: String) {
@@ -71,8 +34,6 @@ class SenderHtmlEmail : Sender {
 
     override fun sendTo(targetEmail: String): Boolean {
         this.targetEmail = targetEmail
-
-        this.configMailProperties()
 
         this.createSession()
 
@@ -87,15 +48,9 @@ class SenderHtmlEmail : Sender {
         this.subject = subject
     }
 
-    override fun trackUsing(logger: Logger): Boolean {
-        logger.log()
-
-        return true
-    }
-
     private fun configMailProperties() {
-        this.properties["mail.smtp.host"] = this.host
-        this.properties["mail.smtp.port"] = this.port
+        this.properties["mail.smtp.host"] = env("MAIL_HOST")
+        this.properties["mail.smtp.port"] = env("MAIL_PORT")
         this.properties["mail.smtp.ssl.enable"] = "true"
         this.properties["mail.smtp.auth"] = "true"
         this.properties["mail.smtp.starttls.enable"] = "true"
@@ -104,7 +59,7 @@ class SenderHtmlEmail : Sender {
     private fun createSession() {
         val authenticator = object : Authenticator() {
             override fun getPasswordAuthentication(): PasswordAuthentication {
-                return PasswordAuthentication(userName, password)
+                return PasswordAuthentication(env("MAIL_USERNAME"), env("PASSWORD"))
             }
         }
 
@@ -113,7 +68,7 @@ class SenderHtmlEmail : Sender {
 
     private fun buildMessage(): MimeMessage {
         val message = MimeMessage(this.session)
-        message.setFrom(InternetAddress(this.from))
+        message.setFrom(InternetAddress(env("MAIL_USERNAME")))
         message.setRecipient(Message.RecipientType.TO, InternetAddress(this.targetEmail))
         message.subject = this.subject
         message.sentDate = Date()

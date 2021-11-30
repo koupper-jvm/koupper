@@ -1,6 +1,7 @@
 package com.koupper.providers.files
 
 import java.io.File
+import java.lang.StringBuilder
 
 interface TextFileHandler {
     /**
@@ -71,4 +72,6 @@ interface TextFileHandler {
     fun getContentBetweenLines(initialLine: Long, finalLine: Long, filePath: String): List<String>
 
     fun getContentForLine(linePosition: Long, filePath: String): String
+
+    fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder
 }

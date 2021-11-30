@@ -4,14 +4,24 @@ import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.interfaces.Container
 import com.koupper.container.KoupperContainer
 import com.koupper.container.app
+import com.koupper.providers.crypto.Crypt0
+import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBConnector
 import com.koupper.providers.db.DBPSQLConnector
 import com.koupper.providers.db.DBServiceProvider
+import com.koupper.providers.files.FileHandler
+import com.koupper.providers.files.FileServiceProvider
+import com.koupper.providers.files.JSONFileHandler
+import com.koupper.providers.files.TextFileHandler
+import com.koupper.providers.http.HtppClient
+import com.koupper.providers.http.HttpServiceProvider
+import com.koupper.providers.jwt.JWT
+import com.koupper.providers.jwt.JWTServiceProvider
+import com.koupper.providers.logger.Logger
+import com.koupper.providers.logger.LoggerServiceProvider
 import com.koupper.providers.mailing.Sender
 import com.koupper.providers.mailing.SenderHtmlEmail
 import com.koupper.providers.mailing.SenderServiceProvider
-import com.koupper.providers.parsing.TextParser
-import com.koupper.providers.parsing.TextParserServiceProvider
 import io.mockk.every
 import io.mockk.mockkClass
 import kotlin.test.assertEquals
@@ -88,9 +98,13 @@ class OctopusTest : AnnotationSpec() {
         assertTrue {
             availableServiceProviders.containsAll(
                     listOf(
-                            TextParserServiceProvider::class,
-                            SenderServiceProvider::class,
-                            DBServiceProvider::class
+                        DBServiceProvider::class,
+                        SenderServiceProvider::class,
+                        LoggerServiceProvider::class,
+                        HttpServiceProvider::class,
+                        FileServiceProvider::class,
+                        JWTServiceProvider::class,
+                        CryptoServiceProvider::class
                     )
             )
         }
@@ -108,7 +122,15 @@ class OctopusTest : AnnotationSpec() {
                 }
             } else {
                 assertTrue {
-                    abstractClass.java.name == DBConnector::class.qualifiedName || abstractClass.java.name == Sender::class.qualifiedName || abstractClass.java.name == TextParser::class.qualifiedName
+                    abstractClass.java.name == Crypt0::class.qualifiedName ||
+                            abstractClass.java.name == DBConnector::class.qualifiedName ||
+                            abstractClass.java.name == FileHandler::class.qualifiedName ||
+                            abstractClass.java.name == JSONFileHandler::class.qualifiedName ||
+                            abstractClass.java.name == TextFileHandler::class.qualifiedName ||
+                            abstractClass.java.name == HtppClient::class.qualifiedName ||
+                            abstractClass.java.name == JWT::class.qualifiedName ||
+                            abstractClass.java.name == Logger::class.qualifiedName ||
+                            abstractClass.java.name == Sender::class.qualifiedName ||
                     (value as () -> Any).invoke() is DBPSQLConnector || (value as () -> Any).invoke() is SenderHtmlEmail
                 }
             }
