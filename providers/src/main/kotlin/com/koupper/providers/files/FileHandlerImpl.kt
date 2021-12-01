@@ -33,7 +33,7 @@ val buildResourcePathName: (String) -> String = {
 }
 
 class FileHandlerImpl : FileHandler {
-    override fun load(filePath: String, targetPath: String): File {
+    override fun load(filePath: String): File {
         return when {
             checkByPathType(filePath) === PathType.URL -> downloadFile(
                 URL(filePath),

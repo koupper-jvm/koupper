@@ -1,31 +1,22 @@
 package com.koupper.providers.mailing
 
 import com.koupper.os.env
-import com.koupper.providers.files.FileHandlerImpl
-import java.io.File
+import com.koupper.providers.Setup
 import java.util.*
 import javax.mail.*
 import javax.mail.internet.InternetAddress
 import javax.mail.internet.MimeMessage
 
-class SenderHtmlEmail : Sender {
+class SenderHtmlEmail : Sender, Setup() {
     private var from: String? = ""
     private var targetEmail: String = ""
     private var subject: String? = ""
     private var message: String = ""
     private lateinit var session: Session
     private var properties: Properties = Properties()
-    private val fileHandler = FileHandlerImpl()
-    private lateinit var configs: File
 
     init {
         this.configMailProperties()
-    }
-
-    override fun configFrom(configPath: String): Sender {
-        this.configs = this.fileHandler.load(configPath)
-
-        return this
     }
 
     override fun withContent(content: String) {
@@ -59,7 +50,7 @@ class SenderHtmlEmail : Sender {
     private fun createSession() {
         val authenticator = object : Authenticator() {
             override fun getPasswordAuthentication(): PasswordAuthentication {
-                return PasswordAuthentication(env("MAIL_USERNAME"), env("PASSWORD"))
+                return PasswordAuthentication(env("MAIL_USERNAME"), env("MAIL_PASSWORD"))
             }
         }
 

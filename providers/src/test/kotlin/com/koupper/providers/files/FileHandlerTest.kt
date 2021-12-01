@@ -10,7 +10,7 @@ class FileHandlerTest : AnnotationSpec() {
     fun `should load from url`() {
         val fileHandler = FileHandlerImpl()
 
-        val loadedFile = fileHandler.load("https://lib-installer.s3.amazonaws.com/model-project.zip")
+        val loadedFile = fileHandler.load("some url")
 
         assertTrue {
             loadedFile.exists()
@@ -64,7 +64,7 @@ class FileHandlerTest : AnnotationSpec() {
     fun `should unzip file from url`() {
         val fileHandler = FileHandlerImpl()
 
-        val unzippedFile = fileHandler.unzipFile("https://lib-installer.s3.amazonaws.com/model-project.zip")
+        val unzippedFile = fileHandler.unzipFile("some url")
 
         assertTrue {
             File("${unzippedFile.absolutePath}.zip").delete()
@@ -88,7 +88,7 @@ class FileHandlerTest : AnnotationSpec() {
     fun `should unzip file from url specifying a target name`() {
         val fileHandler = FileHandlerImpl()
 
-        val unzippedFile = fileHandler.unzipFile("https://lib-installer.s3.amazonaws.com/model-project.zip")
+        val unzippedFile = fileHandler.unzipFile("some url")
 
         assertTrue {
             File("${unzippedFile.absolutePath}.zip").delete()
@@ -107,11 +107,12 @@ class FileHandlerTest : AnnotationSpec() {
         }
     }
 
+    @Ignore
     @Test
     fun `should zip file from url`() {
         val fileHandler = FileHandlerImpl()
 
-        val zippedFile = fileHandler.zipFile("https://lib-installer.s3.amazonaws.com/koupper.txt")
+        val zippedFile = fileHandler.zipFile("some url")
 
         assertTrue {
             File("koupper.txt").delete()
@@ -176,11 +177,12 @@ class FileHandlerTest : AnnotationSpec() {
         assertTrue { zippedFile.delete() }
     }
 
+    @Ignore
     @Test
     fun `should zip file from path`() {
         val fileHandler = FileHandlerImpl()
 
-        val zippedFile = fileHandler.zipFile("/Users/jacobacosta/Code/front-module", filesToIgnore = listOf(".idea", "README.md", ".git", ".DS_Store", "front-module"))
+        val zippedFile = fileHandler.zipFile("some path", filesToIgnore = listOf(".idea", "README.md", ".git", ".DS_Store", "front-module"))
 
         assertTrue {
             zippedFile.exists()

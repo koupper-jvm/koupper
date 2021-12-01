@@ -1,8 +1,5 @@
 package com.koupper.providers.files
 
-import com.koupper.container.app
-import com.koupper.container.interfaces.Container
-import io.kotest.core.spec.Spec
 import io.kotest.core.spec.style.AnnotationSpec
 import java.io.FileNotFoundException
 import kotlin.test.assertEquals
@@ -10,20 +7,13 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class TextFileHandlerTest : AnnotationSpec() {
-    private lateinit var container: Container
-
-    override fun beforeSpec(spec: Spec) {
-        super.beforeSpec(spec)
-        this.container = app
-    }
-
     @Test
-    fun `should get the number line for specific content`() {
+    fun `should get number line for specific content`() {
         val fileHandler = TextFileHandlerImpl()
 
         val numberOfLine = fileHandler.getNumberLineFor(
-                "<link rel=\"stylesheet\" href=\"css/styles.css?v=1.0\">",
-                "resource://index.html"
+            "<link rel=\"stylesheet\" href=\"css/styles.css?v=1.0\">",
+            "resource://index.html"
         )
 
         assertTrue {
@@ -40,8 +30,8 @@ class TextFileHandlerTest : AnnotationSpec() {
         val fileHandler = TextFileHandlerImpl()
 
         val numberOfLines = fileHandler.getNumberLinesFor(
-                "<meta",
-                "resource://index.html"
+            "<meta",
+            "resource://index.html"
         )
 
         assertTrue { numberOfLines.containsAll(listOf(5, 8, 9)) }
@@ -73,7 +63,11 @@ class TextFileHandlerTest : AnnotationSpec() {
     fun `should append content before other specified content`() {
         val fileHandler = TextFileHandlerImpl()
 
-        val file = fileHandler.appendContentBefore(">This", contentToAdd = " class=\"font-weight-bold\"", filePath = "resource://index.html")
+        val file = fileHandler.appendContentBefore(
+            ">This",
+            newContent = " class=\"font-weight-bold\"",
+            filePath = "resource://index.html",
+        )
 
         assertTrue {
             fileHandler.getNumberLineFor("<span class=\"font-weight-bold\">This", file.path).compareTo(14) == 0
@@ -84,7 +78,9 @@ class TextFileHandlerTest : AnnotationSpec() {
     fun `should append content after other specified content`() {
         val fileHandler = TextFileHandlerImpl()
 
-        val file = fileHandler.appendContentAfter(">This", contentToAdd = " example", filePath = "resource://index.html")
+        val file = fileHandler.appendContentAfter(
+            ">This", newContent = " example", filePath = "resource://index.html",
+        )
 
         assertTrue {
             fileHandler.getNumberLineFor("pan>This example is for a ko", file.path).compareTo(14) == 0
@@ -154,6 +150,22 @@ class TextFileHandlerTest : AnnotationSpec() {
 
         assertTrue {
             exception is FileNotFoundException
+        }
+    }
+
+    @Test
+    fun `should get number line for specific content using global file`() {
+        val fileHandler = TextFileHandlerImpl()
+        fileHandler.using("resource://index.html")
+
+        val numberOfLine = fileHandler.getNumberLineFor("<link rel=\"stylesheet\" href=\"css/styles.css?v=1.0\">")
+
+        assertTrue {
+            numberOfLine > 0
+        }
+
+        assertTrue {
+            numberOfLine.compareTo(11) == 0 // this is the line for the targeting content in the specified file.
         }
     }
 }

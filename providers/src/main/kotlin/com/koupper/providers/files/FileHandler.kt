@@ -25,7 +25,7 @@ val listContentOfZippedFile: (String) -> List<String> = {
 }
 
 interface FileHandler {
-    fun load(filePath: String, targetPath: String = "N/A"): File
+    fun load(filePath: String): File
 
     fun zipFile(filePath: String = "", targetPath: String = "N/A", filesToIgnore: List<String> = emptyList()): File
 
