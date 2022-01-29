@@ -314,6 +314,20 @@ class TextFileHandlerImpl : TextFileHandler {
         return content
     }
 
+    override fun bind(data: Map<String, String?>, content: StringBuilder): java.lang.StringBuilder {
+        data.forEach { (key, value) ->
+            if (content.contains(key.toRegex())) {
+                val parsedVariable = content.replace(key.toRegex(), value.toString())
+
+                content.clear()
+
+                content.append(parsedVariable)
+            }
+        }
+
+        return content
+    }
+
     private fun getRangeOfOccurrence(file: File, contentToMatch: String, onOccurrenceNumber: Int): Map<Long, IntRange> {
         var numberOfLine = 0
         var numberOfMatching = 0

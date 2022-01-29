@@ -159,11 +159,20 @@ interface TextFileHandler {
     fun getContentForLine(linePosition: Long, filePath: String = "undefined"): String
 
     /**
-     * Binds "property-value" to "property" in template file.
+     * Binds "property-value" to template file in the specified file path.
      *
      * @property data the pair key-value to bind.
-     * @property content the content to make the bind.
+     * @property filePath the path to content.
      * @return The binding content.
      */
     fun bind(data: Map<String, String?>, filePath: String = "undefined"): StringBuilder
+
+    /**
+     * Binds "property-value" to template content.
+     *
+     * @property data the pair key-value to bind.
+     * @property content the content to bind.
+     * @return The binding content.
+     */
+    fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder
 }
