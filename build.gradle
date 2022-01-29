@@ -43,11 +43,11 @@ subprojects {
     }
 }
 
-def jerseyVersion = "2.33"
+def jerseyVersion = "3.0.3"
 
 project(':bootstrap') {
     dependencies {
-        implementation project(':octopus')
+        compileOnly project(':octopus')
         compileOnly project(':container')
         compileOnly project(':providers')
         compileOnly project(':configurations')
