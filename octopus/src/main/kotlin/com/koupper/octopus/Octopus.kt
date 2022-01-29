@@ -237,9 +237,7 @@ private fun processCallback(context: ScriptExecutor, scriptName: String, result:
     }
 }
 
-fun createDefaultConfiguration(): ScriptExecutor {
-    val container = app
-
+fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
     val octopus = Octopus(container)
     octopus.registerBuildInServicesProvidersInContainer()
 
