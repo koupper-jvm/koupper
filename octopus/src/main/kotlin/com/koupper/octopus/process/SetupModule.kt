@@ -108,16 +108,19 @@ class SetupModule(private val container: Container) : Process {
                     true
                 )
 
-                this.addLibs(modelProject.absolutePath)
+                this.addLibsTo(modelProject.absolutePath)
 
-                this.locateScriptsInProject(this.metadata["scriptsToExecute"] as List<String>, modelProject.absolutePath)
+                this.locateScriptsInProject(
+                    this.metadata["scriptsToExecute"] as List<String>,
+                    modelProject.absolutePath
+                )
 
                 Files.move(Paths.get(modelProject.name), Paths.get(this.name))
             }
         }
     }
 
-    private fun addLibs(projectName: String) {
+    private fun addLibsTo(projectName: String) {
         print("\u001B[38;5;155mRequesting an optimized process manager... \u001B[0m")
 
         File("$projectName/libs").mkdir()
@@ -146,7 +149,17 @@ class SetupModule(private val container: Container) : Process {
                 script
             }
 
-            if (Files.notExists(Paths.get("$targetProjectPath/src/main/kotlin/scripts/${scriptName.replace(".kts", ".kt")}"))) {
+            if (Files.notExists(
+                    Paths.get(
+                        "$targetProjectPath/src/main/kotlin/scripts/${
+                            scriptName.replace(
+                                ".kts",
+                                ".kt"
+                            )
+                        }"
+                    )
+                )
+            ) {
                 val scriptTargetPath = "$targetProjectPath/src/main/kotlin/scripts/${scriptName.replace(".kts", ".kt")}"
 
                 this.locateScript(script, scriptTargetPath)
