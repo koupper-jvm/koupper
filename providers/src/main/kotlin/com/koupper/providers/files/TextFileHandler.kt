@@ -20,7 +20,7 @@ interface TextFileHandler {
     fun read(filePath: String = "undefined"): String
 
     /**
-     * Gets the content between two chunk sections of strings.
+     * Gets the content between two chunk of strings.
      *
      * Because the implementation iterate over string data, the matching process is done when the first matching is found.
      * The behavior can be changed using the inOccurrenceNumber property.

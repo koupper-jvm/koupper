@@ -7,19 +7,21 @@ import kotlin.text.StringBuilder
 class TextFileHandlerImpl : TextFileHandler {
     private val fileHandler: FileHandler = FileHandlerImpl()
     private var globalFilePath: String = "undefined"
+    private lateinit var globalTargetFile: File
+
+    override fun using(filePath: String) {
+        this.globalFilePath = filePath
+        this.globalTargetFile = this.fileHandler.load(this.globalFilePath)
+    }
 
     override fun getNumberLineFor(contentToFind: String, filePath: String): Long {
         return this.getNumberLinesFor(contentToFind, filePath)[0]
     }
 
     override fun getNumberLinesFor(contentToFind: String, filePath: String): List<Long> {
-        if (filePath === "undefined" && this.globalFilePath === "undefined") {
-            throw Exception("It's necessary a file to do operations.")
-        }
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
-        val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
-
-        val file = this.fileHandler.load(finalFilePath)
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
         var lineNumber = 1
 
@@ -58,13 +60,9 @@ class TextFileHandlerImpl : TextFileHandler {
         filePath: String,
         overrideOriginal: Boolean
     ): File {
-        if (filePath === "undefined" && this.globalFilePath === "undefined") {
-            throw Exception("It's necessary a file to do operations.")
-        }
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
-        val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
-
-        val file = this.fileHandler.load(finalFilePath)
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
         val newContentBase = StringBuilder()
 
@@ -106,13 +104,9 @@ class TextFileHandlerImpl : TextFileHandler {
         filePath: String,
         overrideOriginal: Boolean
     ): File {
-        if (filePath === "undefined" && this.globalFilePath === "undefined") {
-            throw Exception("It's necessary a file to do operations.")
-        }
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
-        val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
-
-        val file = this.fileHandler.load(finalFilePath)
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
         val matchingInfo = this.getRangeOfOccurrence(file, contentToFind, inOccurrenceNumber)
 
@@ -133,13 +127,9 @@ class TextFileHandlerImpl : TextFileHandler {
         filePath: String,
         overrideOriginal: Boolean
     ): File {
-        if (filePath === "undefined" && this.globalFilePath === "undefined") {
-            throw Exception("It's necessary a file to do operations.")
-        }
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
-        val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
-
-        val file = this.fileHandler.load(finalFilePath)
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
         val rangeOfOccurrenceFound = this.getRangeOfOccurrence(file, contentToFind, inOccurrenceNumber)
 
@@ -154,13 +144,9 @@ class TextFileHandlerImpl : TextFileHandler {
     }
 
     override fun getContentBetweenLines(initialLine: Long, finalLine: Long, filePath: String): List<String> {
-        if (filePath === "undefined" && this.globalFilePath === "undefined") {
-            throw Exception("It's necessary a file to do operations.")
-        }
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
-        val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
-
-        val file = this.fileHandler.load(finalFilePath)
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
         var numberOfLine = 0
         val contentBetween = mutableListOf<String>()
@@ -176,18 +162,10 @@ class TextFileHandlerImpl : TextFileHandler {
         return contentBetween
     }
 
-    override fun using(filePath: String) {
-        this.globalFilePath = filePath
-    }
-
     override fun read(filePath: String): String {
-        if (filePath === "undefined" && this.globalFilePath === "undefined") {
-            throw Exception("It's necessary a file to do operations.")
-        }
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
-        val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
-
-        val file = this.fileHandler.load(finalFilePath)
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
         return file.readText(Charsets.UTF_8)
     }
@@ -198,13 +176,9 @@ class TextFileHandlerImpl : TextFileHandler {
         onOccurrenceNumber: Int,
         filePath: String
     ): MutableList<List<String>> {
-        if (filePath === "undefined" && this.globalFilePath === "undefined") {
-            throw Exception("It's necessary a file to do operations.")
-        }
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
-        val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
-
-        val file = this.fileHandler.load(finalFilePath)
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
         val result = mutableListOf<List<String>>()
         var occurrenceIndex = onOccurrenceNumber
@@ -268,9 +242,7 @@ class TextFileHandlerImpl : TextFileHandler {
     }
 
     override fun getContentForLine(linePosition: Long, filePath: String): String {
-        if (filePath === "undefined" && this.globalFilePath === "undefined") {
-            throw Exception("It's necessary a file to do operations.")
-        }
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
         val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
 
@@ -293,9 +265,7 @@ class TextFileHandlerImpl : TextFileHandler {
     }
 
     override fun bind(data: Map<String, String?>, filePath: String): StringBuilder {
-        if (filePath === "undefined" && this.globalFilePath === "undefined") {
-            throw Exception("It's necessary a file to do operations.")
-        }
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
         val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
 
