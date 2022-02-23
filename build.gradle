@@ -46,10 +46,10 @@ def jerseyVersion = "3.0.3"
 
 project(':bootstrap') {
     dependencies {
-        compileOnly project(':octopus')
-        compileOnly project(':container')
-        compileOnly project(':providers')
-        compileOnly project(':configurations')
+        implementation project(':octopus')
+        implementation project(':container')
+        implementation project(':providers')
+        implementation project(':configurations')
         implementation "org.jetbrains.kotlin:kotlin-reflect"
         implementation "org.glassfish.jersey.containers:jersey-container-grizzly2-http:${jerseyVersion}"
         implementation "org.glassfish.jersey.inject:jersey-hk2:${jerseyVersion}"
