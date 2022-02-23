@@ -128,7 +128,7 @@ class TextFileHandlerTest : AnnotationSpec() {
 
         val content = fileHandler.getContentBetweenContent("<span>", "</span>", 3, "resource://index.html")
 
-        assertEquals("Here go other text", content[0][0].trim())
+        assertEquals("Here go other text", content[0].trim())
     }
 
     @Test
@@ -137,7 +137,7 @@ class TextFileHandlerTest : AnnotationSpec() {
 
         val content = fileHandler.getContentBetweenContent("This is", "koupper test.", 1, "resource://index.html")
 
-        assertEquals("for a", content[0][0].trim())
+        assertEquals("for a", content[0].trim())
     }
 
     @Test
