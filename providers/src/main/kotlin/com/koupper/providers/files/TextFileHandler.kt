@@ -34,9 +34,10 @@ interface TextFileHandler {
     fun getContentBetweenContent(
         firstContent: String,
         secondContent: String,
-        onOccurrenceNumber: Int = 1,
-        filePath: String = "undefined"
-    ): MutableList<List<String>>
+        onOccurrenceNumber: Int = -1,
+        filePath: String = "undefined",
+        inclusiveMode: Boolean = false,
+    ): List<String>
 
     /**
      * Gets the line number for specific chunk string
@@ -45,7 +46,7 @@ interface TextFileHandler {
      * @property filePath the file path.
      * @return The line number.
      */
-    fun getNumberLineFor(contentToFind: String, filePath: String = "undefined"): Long
+    fun getNumberLineFor(contentToFind: String, filePath: String = "undefined"): Int
 
     /**
      * Gets the line numbers for matching content
@@ -54,7 +55,7 @@ interface TextFileHandler {
      * @property filePath the file path.
      * @return A list of matching line numbers
      */
-    fun getNumberLinesFor(contentToFind: String, filePath: String = "undefined"): List<Long>
+    fun getNumberLinesFor(contentToFind: String, filePath: String = "undefined"): List<Int>
 
     /**
      * Puts a content before specified line number.
@@ -67,7 +68,7 @@ interface TextFileHandler {
      * @property overrideOriginal specify if the original file should be overridden.
      * @return the File object with the added content
      */
-    fun putLineBefore(linePosition: Long, newContent: String, filePath: String = "undefined", overrideOriginal: Boolean = false): File
+    fun putLineBefore(linePosition: Int, newContent: String, filePath: String = "undefined", overrideOriginal: Boolean = false): File
 
     /**
      * Puts a content after specified line number.
@@ -80,7 +81,7 @@ interface TextFileHandler {
      * @property overrideOriginal specify if the original file should be overridden.
      * @return the File object with the added content
      */
-    fun putLineAfter(linePosition: Long, newContent: String, filePath: String = "undefined", overrideOriginal: Boolean = false): File
+    fun putLineAfter(linePosition: Int, newContent: String, filePath: String = "undefined", overrideOriginal: Boolean = false): File
 
     /**
      * Replace a line
@@ -91,7 +92,7 @@ interface TextFileHandler {
      * @property overrideOriginal specify if the original file should be overridden.
      * @return The object File.
      */
-    fun replaceLine(linePosition: Long, newContent: String, filePath: String = "undefined", overrideOriginal: Boolean = false): File
+    fun replaceLine(linePosition: Int, newContent: String, filePath: String = "undefined", overrideOriginal: Boolean = false): File
 
     /**
      * Replace multiple lines
@@ -101,7 +102,7 @@ interface TextFileHandler {
      * @property overrideOriginal specify if the original file should be overridden.
      * @return The object File.
      */
-    fun replaceMultipleLines(lines: Map<Long, String>, filePath: String = "undefined", overrideOriginal: Boolean = false): File
+    fun replaceMultipleLines(lines: Map<Int, String>, filePath: String = "undefined", overrideOriginal: Boolean = false): File
 
     /**
      * Append content before to other content
@@ -145,9 +146,10 @@ interface TextFileHandler {
      * @property initialLine indicate the number to start.
      * @property finalLine the final line number.
      * @property filePath the file path to read.
+     * @property inclusiveMode indicates if the targets are included in the search.
      * @return A list of matching lines.
      */
-    fun getContentBetweenLines(initialLine: Long, finalLine: Long, filePath: String = "undefined"): List<String>
+    fun getContentBetweenLines(initialLine: Int, finalLine: Int, filePath: String = "undefined", inclusiveMode: Boolean = false,): List<String>
 
     /**
      * Get the content of a specific line
@@ -156,7 +158,7 @@ interface TextFileHandler {
      * @property filePath the file path to read.
      * @return The content.
      */
-    fun getContentForLine(linePosition: Long, filePath: String = "undefined"): String
+    fun getContentForLine(linePosition: Int, filePath: String = "undefined"): String
 
     /**
      * Binds "property-value" to template file in the specified file path.

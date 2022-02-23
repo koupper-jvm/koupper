@@ -2,6 +2,8 @@ package com.koupper.providers.files
 
 import java.io.File
 import java.lang.Exception
+import java.util.regex.Pattern
+import kotlin.math.abs
 import kotlin.text.StringBuilder
 
 class TextFileHandlerImpl : TextFileHandler {
@@ -14,21 +16,21 @@ class TextFileHandlerImpl : TextFileHandler {
         this.globalTargetFile = this.fileHandler.load(this.globalFilePath)
     }
 
-    override fun getNumberLineFor(contentToFind: String, filePath: String): Long {
+    override fun getNumberLineFor(contentToFind: String, filePath: String): Int {
         return this.getNumberLinesFor(contentToFind, filePath)[0]
     }
 
-    override fun getNumberLinesFor(contentToFind: String, filePath: String): List<Long> {
+    override fun getNumberLinesFor(contentToFind: String, filePath: String): List<Int> {
         if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
         val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
         var lineNumber = 1
 
-        val matchingLinesNumbers = emptyList<Long>().toMutableList()
+        val matchingLinesNumbers = emptyList<Int>().toMutableList()
 
         file.forEachLine {
-            if (it.contains(contentToFind)) matchingLinesNumbers.add(lineNumber.toLong())
+            if (it.contains(contentToFind)) matchingLinesNumbers.add(lineNumber.toInt())
 
             lineNumber++
         }
@@ -37,7 +39,7 @@ class TextFileHandlerImpl : TextFileHandler {
     }
 
     override fun putLineBefore(
-        linePosition: Long,
+        linePosition: Int,
         newContent: String,
         filePath: String,
         overrideOriginal: Boolean
@@ -46,7 +48,7 @@ class TextFileHandlerImpl : TextFileHandler {
     }
 
     override fun putLineAfter(
-        linePosition: Long,
+        linePosition: Int,
         newContent: String,
         filePath: String,
         overrideOriginal: Boolean
@@ -55,7 +57,7 @@ class TextFileHandlerImpl : TextFileHandler {
     }
 
     override fun replaceLine(
-        linePosition: Long,
+        linePosition: Int,
         newContent: String,
         filePath: String,
         overrideOriginal: Boolean
@@ -70,7 +72,7 @@ class TextFileHandlerImpl : TextFileHandler {
 
         for ((lineNumber, content) in lines.iterator().withIndex()) {
             when {
-                (lineNumber + 1).toLong() == linePosition -> {
+                (lineNumber + 1) == linePosition -> {
                     newContentBase.append("$newContent\n")
                 }
                 lineNumber == lines.size -> {
@@ -93,7 +95,7 @@ class TextFileHandlerImpl : TextFileHandler {
         }
     }
 
-    override fun replaceMultipleLines(lines: Map<Long, String>, filePath: String, overrideOriginal: Boolean): File {
+    override fun replaceMultipleLines(lines: Map<Int, String>, filePath: String, overrideOriginal: Boolean): File {
         TODO("Not yet implemented")
     }
 
@@ -143,7 +145,12 @@ class TextFileHandlerImpl : TextFileHandler {
         return this.replaceLine(matching.key, finalLine, file.path, overrideOriginal)
     }
 
-    override fun getContentBetweenLines(initialLine: Long, finalLine: Long, filePath: String): List<String> {
+    override fun getContentBetweenLines(
+        initialLine: Int,
+        finalLine: Int,
+        filePath: String,
+        inclusiveMode: Boolean
+    ): List<String> {
         if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
         val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
@@ -154,8 +161,14 @@ class TextFileHandlerImpl : TextFileHandler {
         file.forEachLine { line ->
             numberOfLine++
 
-            if (numberOfLine in (initialLine + 1) until finalLine) {
-                contentBetween.add(line)
+            if (inclusiveMode) {
+                if (numberOfLine in initialLine until finalLine + 1) {
+                    contentBetween.add(line)
+                }
+            } else {
+                if (numberOfLine in (initialLine + 1) until finalLine) {
+                    contentBetween.add(line)
+                }
             }
         }
 
@@ -174,74 +187,37 @@ class TextFileHandlerImpl : TextFileHandler {
         firstContent: String,
         secondContent: String,
         onOccurrenceNumber: Int,
-        filePath: String
-    ): MutableList<List<String>> {
+        filePath: String,
+        inclusiveMode: Boolean
+    ): List<String> {
         if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
         val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
-        val result = mutableListOf<List<String>>()
-        var occurrenceIndex = onOccurrenceNumber
+        var result: List<String> = emptyList()
 
-        if (occurrenceIndex < 0) {
-            occurrenceIndex += 2
+        val lineNumberForFirstMatch = this.getRangeOfOccurrence(file, firstContent, onOccurrenceNumber).entries
 
-            while (true) {
-                val lineNumberForFirstMatch =
-                    this.getRangeOfOccurrence(file, firstContent, occurrenceIndex).entries
+        val lineNumberForSecondMatch = this.getRangeOfOccurrence(
+            file,
+            secondContent,
+            onOccurrenceNumber,
+            lineNumberForFirstMatch.first().key
+        ).entries
 
-                val lineNumberForSecondMatch =
-                    this.getRangeOfOccurrence(file, secondContent, occurrenceIndex).entries
-
-                if (lineNumberForFirstMatch.isNotEmpty() && lineNumberForSecondMatch.isNotEmpty()) {
-                    result.add(
-                        this.getContentBetweenLines(
-                            lineNumberForFirstMatch.first().key,
-                            lineNumberForSecondMatch.first().key,
-                            file.path
-                        )
-                    )
-                } else {
-                    break
-                }
-
-                occurrenceIndex++
-            }
-        } else {
-            val lineNumberForFirstMatch =
-                this.getRangeOfOccurrence(file, firstContent, onOccurrenceNumber).entries
-
-            val lineNumberForSecondMatch =
-                this.getRangeOfOccurrence(file, secondContent, onOccurrenceNumber).entries
-
-            if (lineNumberForFirstMatch.isNotEmpty() && lineNumberForSecondMatch.isNotEmpty()) {
-                if (lineNumberForFirstMatch.first().key == lineNumberForSecondMatch.first().key) {
-                    val content = this.getContentForLine(lineNumberForFirstMatch.first().key, file.path)
-
-                    result.add(
-                        listOf(
-                            content.substring(
-                                lineNumberForFirstMatch.first().value.last + 1,
-                                lineNumberForSecondMatch.first().value.first
-                            )
-                        )
-                    )
-                } else {
-                    result.add(
-                        this.getContentBetweenLines(
-                            lineNumberForFirstMatch.first().key,
-                            lineNumberForSecondMatch.first().key,
-                            file.path
-                        )
-                    )
-                }
-            }
+        if (lineNumberForFirstMatch.isNotEmpty() && lineNumberForSecondMatch.isNotEmpty()) {
+            result = this.getContentBetweenLines(
+                lineNumberForFirstMatch.first().key,
+                lineNumberForSecondMatch.first().key,
+                file.path,
+                inclusiveMode
+            )
         }
 
         return result
     }
 
-    override fun getContentForLine(linePosition: Long, filePath: String): String {
+    override fun getContentForLine(linePosition: Int, filePath: String): String {
         if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
         val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
@@ -254,7 +230,7 @@ class TextFileHandlerImpl : TextFileHandler {
         file.forEachLine lit@{ line ->
             numberOfLine++
 
-            if (linePosition == numberOfLine.toLong()) {
+            if (linePosition == numberOfLine) {
                 content += line
 
                 return@lit
@@ -298,28 +274,48 @@ class TextFileHandlerImpl : TextFileHandler {
         return content
     }
 
-    private fun getRangeOfOccurrence(file: File, contentToMatch: String, onOccurrenceNumber: Int): Map<Long, IntRange> {
+    private fun getRangeOfOccurrence(
+        file: File,
+        contentToMatch: String,
+        onOccurrenceNumber: Int,
+        fromLine: Int = 0
+    ): Map<Int, IntRange> {
+        if (onOccurrenceNumber == 0) {
+            return emptyMap()
+        }
+
         var numberOfLine = 0
         var numberOfMatching = 0
-        val matchingInfo = mutableMapOf<Long, IntRange>()
+        val matchingInfo = mutableMapOf<Int, IntRange>()
+        var matchFound = false
 
         file.forEachLine lit@{ line ->
+            if (matchFound) return@lit
+
             numberOfLine++
 
+            if (fromLine != 0 && numberOfLine < fromLine) {
+                return@lit
+            }
+
             if (line.contains(contentToMatch)) {
-                val matches = contentToMatch.toRegex().findAll(line)
+                val matches = Pattern.quote(contentToMatch).toRegex().findAll(line)
 
                 matches.iterator().forEach { matching ->
                     numberOfMatching++
 
-                    if (numberOfMatching == onOccurrenceNumber) {
-                        matchingInfo[numberOfLine.toLong()] = matching.range
+                    if (numberOfMatching == abs(onOccurrenceNumber)) {
+                        matchingInfo[numberOfLine] = matching.range
+
+                        matchFound = true
 
                         return@lit
                     }
                 }
             }
         }
+
+        matchFound = false
 
         return matchingInfo
     }
