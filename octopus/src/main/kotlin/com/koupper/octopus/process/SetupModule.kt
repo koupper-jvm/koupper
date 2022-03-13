@@ -14,7 +14,6 @@ import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.system.exitProcess
-import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createTempFile
 
 class SetupModule(private val container: Container) : Process {
@@ -59,7 +58,7 @@ class SetupModule(private val container: Container) : Process {
     private fun buildByType() {
         when {
             this.moduletype.equals("FRONT", true) -> {
-                val modelProject = fileHandler.unzipFile(env("MODEL_FRONT_PROJECT_URL"))
+                val modelProject = this.fileHandler.unzipFile(env("MODEL_FRONT_PROJECT_URL"))
 
                 File("${modelProject.name}.zip").delete()
 
@@ -80,17 +79,10 @@ class SetupModule(private val container: Container) : Process {
                 Files.move(Paths.get(modelProject.name), Paths.get(this.name))
             }
             this.moduletype.equals("BACK", true) -> {
-                /*fileHandler.unzipFile("https://lib-installer.s3.amazonaws.com/back-module.zip", this.name)
 
-                File(this.name).delete()
-
-                val fileHandler = this.container.createInstanceOf(TextFileHandler::class)
-                fileHandler.replaceLine(10, "rootProject.name = '${this.name}'", "${Paths.get("").toAbsolutePath()}/${this.name}/settings.gradle")*/
-
-                //val processManager = textFileHandler.read("resource://.env").getProperty("MODEL_BACK_PROJECT_URL")
             }
             this.moduletype.equals("DEPLOYABLE_SCRIPT", true) -> {
-                val modelProject = fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
+                val modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
 
                 File("${modelProject.name}.zip").delete()
 
@@ -108,7 +100,7 @@ class SetupModule(private val container: Container) : Process {
                     true
                 )
 
-                this.addLibsTo(modelProject.absolutePath)
+                 this.addLibsTo(modelProject.absolutePath)
 
                 this.locateScriptsInProject(
                     this.metadata["scriptsToExecute"] as List<String>,
@@ -209,13 +201,12 @@ class SetupModule(private val container: Container) : Process {
 
             val callableLineContent = this.textFileHandler.getContentForLine(callableLine, scriptTargetPath)
 
-            val renamedCallable = callableLineContent.replace(callableName[0][0], " $finalValName")
+            val renamedCallable = callableLineContent.replace(callableName[0], " $finalValName")
 
             this.textFileHandler.replaceLine(callableLine, renamedCallable, scriptTargetPath, true);
         }
     }
 
-    @OptIn(ExperimentalPathApi::class)
     private fun locateScript(scriptPath: String, destinationPath: String) {
         val file = this.fileHandler.load(scriptPath)
 
