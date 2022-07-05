@@ -91,7 +91,7 @@ project(':providers') {
         implementation project(':shared')
         implementation project(':container')
         implementation project(':os')
-        implementation 'javax.mail:mail:1.4.1'
+        implementation 'javax.mail:mail:1.4.7'
         implementation 'io.zeko:zeko-sql-builder:1.2.4'
         implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.3'
         implementation 'io.vertx:vertx-jdbc-client:4.0.3'

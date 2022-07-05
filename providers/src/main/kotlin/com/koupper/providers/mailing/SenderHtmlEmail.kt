@@ -42,9 +42,9 @@ class SenderHtmlEmail : Sender, Setup() {
     private fun configMailProperties() {
         this.properties["mail.smtp.host"] = env("MAIL_HOST")
         this.properties["mail.smtp.port"] = env("MAIL_PORT")
-        this.properties["mail.smtp.ssl.enable"] = "true"
         this.properties["mail.smtp.auth"] = "true"
         this.properties["mail.smtp.starttls.enable"] = "true"
+        this.properties["mail.smtp.ssl.protocols"] = "TLSv1.2"
     }
 
     private fun createSession() {
