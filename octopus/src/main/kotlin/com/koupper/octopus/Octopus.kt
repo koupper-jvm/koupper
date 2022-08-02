@@ -11,7 +11,6 @@ import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import com.koupper.providers.files.*
 import com.koupper.providers.http.HtppClient
-import com.koupper.shared.getProperty
 import java.io.*
 import java.net.URL
 import java.nio.file.Paths
@@ -29,7 +28,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
 
     override fun <T> runFromScriptFile(scriptPath: String, params: String, result: (value: T) -> Unit) {
-        val content = File(scriptPath).readText(Charsets.UTF_8)
+        val content = app.createInstanceOf(FileHandler::class).load(scriptPath).readText(Charsets.UTF_8)
 
         this.run(content, this.convertStringParamsToListParams(params)) { process: T ->
             result(process)
@@ -52,7 +51,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
             val startOfSentence = sentence.indexOf("val")
 
-            val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
+            val valName = sentence.substring(startOfSentence + "val".length, endOfVariableNameInSentence).trim()
 
             when {
                 isContainerType(sentence) -> {
