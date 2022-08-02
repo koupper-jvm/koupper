@@ -2,12 +2,8 @@ package com.koupper.providers.controllers
 
 import com.koupper.os.env
 import com.koupper.providers.files.TextFileHandlerImpl
-import io.zeko.db.sql.utilities.toCamelCase
 import java.io.File
-import java.lang.Exception
-import java.util.*
 import kotlin.reflect.KClass
-import kotlin.reflect.full.memberProperties
 
 enum class Type {
     JERSEY,
@@ -17,6 +13,15 @@ enum class Type {
 sealed interface RouteDefinition {
     fun type(type: () -> Type)
     fun path(path: () -> String)
+    fun name(name: () -> String)
+    fun middlewares(middlewares: () -> List<String>)
+    fun queryParams(queryParams: () -> Map<String, KClass<*>>)
+    fun matrixParams(matrixParams: () -> Map<String, KClass<*>>)
+    fun headerParams(headerParams: () -> Map<String, KClass<*>>)
+    fun cookieParams(cookieParams: () -> Map<String, KClass<*>>)
+    fun formParams(formParams: () -> Map<String, KClass<*>>)
+    fun response(response: () -> KClass<*>)
+    fun script(script: () -> String)
     fun controllerName(controllerName: () -> String)
     fun produces(produces: () -> List<String>)
     fun consumes(consumes: () -> List<String>)
@@ -31,20 +36,20 @@ sealed interface RouteDefinition {
 }
 
 open class Route : RouteDefinition {
-    private var path: String = "/"
     private var type: Type = Type.JERSEY
-    private lateinit var controllerName: String
+    private var path: String = "/"
     private var produces: List<String> = emptyList()
+    private lateinit var controllerName: String
     private var consumes: List<String> = emptyList()
-    lateinit var name: String
-    var middlewares: List<String> = emptyList()
-    var queryParams: Map<String, KClass<*>> = emptyMap()
-    var matrixParams: Map<String, KClass<*>> = emptyMap()
-    var headerParams: Map<String, KClass<*>> = emptyMap()
-    var cookieParams: Map<String, KClass<*>> = emptyMap()
-    var formParams: Map<String, KClass<*>> = emptyMap()
-    lateinit var response: Any
-    lateinit var script: String
+    private var name: String = ""
+    private var middlewares: List<String> = emptyList()
+    private var queryParams: Map<String, KClass<*>> = emptyMap()
+    private var matrixParams: Map<String, KClass<*>> = emptyMap()
+    private var headerParams: Map<String, KClass<*>> = emptyMap()
+    private var cookieParams: Map<String, KClass<*>> = emptyMap()
+    private var formParams: Map<String, KClass<*>> = emptyMap()
+    private var response: KClass<*>? = null
+    private var script: String = ""
     private var postMethods: MutableList<Any> = mutableListOf()
     private var getMethods: MutableList<RouteDefinition.() -> Unit> = mutableListOf()
     private var updateMethods: MutableList<RouteDefinition.() -> Unit> = mutableListOf()
@@ -59,6 +64,42 @@ open class Route : RouteDefinition {
         this.path = path()
     }
 
+    override fun name(name: () -> String) {
+        this.name = name()
+    }
+
+    override fun middlewares(middlewares: () -> List<String>) {
+        this.middlewares = middlewares()
+    }
+
+    override fun queryParams(queryParams: () -> Map<String, KClass<*>>) {
+        this.queryParams = queryParams()
+    }
+
+    override fun matrixParams(matrixParams: () -> Map<String, KClass<*>>) {
+        this.matrixParams = matrixParams()
+    }
+
+    override fun headerParams(headerParams: () -> Map<String, KClass<*>>) {
+        this.headerParams = headerParams()
+    }
+
+    override fun cookieParams(cookieParams: () -> Map<String, KClass<*>>) {
+        this.cookieParams = cookieParams()
+    }
+
+    override fun formParams(formParams: () -> Map<String, KClass<*>>) {
+        this.formParams = formParams()
+    }
+
+    override fun response(response: () -> KClass<*>) {
+        this.response = response()
+    }
+
+    override fun script(script: () -> String) {
+        this.script = script()
+    }
+
     override fun controllerName(controllerName: () -> String) {
         this.controllerName = controllerName()
     }
@@ -68,7 +109,7 @@ open class Route : RouteDefinition {
     }
 
     override fun consumes(consumes: () -> List<String>) {
-        this.produces = consumes()
+        this.consumes = consumes()
     }
 
     override fun post(route: Post.() -> Unit) {
@@ -102,9 +143,43 @@ open class Route : RouteDefinition {
 
         this.setVersionFor(modelProject, config["moduleVersion"] as String)
 
-        this.modelController(modelProject)
+        this.buildController(modelProject)
 
         return true
+    }
+
+    private fun buildController(modelProject: File) {
+        val routerScope = this
+
+        ModelController.build("${modelProject.path}/src/main/kotlin/controllers/ModelController.kt") {
+            this.controllerPath = routerScope.path
+
+            this.controllerProduces = routerScope.produces
+
+            this.controllerName = routerScope.controllerName
+
+            routerScope.postMethods.forEach {
+                val route = it as Route
+
+                val method = Method(
+                    route.name,
+                    Action.POST,
+                    route.path,
+                    route.consumes,
+                    route.produces,
+                    route.queryParams,
+                    route.matrixParams,
+                    route.headerParams,
+                    route.cookieParams,
+                    route.formParams,
+                    route.response,
+                    route.script,
+                    (route as Post).body
+                )
+
+                this.methods.add(method)
+            }
+        }.build()
     }
 
     override fun deployOn(port: Int) {
@@ -112,15 +187,6 @@ open class Route : RouteDefinition {
 
     override fun stop() {
         TODO("Not yet implemented")
-    }
-
-    private fun setVersionFor(modelProject: File, version: String) {
-        this.textFileHandler.using("${modelProject.path}/build.gradle")
-        this.textFileHandler.replaceLine(
-            this.textFileHandler.getNumberLineFor("version = '{VERSION}'"),
-            "version = '${version}'",
-            overrideOriginal = true
-        )
     }
 
     private fun setRootProjectNameFor(modelProject: File, name: String) {
@@ -132,345 +198,32 @@ open class Route : RouteDefinition {
         )
     }
 
-    private fun modelController(modelProject: File) {
-        this.textFileHandler.using("${modelProject.path}/src/main/kotlin/controllers/ModelController.kt")
-
-        val packageDefinition = this.textFileHandler.getContentForLine(
-            this.textFileHandler.getNumberLineFor("package controllers")
+    private fun setVersionFor(modelProject: File, version: String) {
+        this.textFileHandler.using("${modelProject.path}/build.gradle")
+        this.textFileHandler.replaceLine(
+            this.textFileHandler.getNumberLineFor("version = '{VERSION}'"),
+            "version = '${version}'",
+            overrideOriginal = true
         )
-        val importsDefinitions = this.textFileHandler.getNumberLinesFor("import").map {
-            textFileHandler.getContentForLine(it)
-        }
-        val classDefinitionParts = this.textFileHandler.getContentBetweenContent("@Path", "{", inclusiveMode = true)
-        val postMethodStructure = this.textFileHandler.getContentBetweenContent("@POST", "    }", inclusiveMode = true)
-        val getMethodStructure = this.textFileHandler.getContentBetweenContent("@GET", "    }", inclusiveMode = true)
-        val putMethodStructure = this.textFileHandler.getContentBetweenContent("@PUT", "    }", inclusiveMode = true)
-        val deleteMethodStructure = this.textFileHandler.getContentBetweenContent("@DELETE", "    }", inclusiveMode = true)
-
-        val customModel = StringBuilder().append(packageDefinition).appendLine("\n")
-
-        importsDefinitions.forEach { importSentence ->
-            customModel.append(importSentence).appendLine()
-        }
-
-        customModel.appendLine()
-
-        val dataClassesDefinitions = StringBuilder()
-
-        customModel.append("DATA_CLASS_SPOT").appendLine("\n")
-
-        classDefinitionParts.forEach lit@{ chunk ->
-            if (chunk.contains("@Path")) {
-                customModel.append(chunk.replace("ROOT_PATH", path)).appendLine()
-            }
-
-            if (chunk.contains("@Produces") && produces.isNotEmpty()) {
-                val producesValue = StringBuilder()
-
-                produces.forEachIndexed() { index, produce ->
-                    if (produce.isEmpty()) {
-                        throw Exception("Consume can't be empty.")
-                    }
-
-                    if (index == produces.size - 1) {
-                        producesValue.append("\"${produce}\"")
-                    } else {
-                        producesValue.append("\"${produce}\", ") 
-                    }
-                }
-
-                customModel.append("${chunk}({${producesValue}})").appendLine()
-            }
-
-            if (chunk.contains("@Produces") && produces.isEmpty()) {
-                return@lit
-            }
-
-            if (chunk.contains("class ModelController")) {
-                customModel.append(chunk.replace("ModelController", controllerName)).appendLine("\n")
-            }
-        }
-
-        val customPostMethod: StringBuilder = StringBuilder("")
-
-        this.postMethods.forEach { method ->
-            val postMethod = method as Route
-
-            var existBeanParam = false
-
-            val beanInputs = StringBuilder()
-
-            val methodInputs = StringBuilder()
-
-            postMethodStructure.forEachIndexed { index, chunk ->
-                if (existBeanParam && chunk.contains("@")) {
-                    return@forEachIndexed
-                }
-
-                if (index == 0) {
-                    customPostMethod.append(chunk).appendLine()
-                }
-
-                if (chunk.contains("@Path") && postMethod.path.isNotEmpty()) {
-                    var finalPath = ""
-
-                    finalPath = if (postMethod.path.startsWith("/")) {
-                        postMethod.path
-                    } else {
-                        "/${postMethod.path}"
-                    }
-
-                    if (postMethod.path.endsWith("/")) {
-                        finalPath = finalPath.substring(finalPath.lastIndexOf("/") - 1)
-                    }
-
-                    customPostMethod.append(chunk.replace("/{path-param}", finalPath)).appendLine()
-                }
-
-                if (chunk.contains("@Consumes") && postMethod.consumes.isNotEmpty()) {
-                    val consumesValue = StringBuilder()
-
-                    postMethod.consumes.forEachIndexed() { index, consume ->
-                        if (consume.isEmpty()) {
-                            throw Exception("Consume can't be empty.")
-                        }
-
-                        if (index == postMethod.consumes.size - 1) {
-                            consumesValue.append(consume)
-                        } else {
-                            consumesValue.append("${consume}, ")
-                        }
-                    }
-
-                    customPostMethod.append("${chunk}({${consumesValue}})").appendLine()
-                }
-
-
-                if (chunk.contains("@Produces") && postMethod.produces.isNotEmpty()) {
-                    val producesValue = StringBuilder()
-
-                    postMethod.produces.forEachIndexed() { index, produce ->
-                        if (produce.isEmpty()) {
-                            throw Exception("Produce can't be empty.")
-                        }
-
-                        if (index == postMethod.produces.size - 1) {
-                            producesValue.append(produce)
-                        } else {
-                            producesValue.append("${produce}, ")
-                        }
-                    }
-
-                    customPostMethod.append("${chunk}({\"${producesValue}\"})").appendLine()
-                }
-
-                if (chunk.contains("fun postMethod(")) {
-                    customPostMethod.append(chunk.replace("postMethod", postMethod.name)).appendLine()
-                }
-
-                // Check by path params to build the method's params
-                val pathParams = "\\{\\w+}".toRegex().findAll(postMethod.path).toList()
-
-                if (chunk.contains("@BeanParam") &&
-                    postMethod.queryParams.isNotEmpty() &&
-                    postMethod.headerParams.isNotEmpty() &&
-                    postMethod.matrixParams.isNotEmpty() &&
-                    pathParams.isNotEmpty() &&
-                    (postMethod.headerParams.size > 2 ||
-                            postMethod.queryParams.size > 2 ||
-                            postMethod.matrixParams.size > 2 ||
-                            pathParams.size > 2)
-                ) {
-                    existBeanParam = true
-
-                    pathParams.forEach { pathParam ->
-                        val param = pathParam.value.replace("{", "").replace("}", "")
-
-                        beanInputs.append("@PathParam(\"${param}\") val ${param}: String, ")
-                            .appendLine()
-                    }
-
-                    postMethod.queryParams.forEach { header ->
-                        beanInputs.append("@QueryParam(\"${header.key}\") val ${header.key}: ${header.value.simpleName}, ")
-                            .appendLine()
-                    }
-
-                    postMethod.matrixParams.forEach { header ->
-                        beanInputs.append("@MatrixParam(\"${header.key}\") val ${header.key}: ${header.value.simpleName}, ")
-                            .appendLine()
-                    }
-
-                    postMethod.headerParams.forEach { header ->
-                        beanInputs.append("@HeaderParam(\"${header.key}\") val ${header.key}: ${header.value.simpleName}, ")
-                            .appendLine()
-                    }
-
-                    postMethod.cookieParams.forEach { header ->
-                        beanInputs.append("@CookieParam(\"${header.key}\") val ${header.key}: ${header.value.simpleName}, ")
-                            .appendLine()
-                    }
-
-                    if (postMethod.formParams.size > 3) {
-                        postMethod.formParams.forEach { header ->
-                            beanInputs.append("MultivaluedMap<String, String> formParams, ").appendLine()
-                        }
-                    } else {
-                        postMethod.formParams.forEach { header ->
-                            beanInputs.append("@FormParam(\"${header.key}\") val ${header.key}: ${header.value.simpleName}, ")
-                                .appendLine()
-                        }
-                    }
-
-                    beanInputs.setLength(beanInputs.length - 1)
-
-                    if (beanInputs.endsWith(", ")) {
-                        beanInputs.setLength(beanInputs.length - 2)
-                    }
-
-                    dataClassesDefinitions.append("data class InputBean(${beanInputs})").appendLine("\n")
-
-                    customPostMethod.append(chunk.plus(" inputBean: InputBean")).appendLine()
-
-                    return@forEachIndexed
-                }
-
-                if (chunk.contains("@PathParam")) {
-                    pathParams.forEach { pathParam ->
-                        val param = pathParam.value.replace("{", "").replace("}", "")
-
-                        methodInputs.append("@PathParam(\"${param}\") val ${param}: String, ")
-                            .appendLine()
-                    }
-                }
-
-                if (chunk.contains("@QueryParam")) {
-                    postMethod.queryParams.forEach { header ->
-                        methodInputs.append("@QueryParam(\"${header.key}\") val ${header.key}: ${header.value.simpleName}, ")
-                            .appendLine()
-                    }
-                }
-
-                if (chunk.contains("@MatrixParam")) {
-                    postMethod.matrixParams.forEach { header ->
-                        methodInputs.append("@MatrixParam(\"${header.key}\") val ${header.key}: ${header.value.simpleName}, ")
-                            .appendLine()
-                    }
-                }
-
-                if (chunk.contains("@HeaderParam")) {
-                    postMethod.headerParams.forEach { header ->
-                        methodInputs.append("@HeaderParam(\"${header.key}\") val ${header.key}: ${header.value.simpleName}, ")
-                            .appendLine()
-                    }
-                }
-
-                if (chunk.contains("@CookieParam")) {
-                    postMethod.cookieParams.forEach { header ->
-                        methodInputs.append("@CookieParam(\"${header.key}\") val ${header.key}: ${header.value.simpleName}, ")
-                            .appendLine()
-                    }
-                }
-
-                if (chunk.contains("@FormParam")) {
-                    if (postMethod.formParams.size > 3) {
-                        postMethod.formParams.forEach { header ->
-                            methodInputs.append("MultivaluedMap<String, String> formParams, ").appendLine()
-                        }
-                    } else {
-                        postMethod.formParams.forEach { header ->
-                            methodInputs.append("@FormParam(\"${header.key}\") val ${header.key}: ${header.value.simpleName}, ")
-                                .appendLine()
-                        }
-                    }
-                }
-
-                if (methodInputs.isNotEmpty()) {
-                    if (methodInputs.endsWith(", ")) {
-                        methodInputs.setLength(methodInputs.length - 2)
-                    }
-
-                    customPostMethod.append(methodInputs.appendLine()).appendLine()
-                }
-
-                if (chunk.contains("): Any {")) {
-                    if ((postMethod as Post).body != null) {
-                        customPostMethod.append("val ${(postMethod.body as KClass<*>).simpleName!!.toCamelCase()}: ${(postMethod.body as KClass<*>).simpleName}, ")
-
-                        if (customPostMethod.endsWith(", ")) {
-                            customPostMethod.setLength(customPostMethod.length - 2)
-                        }
-
-                        customPostMethod.appendLine()
-                    }
-
-                    val responseClass = (postMethod.response as KClass<*>)
-
-                    customPostMethod.append(chunk.replace("Any", responseClass.simpleName!!)).appendLine()
-
-                    if (responseClass.isData) {
-                        val dataClassParams = StringBuilder()
-
-                        responseClass.memberProperties.forEach {
-                            val type = it.returnType.toString()
-
-                            dataClassParams.append("val ${it.name}: ${(type.substring(type.indexOf(".") + 1))}, ")
-                        }
-
-                        dataClassParams.setLength(dataClassParams.length - 2)
-
-                        dataClassesDefinitions.append("data class ${(postMethod.response as KClass<*>).simpleName!!}(${dataClassParams})").appendLine("\n")
-                    }
-                }
-
-                if (chunk.contains("return ")) {
-                    val finalReturn = StringBuilder()
-
-                    if (existBeanParam) {
-                        finalReturn.append("\"inputBean\" to InputBean, ").appendLine()
-                    }
-
-                    if ((postMethod as Post).body != null) {
-                        finalReturn.append(
-                            "\"${(postMethod.body as KClass<*>).simpleName!!.lowercase(Locale.getDefault())}\" to ${
-                                (postMethod.body as KClass<*>).simpleName!!.lowercase(
-                                    Locale.getDefault()
-                                )
-                            }"
-                        )
-                            .appendLine()
-                    }
-
-                    if (finalReturn.endsWith(", ")) {
-                        finalReturn.setLength(finalReturn.length - 2)
-                    }
-
-                    customPostMethod.append(chunk.replace("emptyMap()", finalReturn.toString())).appendLine()
-                }
-            }
-
-            customPostMethod.append("}").appendLine()
-        }
-
-        customModel.replace(
-            customModel.indexOf("DATA_CLASS_SPOT"),
-            customModel.indexOf("DATA_CLASS_SPOT") + "DATA_CLASS_SPOT".length,
-            dataClassesDefinitions.toString()
-        )
-
-        customModel.append(customPostMethod).appendLine()
-
-        print("joder")
     }
 }
 
 class Post : Route() {
     var body: KClass<*>? = null
+
+    fun body(body: () -> KClass<*>) {
+        this.body = body()
+    }
 }
 
 class Get : Route()
 
 class Put : Route() {
     var body: KClass<*>? = null
+
+    fun body(body: () -> KClass<*>) {
+        this.body = body()
+    }
 }
 
 class Delete : Route()
