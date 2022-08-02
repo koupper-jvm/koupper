@@ -201,17 +201,24 @@ class TextFileHandlerImpl : TextFileHandler {
         val lineNumberForSecondMatch = this.getRangeOfOccurrence(
             file,
             secondContent,
-            onOccurrenceNumber,
+            1,
             lineNumberForFirstMatch.first().key
         ).entries
 
         if (lineNumberForFirstMatch.isNotEmpty() && lineNumberForSecondMatch.isNotEmpty()) {
-            result = this.getContentBetweenLines(
-                lineNumberForFirstMatch.first().key,
-                lineNumberForSecondMatch.first().key,
-                file.path,
-                inclusiveMode
-            )
+            result = if (lineNumberForFirstMatch.first().key == lineNumberForSecondMatch.first().key) {
+                listOf(
+                    this.getContentForLine(lineNumberForFirstMatch.first().key, file.path)
+                        .substring((lineNumberForFirstMatch.first().value.last + 1) until lineNumberForSecondMatch.first().value.first)
+                )
+            } else {
+                this.getContentBetweenLines(
+                    lineNumberForFirstMatch.first().key,
+                    lineNumberForSecondMatch.first().key,
+                    file.path,
+                    inclusiveMode
+                )
+            }
         }
 
         return result
