@@ -48,5 +48,5 @@ interface ScriptExecutor {
      * @param callable the script sentence
      * @param params the script params
      */
-    fun execute(callable: (container: Container, params: Map<String, Any>) -> Container, params: Map<String, Any>)
+    fun <T> execute(callable: (container: Container, params: Map<String, Any>) -> T, params: Map<String, Any>): T
 }

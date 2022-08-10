@@ -11,7 +11,6 @@ import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import com.koupper.providers.files.*
 import com.koupper.providers.http.HtppClient
-import com.koupper.shared.getProperty
 import java.io.*
 import java.net.URL
 import java.nio.file.Paths
@@ -98,11 +97,11 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
     }
 
-    override fun execute(
-        callable: (container: Container, params: Map<String, Any>) -> Container,
+    override fun <T> execute(
+        callable: (container: Container, params: Map<String, Any>) -> T,
         params: Map<String, Any>
-    ) {
-        callable(container, params)
+    ): T {
+        return callable(container, params)
     }
 
     private fun convertStringParamsToListParams(args: String): Map<String, Any> {
