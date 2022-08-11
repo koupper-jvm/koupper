@@ -51,9 +51,9 @@ open class Route : RouteDefinition {
     private var response: KClass<*>? = null
     private var script: String = ""
     private var postMethods: MutableList<Any> = mutableListOf()
-    private var getMethods: MutableList<RouteDefinition.() -> Unit> = mutableListOf()
-    private var updateMethods: MutableList<RouteDefinition.() -> Unit> = mutableListOf()
-    private var deleteMethods: MutableList<RouteDefinition.() -> Unit> = mutableListOf()
+    private var getMethods: MutableList<Any> = mutableListOf()
+    private var putMethods: MutableList<Any> = mutableListOf()
+    private var deleteMethods: MutableList<Any> = mutableListOf()
     private var textFileHandler: TextFileHandlerImpl = TextFileHandlerImpl()
 
     override fun type(type: () -> Type) {
@@ -119,15 +119,21 @@ open class Route : RouteDefinition {
     }
 
     override fun get(route: Get.() -> Unit) {
-        Get().apply(route)
+        val get = Get().apply(route)
+
+        this.getMethods.add(get)
     }
 
     override fun put(route: Put.() -> Unit) {
-        Put().apply(route)
+        val put = Put().apply(route)
+
+        this.putMethods.add(put)
     }
 
     override fun delete(route: Delete.() -> Unit) {
-        Delete().apply(route)
+        val delete = Delete().apply(route)
+
+        this.deleteMethods.add(delete)
     }
 
     override fun registerRouters(route: RouteDefinition.() -> Unit) {
@@ -175,6 +181,72 @@ open class Route : RouteDefinition {
                     route.response,
                     route.script,
                     (route as Post).body
+                )
+
+                this.methods.add(method)
+            }
+
+            routerScope.getMethods.forEach {
+                val route = it as Route
+
+                val method = Method(
+                    route.name,
+                    Action.GET,
+                    route.path,
+                    route.consumes,
+                    route.produces,
+                    route.queryParams,
+                    route.matrixParams,
+                    route.headerParams,
+                    route.cookieParams,
+                    route.formParams,
+                    route.response,
+                    route.script,
+                    null
+                )
+
+                this.methods.add(method)
+            }
+
+            routerScope.putMethods.forEach {
+                val route = it as Route
+
+                val method = Method(
+                    route.name,
+                    Action.PUT,
+                    route.path,
+                    route.consumes,
+                    route.produces,
+                    route.queryParams,
+                    route.matrixParams,
+                    route.headerParams,
+                    route.cookieParams,
+                    route.formParams,
+                    route.response,
+                    route.script,
+                    (route as Put).body
+                )
+
+                this.methods.add(method)
+            }
+
+            routerScope.deleteMethods.forEach {
+                val route = it as Route
+
+                val method = Method(
+                    route.name,
+                    Action.DELETE,
+                    route.path,
+                    route.consumes,
+                    route.produces,
+                    route.queryParams,
+                    route.matrixParams,
+                    route.headerParams,
+                    route.cookieParams,
+                    route.formParams,
+                    route.response,
+                    route.script,
+                    null
                 )
 
                 this.methods.add(method)

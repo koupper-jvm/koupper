@@ -14,7 +14,6 @@ class RouterMakerTest : AnnotationSpec() {
         "MODEL_BACK_PROJECT_URL" to "/Users/jacobacosta/Code/model-project",
     )
 
-    @Ignore
     @Test
     fun `should build a route`() {
         withEnvironment(envs) {
@@ -47,22 +46,37 @@ class RouterMakerTest : AnnotationSpec() {
                     consumes { listOf("application/json") }
                 }
 
-                post {
+                put {
                     path { "/helloWorld/{example}" }
-                    name { "createPost" }
+                    name { "updatePost" }
                     middlewares { listOf("jwt-auth") }
                     queryParams { mapOf("name" to String::class) }
-                    matrixParams {
-                        mapOf(
-                            "lat" to String::class,
-                            "long" to String::class,
-                            "scale" to String::class,
-                        )
-                    }
-                    headerParams { mapOf("name" to String::class) }
                     cookieParams { mapOf("sessionId" to String::class) }
-                    formParams { mapOf("user" to String::class) }
                     body { Body::class }
+                    response { Int::class }
+                    script { "create-post" }
+                    produces { listOf("application/json") }
+                    consumes { listOf("application/json") }
+                }
+
+                get {
+                    path { "/helloWorld/{example}" }
+                    name { "getPost" }
+                    middlewares { listOf("jwt-auth") }
+                    queryParams { mapOf("name" to String::class) }
+                    cookieParams { mapOf("sessionId" to String::class) }
+                    response { Int::class }
+                    script { "create-post" }
+                    produces { listOf("application/json") }
+                    consumes { listOf("application/json") }
+                }
+
+                delete {
+                    path { "/helloWorld/{example}" }
+                    name { "deletePost" }
+                    middlewares { listOf("jwt-auth") }
+                    queryParams { mapOf("name" to String::class) }
+                    cookieParams { mapOf("sessionId" to String::class) }
                     response { Int::class }
                     script { "create-post" }
                     produces { listOf("application/json") }

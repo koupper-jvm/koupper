@@ -166,6 +166,18 @@ class ModelController(
         if (method == Action.POST) {
             this.finalCustomController.append("@POST").appendLine()
         }
+
+        if (method == Action.PUT) {
+            this.finalCustomController.append("@PUT").appendLine()
+        }
+
+        if (method == Action.GET) {
+            this.finalCustomController.append("@GET").appendLine()
+        }
+
+        if (method == Action.DELETE) {
+            this.finalCustomController.append("@DELETE").appendLine()
+        }
     }
 
     private fun addMethodPath(path: String) {
