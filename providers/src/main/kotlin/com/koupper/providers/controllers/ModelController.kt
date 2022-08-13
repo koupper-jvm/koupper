@@ -41,6 +41,7 @@ class ModelController(
 ) {
     private val textFileHandler = TextFileHandlerImpl()
     private val finalCustomController = StringBuilder()
+    private val spaces = String.format("%-4s", " ");
 
     private constructor(builder: Builder) : this(
         builder.controllerLocation,
@@ -88,7 +89,7 @@ class ModelController(
 
             this.addMethodBody(it)
 
-            this.finalCustomController.append("}").appendLine()
+            this.finalCustomController.append("\n${spaces}}").appendLine().appendLine()
 
             this.addDataClasses(it)
         }
@@ -164,32 +165,34 @@ class ModelController(
 
     private fun addMethodAction(method: Action) {
         if (method == Action.POST) {
-            this.finalCustomController.append("@POST").appendLine()
+            this.finalCustomController.append("$spaces@POST").appendLine()
         }
 
         if (method == Action.PUT) {
-            this.finalCustomController.append("@PUT").appendLine()
+            this.finalCustomController.append("$spaces@PUT").appendLine()
         }
 
         if (method == Action.GET) {
-            this.finalCustomController.append("@GET").appendLine()
+            this.finalCustomController.append("$spaces@GET").appendLine()
         }
 
         if (method == Action.DELETE) {
-            this.finalCustomController.append("@DELETE").appendLine()
+            this.finalCustomController.append("$spaces@DELETE").appendLine()
         }
     }
 
     private fun addMethodPath(path: String) {
-        this.finalCustomController.append("@Path(\"$path\")").appendLine()
+        this.finalCustomController.append("$spaces@Path(\"$path\")").appendLine()
     }
 
     private fun addConsumesPath(consumes: List<String>) {
-        this.finalCustomController.append("@Consumes(${this.buildMethodAnnotationParameters(consumes)})").appendLine()
+        this.finalCustomController.append("$spaces@Consumes(${this.buildMethodAnnotationParameters(consumes)})")
+            .appendLine()
     }
 
     private fun addMethodProduces(produces: List<String>) {
-        this.finalCustomController.append("@Produces(${this.buildMethodAnnotationParameters(produces)})").appendLine()
+        this.finalCustomController.append("$spaces@Produces(${this.buildMethodAnnotationParameters(produces)})")
+            .appendLine()
     }
 
     private fun buildMethodAnnotationParameters(parameters: List<String>): StringBuilder {
@@ -207,12 +210,12 @@ class ModelController(
     }
 
     private fun addMethodOpening(name: String) {
-        this.finalCustomController.append("fun $name(").appendLine()
+        this.finalCustomController.append("${spaces}fun $name(").appendLine()
     }
 
     private fun addMethodParameters(method: Method) {
         if (this.isElegibleForBeanCreation(method)) {
-            this.finalCustomController.append("@BeanParam inputBean: ${this.getDataClassName()}, ").appendLine()
+            this.finalCustomController.append("$spaces$spaces@BeanParam inputBean: ${this.getDataClassName()}, ").appendLine()
         } else {
             val pathParams = "\\{\\w+}".toRegex().findAll(method.path).toList()
 
@@ -242,12 +245,12 @@ class ModelController(
         }
 
         if (method.action == Action.POST) {
-            this.finalCustomController.append("${(method.body as KClass<*>).simpleName!!.toCamelCase()}: ${(method.body as KClass<*>).simpleName}")
+            this.finalCustomController.append("${spaces}${spaces}${(method.body as KClass<*>).simpleName!!.toCamelCase()}: ${(method.body as KClass<*>).simpleName}")
                 .appendLine()
         }
 
         if (method.action == Action.PUT) {
-            this.finalCustomController.append("${(method.body as KClass<*>).simpleName!!.toCamelCase()}: ${(method.body as KClass<*>).simpleName}")
+            this.finalCustomController.append("${spaces}${spaces}${(method.body as KClass<*>).simpleName!!.toCamelCase()}: ${(method.body as KClass<*>).simpleName}")
                 .appendLine()
         }
 
@@ -269,73 +272,73 @@ class ModelController(
         pathParams.forEach { pathParam ->
             val param = pathParam.value.replace("{", "").replace("}", "")
 
-            this.finalCustomController.append("@PathParam(\"${param}\") ${param}: String, ").appendLine()
+            this.finalCustomController.append("$spaces$spaces@PathParam(\"${param}\") ${param}: String, ").appendLine()
         }
     }
 
     private fun buildQueryParams(queryParams: Map<String, KClass<*>>) {
         queryParams.forEach { queryParam ->
-            this.finalCustomController.append("@QueryParam(\"${queryParam.key}\") ${queryParam.key}: ${queryParam.value.simpleName}, ")
+            this.finalCustomController.append("$spaces$spaces@QueryParam(\"${queryParam.key}\") ${queryParam.key}: ${queryParam.value.simpleName}, ")
                 .appendLine()
         }
     }
 
     private fun buildMatrixParams(matrixParams: Map<String, KClass<*>>) {
         matrixParams.forEach { matrixParam ->
-            this.finalCustomController.append("@MatrixParam(\"${matrixParam.key}\") ${matrixParam.key}: ${matrixParam.value.simpleName}, ")
+            this.finalCustomController.append("$spaces$spaces@MatrixParam(\"${matrixParam.key}\") ${matrixParam.key}: ${matrixParam.value.simpleName}, ")
                 .appendLine()
         }
     }
 
     private fun buildHeaderParams(headerParams: Map<String, KClass<*>>) {
         headerParams.forEach { headerParam ->
-            this.finalCustomController.append("@HeaderParam(\"${headerParam.key}\") ${headerParam.key}: ${headerParam.value.simpleName}, ")
+            this.finalCustomController.append("$spaces$spaces@HeaderParam(\"${headerParam.key}\") ${headerParam.key}: ${headerParam.value.simpleName}, ")
                 .appendLine()
         }
     }
 
     private fun buildCookieParams(cookieParams: Map<String, KClass<*>>) {
         cookieParams.forEach { cookieParam ->
-            this.finalCustomController.append("@CookieParam(\"${cookieParam.key}\") ${cookieParam.key}: ${cookieParam.value.simpleName}, ")
+            this.finalCustomController.append("$spaces$spaces@CookieParam(\"${cookieParam.key}\") ${cookieParam.key}: ${cookieParam.value.simpleName}, ")
                 .appendLine()
         }
     }
 
     private fun buildFormParams(formParams: Map<String, KClass<*>>) {
         formParams.forEach { formParam ->
-            this.finalCustomController.append("@FormParam(\"${formParam.key}\") ${formParam.key}: ${formParam.value.simpleName}, ")
+            this.finalCustomController.append("$spaces$spaces@FormParam(\"${formParam.key}\") ${formParam.key}: ${formParam.value.simpleName}, ")
                 .appendLine()
         }
     }
 
     private fun addMethodClosing(responseClass: KClass<*>) {
-        this.finalCustomController.append("): Any {".replace("Any", responseClass.simpleName!!)).appendLine()
+        this.finalCustomController.append("${spaces}): Any {".replace("Any", responseClass.simpleName!!)).appendLine()
     }
 
     private fun addMethodBody(method: Method) {
         val returnStructure = StringBuilder()
 
         if (this.isElegibleForBeanCreation(method)) {
-            returnStructure.append("\"inputBean\" to inputBean, ").appendLine()
+            returnStructure.append("${spaces}${spaces}${spaces}${spaces}\"inputBean\" to inputBean, ").appendLine()
         } else {
             method.queryParams.forEach {
-                returnStructure.append("\"${it.key}\" to ${it.key}, ").appendLine()
+                returnStructure.append("${spaces}${spaces}${spaces}${spaces}\"${it.key}\" to ${it.key}, ").appendLine()
             }
             method.matrixParams.forEach {
-                returnStructure.append("\"${it.key}\" to ${it.key}, ").appendLine()
+                returnStructure.append("${spaces}${spaces}${spaces}${spaces}\"${it.key}\" to ${it.key}, ").appendLine()
             }
             method.headerParams.forEach {
-                returnStructure.append("\"${it.key}\" to ${it.key}, ").appendLine()
+                returnStructure.append("${spaces}${spaces}${spaces}${spaces}\"${it.key}\" to ${it.key}, ").appendLine()
             }
             method.cookieParams.forEach {
-                returnStructure.append("\"${it.key}\" to ${it.key}, ").appendLine()
+                returnStructure.append("${spaces}${spaces}${spaces}${spaces}\"${it.key}\" to ${it.key}, ").appendLine()
             }
             method.formParams.forEach {
-                returnStructure.append("\"${it.key}\" to ${it.key}, ").appendLine()
+                returnStructure.append("${spaces}${spaces}${spaces}${spaces}\"${it.key}\" to ${it.key}, ").appendLine()
             }
             "\\{\\w+}".toRegex().findAll(method.path).toList().forEach {
                 returnStructure.append(
-                    "\"${it.value.replace("{", "").replace("}", "")}\" to ${
+                    "${spaces}${spaces}${spaces}${spaces}\"${it.value.replace("{", "").replace("}", "")}\" to ${
                         it.value.replace("{", "").replace("}", "")
                     }, "
                 ).appendLine()
@@ -343,7 +346,7 @@ class ModelController(
         }
 
         if (method.body != null) {
-            returnStructure.append("\"${(method.body as KClass<*>).simpleName!!.toCamelCase()}\" to ${(method.body as KClass<*>).simpleName!!.toCamelCase()}, ")
+            returnStructure.append("${spaces}${spaces}${spaces}${spaces}\"${(method.body as KClass<*>).simpleName!!.toCamelCase()}\" to ${(method.body as KClass<*>).simpleName!!.toCamelCase()}, ")
                 .appendLine()
         }
 
@@ -351,7 +354,7 @@ class ModelController(
             returnStructure.setLength(returnStructure.length - 3)
         }
 
-        this.finalCustomController.append("return executor.execute(\n${this.changeScriptName(method.script)}, \nmapOf(\n$returnStructure\n)\n)")
+        this.finalCustomController.append("${spaces}${spaces}return executor.execute(\n${spaces}${spaces}${spaces}${this.changeScriptName(method.script)}, \n${spaces}${spaces}${spaces}mapOf(\n$returnStructure\n${spaces}${spaces}${spaces})\n${spaces}${spaces})")
     }
 
     private fun addDataClasses(method: Method) {
@@ -394,19 +397,23 @@ class ModelController(
         }
 
         method.queryParams.forEach { header ->
-            inputs.append("@QueryParam(\"${header.key}\") ${header.key}: ${header.value.simpleName}, ").appendLine()
+            inputs.append("$spaces@QueryParam(\"${header.key}\") ${header.key}: ${header.value.simpleName}, ")
+                .appendLine()
         }
 
         method.matrixParams.forEach { header ->
-            inputs.append("@MatrixParam(\"${header.key}\") ${header.key}: ${header.value.simpleName}, ").appendLine()
+            inputs.append("$spaces@MatrixParam(\"${header.key}\") ${header.key}: ${header.value.simpleName}, ")
+                .appendLine()
         }
 
         method.headerParams.forEach { header ->
-            inputs.append("@HeaderParam(\"${header.key}\") ${header.key}: ${header.value.simpleName}, ").appendLine()
+            inputs.append("$spaces@HeaderParam(\"${header.key}\") ${header.key}: ${header.value.simpleName}, ")
+                .appendLine()
         }
 
         method.cookieParams.forEach { header ->
-            inputs.append("@CookieParam(\"${header.key}\") ${header.key}: ${header.value.simpleName}, ").appendLine()
+            inputs.append("$spaces@CookieParam(\"${header.key}\") ${header.key}: ${header.value.simpleName}, ")
+                .appendLine()
         }
 
         if (method.formParams.size > 3) {
@@ -415,7 +422,8 @@ class ModelController(
             }
         } else {
             method.formParams.forEach { header ->
-                inputs.append("@FormParam(\"${header.key}\") ${header.key}: ${header.value.simpleName}, ").appendLine()
+                inputs.append("$spaces@FormParam(\"${header.key}\") ${header.key}: ${header.value.simpleName}, ")
+                    .appendLine()
             }
         }
 
