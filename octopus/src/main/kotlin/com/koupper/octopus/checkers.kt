@@ -21,8 +21,8 @@ val isScriptProcess: (String) -> Boolean = {
             it.contains("val\\s[a-zA-Z0-9]+:\\s\\(ScriptProcess,\\s*Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }
 
-val isParameterized: (String) -> Boolean = {
-    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Container,\\s*Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
+val isRoute: (String) -> Boolean = {
+    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Route,\\s*Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }
 
 val isModuleProcess: (String) -> Boolean = {

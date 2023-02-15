@@ -4,14 +4,14 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
 import com.koupper.configurations.utilities.ANSIColors.ANSI_WHITE
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
+import com.koupper.octopus.process.ModuleMaker
 import com.koupper.octopus.process.Process
-import com.koupper.octopus.process.SetupModule
+import com.koupper.octopus.routes.Route
 import com.koupper.os.env
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import com.koupper.providers.files.*
 import com.koupper.providers.http.HtppClient
-import com.koupper.shared.getProperty
 import java.io.*
 import java.net.URL
 import java.nio.file.Paths
@@ -20,6 +20,9 @@ import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
 
+fun String.toCamelCase(): String {
+    return split(" ").joinToString("") { it.lowercase().replaceFirstChar { it.titlecase() } }
+}
 
 val isRelativeScriptFile: (String) -> Boolean = {
     it.matches("^[a-zA-Z0-9]+.kts$".toRegex())
@@ -44,7 +47,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
     }
 
-    override fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
+    override fun <T> run(sentence : String, params: Map<String, Any>, result: (value: T) -> Unit) {
         System.setProperty("kotlin.script.classpath", currentClassPath)
 
         with(ScriptEngineManager().getEngineByExtension("kts")) {
@@ -75,19 +78,25 @@ class Octopus(private var container: Container) : ScriptExecutor {
                     if (params.isEmpty()) {
                         val targetCallback = eval(valName) as (Process) -> T
 
-                        result(targetCallback.invoke(SetupModule(container)))
+                        result(targetCallback.invoke(ModuleMaker(container)))
                     } else {
                         val targetCallback = eval(valName) as (Process, Map<String, Any>) -> T
 
-                        result(targetCallback.invoke(SetupModule(container), params))
+                        result(targetCallback.invoke(ModuleMaker(container), params))
                     }
                 }
-                isParameterized(sentence) -> {
+                isRoute(sentence) -> {
                     eval(sentence)
 
-                    val targetCallback = eval(valName) as (Container, Map<String, Any>) -> T
+                    if (params.isEmpty()) {
+                        val targetCallback = eval(valName) as (Route) -> T
 
-                    result(targetCallback.invoke(container, params))
+                        result(targetCallback.invoke(Route(container)))
+                    } else {
+                        val targetCallback = eval(valName) as (Route, Map<String, Any>) -> T
+
+                        result(targetCallback.invoke(Route(container), params))
+                    }
                 }
                 else -> {
                     eval(sentence)
@@ -99,7 +108,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
     }
 
     override fun execute(
-        callable: (container: Container, params: Map<String, Any>) -> Container,
+        callable: (container: Container, params: Map<String, Any>) -> Any,
         params: Map<String, Any>
     ) {
         callable(container, params)
@@ -231,7 +240,7 @@ fun checkForUpdates(): Boolean {
 
 private fun processCallback(context: ScriptExecutor, scriptName: String, result: Any) {
     if (result is Container) {
-        println("\nscript [$scriptName] ->\u001B[38;5;155m was executed.\u001B[0m")
+        println("\nscript [$scriptName] ->\u001B[38;5;155m was executed b .\u001B[0m")
     } else if (result is Process) {
         println("\r${ANSI_GREEN_155}📦 module ${ANSI_WHITE}${result.processName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
     }

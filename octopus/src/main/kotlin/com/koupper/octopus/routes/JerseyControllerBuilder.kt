@@ -1,7 +1,7 @@
-package com.koupper.providers.controllers
+package com.koupper.octopus.routes
 
+import com.koupper.octopus.toCamelCase
 import com.koupper.providers.files.TextFileHandlerImpl
-import io.zeko.db.sql.utilities.toCamelCase
 import kotlin.reflect.KClass
 import kotlin.reflect.full.memberProperties
 
@@ -32,9 +32,8 @@ data class Method(
     var body: KClass<*>? = null
 )
 
-class ModelController(
-    private val controllerLocation: String,
-    private val controllerPath: String = Property.UNDEFINED.name,
+class JerseyControllerBuilder private constructor(
+    private val location: String,
     private val controllerProduces: List<String> = emptyList(),
     private val controllerName: String = Property.UNDEFINED.name,
     private val methods: MutableList<Method> = mutableListOf()
@@ -44,20 +43,19 @@ class ModelController(
     private val spaces = String.format("%-4s", " ");
 
     private constructor(builder: Builder) : this(
-        builder.controllerLocation,
-        builder.controllerPath,
+         "${builder.location}/src/main/kotlin/controllers/ModelController.kt}",
         builder.controllerProduces,
         builder.controllerName,
         builder.methods
     )
 
     companion object {
-        inline fun build(controllerLocation: String, block: Builder.() -> Unit) =
-            Builder(controllerLocation).apply(block).build()
+        inline fun build(location: String, block: Builder.() -> Unit) =
+            Builder(location).apply(block).build()
     }
 
     fun build() {
-        this.textFileHandler.using(this.controllerLocation)
+        this.textFileHandler.using(this.location)
         this.addPackage()
         this.addImports()
         this.addControllerPath()
@@ -138,7 +136,7 @@ class ModelController(
     }
 
     private fun addControllerPath() {
-        this.finalCustomController.append("@Path(\"${this.controllerPath}\")").appendLine()
+        this.finalCustomController.append("@Path(\"${this.location}\")").appendLine()
     }
 
     private fun addControllerProduces() {
@@ -446,17 +444,16 @@ class ModelController(
 
     private fun locateDataClass(dataClassBlock: StringBuilder) {
         this.finalCustomController.insert(
-            this.finalCustomController.indexOf("@Path(\"${this.controllerPath}\")") - 1,
+            this.finalCustomController.indexOf("@Path(\"${this.location}\")") - 1,
             "\n$dataClassBlock"
         )
     }
 
-    class Builder(val controllerLocation: String) {
-        var controllerPath: String = Property.UNDEFINED.name
+    class Builder(var location: String) {
         var controllerProduces: List<String> = emptyList()
         var controllerName: String = Property.UNDEFINED.name
         var methods: MutableList<Method> = mutableListOf()
 
-        fun build() = ModelController(this)
+        fun build() = JerseyControllerBuilder(this)
     }
 }

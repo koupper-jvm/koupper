@@ -4,6 +4,9 @@ import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.interfaces.Container
 import com.koupper.container.KoupperContainer
 import com.koupper.container.app
+import com.koupper.octopus.routes.ProjectType
+import com.koupper.octopus.routes.Route
+import com.koupper.octopus.routes.Type
 import com.koupper.providers.crypto.Crypt0
 import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBConnector
@@ -22,6 +25,7 @@ import com.koupper.providers.logger.LoggerServiceProvider
 import com.koupper.providers.mailing.Sender
 import com.koupper.providers.mailing.SenderHtmlEmail
 import com.koupper.providers.mailing.SenderServiceProvider
+import io.kotest.extensions.system.withEnvironment
 import io.mockk.every
 import io.mockk.mockkClass
 import kotlin.test.assertEquals
@@ -134,6 +138,92 @@ class OctopusTest : AnnotationSpec() {
                     (value as () -> Any).invoke() is DBPSQLConnector || (value as () -> Any).invoke() is SenderHtmlEmail
                 }
             }
+        }
+    }
+
+    private var envs: Map<String, String> = mapOf(
+        "MODEL_BACK_PROJECT_URL" to "/Users/jacobacosta/Code/model-project",
+    )
+
+    data class Body(val prop1: Int, val prop2: String)
+
+    data class Post2(val prop1: Int, val prop2: String)
+
+    @Ignore
+    @Test
+    fun `should build a route`() {
+        withEnvironment(envs) {
+            Route(this.container).registerRouters {
+                path { "post" }
+                controllerName { "Post" }
+                produces { listOf("application/json") }
+                post {
+                    path { "/helloWorld/{example}" }
+                    identifier { "createPost" }
+                    middlewares { listOf("jwt-auth") }
+                    queryParams { mapOf("name" to String::class) }
+                    matrixParams {
+                        mapOf(
+                            "lat" to String::class,
+                            "long" to String::class,
+                            "scale" to String::class,
+                        )
+                    }
+                    headerParams { mapOf("name" to String::class) }
+                    cookieParams { mapOf("sessionId" to String::class) }
+                    formParams { mapOf("user" to String::class) }
+                    body { Body::class }
+                    response { Int::class }
+                    script { "create-post" }
+                    produces { listOf("application/json") }
+                    consumes { listOf("application/json") }
+                }
+
+                put {
+                    path { "/helloWorld/{example}" }
+                    identifier { "updatePost" }
+                    middlewares { listOf("jwt-auth") }
+                    queryParams { mapOf("name" to String::class) }
+                    cookieParams { mapOf("sessionId" to String::class) }
+                    body { Body::class }
+                    response { Int::class }
+                    script { "create-post" }
+                    produces { listOf("application/json") }
+                    consumes { listOf("application/json") }
+                }
+
+                get {
+                    path { "/helloWorld/{example}" }
+                    identifier { "getPost" }
+                    middlewares { listOf("jwt-auth") }
+                    queryParams { mapOf("name" to String::class) }
+                    cookieParams { mapOf("sessionId" to String::class) }
+                    response { Int::class }
+                    script { "create-post" }
+                    produces { listOf("application/json") }
+                    consumes { listOf("application/json") }
+                }
+
+                delete {
+                    path { "/helloWorld/{example}" }
+                    identifier { "deletePost" }
+                    middlewares { listOf("jwt-auth") }
+                    queryParams { mapOf("name" to String::class) }
+                    cookieParams { mapOf("sessionId" to String::class) }
+                    response { Int::class }
+                    script { "create-post" }
+                    produces { listOf("application/json") }
+                    consumes { listOf("application/json") }
+                }
+            }.deployOn {
+                port = 8080
+                rootUrl = "http://localhost/"
+            }.setup {
+                name = "hello"
+                type = Type.JERSEY
+                buildingTool = ProjectType.GRADLE
+                version = "2.0.1"
+            }.build()
         }
     }
 }

@@ -16,7 +16,7 @@ import java.nio.file.Paths
 import kotlin.system.exitProcess
 import kotlin.io.path.createTempFile
 
-class SetupModule(private val container: Container) : Process {
+class ModuleMaker(private val container: Container) : Process {
     override lateinit var name: String
     override var metadata: MutableMap<String, Any> = mutableMapOf()
     override lateinit var moduletype: String
@@ -40,7 +40,7 @@ class SetupModule(private val container: Container) : Process {
     }
 
     override fun run() {
-        if (File(name).exists()) {
+        if (File(this.name).exists()) {
             if (!this.moduletype.equals("DEPLOYABLE", true)) {
                 println("\n$ANSI_YELLOW_229 A module named '$name' already exist. $ANSI_RESET \n")
 
