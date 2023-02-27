@@ -39,19 +39,21 @@ sealed interface RouteDefinition {
     fun consumes(consumes: () -> List<String>)
     fun consumes(): List<String>
     fun post(route: Post.() -> Unit)
-    fun postMethods(): MutableList<Any>
+    fun postMethods(): MutableList<RouteDefinition>
     fun get(route: Get.() -> Unit)
-    fun getMethods(): MutableList<Any>
+    fun getMethods(): MutableList<RouteDefinition>
     fun put(route: Put.() -> Unit)
-    fun putMethods(): MutableList<Any>
+    fun putMethods(): MutableList<RouteDefinition>
     fun delete(route: Delete.() -> Unit)
-    fun deleteMethods(): MutableList<Any>
+    fun deleteMethods(): MutableList<RouteDefinition>
     fun registerRouters(route: RouteDefinition.() -> Unit): RouteDefinition
     fun setup(config: ProjectBuilder.() -> Unit): RouteDefinition
     fun deployOn(config: DeploymentBuilder.() -> Unit): RouteDefinition
     fun build()
     fun stop()
 }
+
+private var modelProject: File = FileHandlerImpl().unzipFile(env("MODEL_BACK_PROJECT_URL"))
 
 open class Route(private val container: Container) : RouteDefinition {
     private var path: String = "/"
@@ -67,14 +69,17 @@ open class Route(private val container: Container) : RouteDefinition {
     private var formParams: Map<String, KClass<*>> = emptyMap()
     private var response: KClass<*>? = null
     private var script: String = ""
-    private var postMethods: MutableList<Any> = mutableListOf()
-    private var getMethods: MutableList<Any> = mutableListOf()
-    private var putMethods: MutableList<Any> = mutableListOf()
-    private var deleteMethods: MutableList<Any> = mutableListOf()
+    private var postMethods: MutableList<RouteDefinition> = mutableListOf()
+    private var getMethods: MutableList<RouteDefinition> = mutableListOf()
+    private var putMethods: MutableList<RouteDefinition> = mutableListOf()
+    private var deleteMethods: MutableList<RouteDefinition> = mutableListOf()
     private var projectBuilder: ProjectBuilder? = null
     private var deploymentBuilder: DeploymentBuilder? = null
-    private var modelProject: File = FileHandlerImpl().unzipFile(env("MODEL_BACK_PROJECT_URL"))
     private var location: String = modelProject.path
+
+    init {
+        File(location).delete()
+    }
 
     override fun path(path: () -> String) {
         this.path = path()

@@ -3,7 +3,8 @@ package com.koupper.octopus.process
 class ModuleAnalyzer : Process {
     override lateinit var name: String
     override lateinit var metadata: MutableMap<String, Any>
-    override lateinit var moduletype: String
+    override lateinit var moduleType: String
+    override lateinit var location: String
 
     override fun register(name: String, metadata: Map<String, Any>): Process {
         TODO("Not yet implemented")

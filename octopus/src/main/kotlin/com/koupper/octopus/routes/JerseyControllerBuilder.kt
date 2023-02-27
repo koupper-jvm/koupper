@@ -2,6 +2,8 @@ package com.koupper.octopus.routes
 
 import com.koupper.octopus.toCamelCase
 import com.koupper.providers.files.TextFileHandlerImpl
+import java.io.BufferedWriter
+import java.io.FileWriter
 import kotlin.reflect.KClass
 import kotlin.reflect.full.memberProperties
 
@@ -34,6 +36,8 @@ data class Method(
 
 class JerseyControllerBuilder private constructor(
     private val location: String,
+    private val path: String,
+    private val controllerConsumes: List<String> = emptyList(),
     private val controllerProduces: List<String> = emptyList(),
     private val controllerName: String = Property.UNDEFINED.name,
     private val methods: MutableList<Method> = mutableListOf()
@@ -43,7 +47,9 @@ class JerseyControllerBuilder private constructor(
     private val spaces = String.format("%-4s", " ");
 
     private constructor(builder: Builder) : this(
-         "${builder.location}/src/main/kotlin/controllers/ModelController.kt}",
+        "${builder.location}/src/main/kotlin/controllers/ModelController.kt",
+        builder.path,
+        builder.controllerConsumes,
         builder.controllerProduces,
         builder.controllerName,
         builder.methods
@@ -93,6 +99,16 @@ class JerseyControllerBuilder private constructor(
         }
 
         this.finalCustomController.append("}").appendLine()
+
+        val streamBuilder = buildString {
+            append(finalCustomController)
+        }
+
+        val fileWriter = FileWriter(this.location)
+
+        val bufferedWriter = BufferedWriter(fileWriter)
+        bufferedWriter.write(streamBuilder)
+        bufferedWriter.close()
     }
 
     private fun addPackage() {
@@ -136,7 +152,7 @@ class JerseyControllerBuilder private constructor(
     }
 
     private fun addControllerPath() {
-        this.finalCustomController.append("@Path(\"${this.location}\")").appendLine()
+        this.finalCustomController.append("@Path(\"${this.path}\")").appendLine()
     }
 
     private fun addControllerProduces() {
@@ -154,9 +170,7 @@ class JerseyControllerBuilder private constructor(
     }
 
     private fun addClassDefinition() {
-        var classDeclaration = "class ModelController {"
-
-        classDeclaration = classDeclaration.replace("ModelController", this.controllerName)
+        val classDeclaration = "class ${this.controllerName} {"
 
         this.finalCustomController.append(classDeclaration).appendLine()
     }
@@ -213,7 +227,8 @@ class JerseyControllerBuilder private constructor(
 
     private fun addMethodParameters(method: Method) {
         if (this.isElegibleForBeanCreation(method)) {
-            this.finalCustomController.append("$spaces$spaces@BeanParam inputBean: ${this.getDataClassName()}, ").appendLine()
+            this.finalCustomController.append("$spaces$spaces@BeanParam inputBean: ${this.getDataClassName()}, ")
+                .appendLine()
         } else {
             val pathParams = "\\{\\w+}".toRegex().findAll(method.path).toList()
 
@@ -352,10 +367,16 @@ class JerseyControllerBuilder private constructor(
             returnStructure.setLength(returnStructure.length - 3)
         }
 
-        this.finalCustomController.append("${spaces}${spaces}return executor.execute(\n${spaces}${spaces}${spaces}${this.changeScriptName(method.script)}, \n${spaces}${spaces}${spaces}mapOf(\n$returnStructure\n${spaces}${spaces}${spaces})\n${spaces}${spaces})")
+        this.finalCustomController.append(
+            "${spaces}${spaces}return executor.execute(\n${spaces}${spaces}${spaces}${
+                this.changeScriptName(
+                    method.script
+                )
+            }, \n${spaces}${spaces}${spaces}mapOf(\n$returnStructure\n${spaces}${spaces}${spaces})\n${spaces}${spaces})"
+        )
     }
 
-    private fun addDataClasses(method: Method) {
+¡    private fun addDataClasses(method: Method) {
         if (this.isElegibleForBeanCreation(method)) {
             this.locateDataClass(this.buildBeanDataClass(method))
         }
@@ -444,12 +465,14 @@ class JerseyControllerBuilder private constructor(
 
     private fun locateDataClass(dataClassBlock: StringBuilder) {
         this.finalCustomController.insert(
-            this.finalCustomController.indexOf("@Path(\"${this.location}\")") - 1,
+            this.finalCustomController.indexOf("@Path(\"${this.path}\")") - 1,
             "\n$dataClassBlock"
         )
     }
 
     class Builder(var location: String) {
+        var path: String = Property.UNDEFINED.name
+        var controllerConsumes: List<String> = emptyList()
         var controllerProduces: List<String> = emptyList()
         var controllerName: String = Property.UNDEFINED.name
         var methods: MutableList<Method> = mutableListOf()

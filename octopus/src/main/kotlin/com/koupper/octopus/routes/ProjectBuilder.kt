@@ -37,15 +37,12 @@ class ProjectBuilder private constructor(
         ModuleMaker(this.container).register(
             this.name,
             mapOf(
-                "moduleType" to "DEPLOYABLE",
+                "moduleType" to "CONTROLLER",
                 "moduleVersion" to this.version,
-                "scriptsToExecute" to listOf(this.getRegisteredScripts())
+                "methods" to this.getRegisteredScripts(),
+                "projectLocation" to this.location
             )
         ).run()
-
-        if (this.buildingTool == ProjectType.GRADLE) {
-            this.setupGradle()
-        }
 
         if (this.routeDefinition != null) {
             if (this.type == Type.JERSEY) {
@@ -54,37 +51,29 @@ class ProjectBuilder private constructor(
         }
     }
 
-    private fun getRegisteredScripts(): List<String> {
-        val result = mutableListOf<String>()
+    private fun getRegisteredScripts(): List<RouteDefinition> {
+        val result = mutableListOf<RouteDefinition>()
         result.addAll(
-            this.routeDefinition!!.postMethods().map { (it as Route).script() }
+            this.routeDefinition!!.postMethods()
         )
         result.addAll(
-            this.routeDefinition!!.getMethods().map { (it as Route).script()}
+            this.routeDefinition!!.getMethods()
         )
         result.addAll(
-            this.routeDefinition!!.putMethods().map { (it as Route).script()}
+            this.routeDefinition!!.putMethods()
         )
         result.addAll(
-            this.routeDefinition!!.deleteMethods().map { (it as Route).script()}
+            this.routeDefinition!!.deleteMethods()
         )
 
         return result
     }
 
-    private fun setupGradle() {
-        val self = this
-
-        GradleBuilder.build(this.location, this.container) {
-            this.name = self.name
-
-            this.version = self.version
-        }.build()
-    }
-
     private fun setupJersey() {
-        JerseyControllerBuilder.build(location) {
-            this.location = routeDefinition!!.path()
+        JerseyControllerBuilder.build(this.name) {
+            this.path = routeDefinition!!.path()
+
+            this.controllerConsumes = routeDefinition!!.consumes()
 
             this.controllerProduces = routeDefinition!!.produces()
 

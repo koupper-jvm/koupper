@@ -24,7 +24,7 @@ class DeploymentBuilder private constructor(
     }
 
     fun build() {
-        val processBuilder = ProcessBuilder("${location}/gradlew", "build")
+        /*val processBuilder = ProcessBuilder("${location}/gradlew", "build")
         val process = processBuilder.start()
 
         val inputStream = process.inputStream
@@ -36,7 +36,7 @@ class DeploymentBuilder private constructor(
 
         val exitCode = process.waitFor()
 
-        println("Process finished with exit code $exitCode")
+        println("Process finished with exit code $exitCode")*/
     }
 
     class Builder(var location: String, var container: Container) {

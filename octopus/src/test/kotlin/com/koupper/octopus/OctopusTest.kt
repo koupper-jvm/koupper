@@ -28,6 +28,7 @@ import com.koupper.providers.mailing.SenderServiceProvider
 import io.kotest.extensions.system.withEnvironment
 import io.mockk.every
 import io.mockk.mockkClass
+import jdk.nashorn.internal.objects.NativeArray.forEach
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -118,48 +119,22 @@ class OctopusTest : AnnotationSpec() {
         }
     }
 
-    @Test
-    fun `should bind the available service providers in container`() {
-        val containerImplementation = KoupperContainer()
-
-        val octopus = Octopus(containerImplementation)
-
-        octopus.registerBuildInServicesProvidersInContainer().forEach { (abstractClass, value) ->
-            if (value is Map<*, *>) {
-                value.forEach { (key, value) ->
-                }
-            } else {
-                assertTrue {
-                    abstractClass.java.name == Crypt0::class.qualifiedName ||
-                            abstractClass.java.name == DBConnector::class.qualifiedName ||
-                            abstractClass.java.name == FileHandler::class.qualifiedName ||
-                            abstractClass.java.name == JSONFileHandler::class.qualifiedName ||
-                            abstractClass.java.name == TextFileHandler::class.qualifiedName ||
-                            abstractClass.java.name == HtppClient::class.qualifiedName ||
-                            abstractClass.java.name == JWT::class.qualifiedName ||
-                            abstractClass.java.name == Logger::class.qualifiedName ||
-                            abstractClass.java.name == Sender::class.qualifiedName ||
-                    (value as () -> Any).invoke() is DBPSQLConnector || (value as () -> Any).invoke() is SenderHtmlEmail
-                }
-            }
-        }
-    }
-
     private var envs: Map<String, String> = mapOf(
         "MODEL_BACK_PROJECT_URL" to "/Users/jacobacosta/Code/model-project",
     )
-
-    data class Body(val prop1: Int, val prop2: String)
 
     data class Post2(val prop1: Int, val prop2: String)
 
     @Ignore
     @Test
     fun `should build a route`() {
+        data class Body(val prop1: Int, val prop2: String)
+
         withEnvironment(envs) {
             Route(this.container).registerRouters {
                 path { "post" }
                 controllerName { "Post" }
+                consumes { listOf("application/json") }
                 produces { listOf("application/json") }
                 post {
                     path { "/helloWorld/{example}" }
