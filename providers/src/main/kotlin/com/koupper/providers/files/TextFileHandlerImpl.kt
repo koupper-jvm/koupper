@@ -71,17 +71,22 @@ class TextFileHandlerImpl : TextFileHandler {
         val lines = file.readLines()
 
         for ((lineNumber, content) in lines.iterator().withIndex()) {
-            when {
-                (lineNumber + 1) == linePosition -> {
+            if ((lineNumber + 1) == linePosition) {
+                if (lineNumber == lines.size - 1) {
+                    newContentBase.append(content)
+                } else {
                     newContentBase.append("$newContent\n")
                 }
-                lineNumber == lines.size -> {
-                    newContentBase.append(content)
-                }
-                else -> {
-                    newContentBase.append("$content\n")
-                }
+
+                continue
             }
+
+            if (lineNumber == lines.size - 1) {
+                newContentBase.append(content)
+                continue
+            }
+
+            newContentBase.append("$content\n")
         }
 
         return if (!overrideOriginal) {
