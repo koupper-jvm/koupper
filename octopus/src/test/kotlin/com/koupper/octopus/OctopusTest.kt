@@ -12,10 +12,7 @@ import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBConnector
 import com.koupper.providers.db.DBPSQLConnector
 import com.koupper.providers.db.DBServiceProvider
-import com.koupper.providers.files.FileHandler
-import com.koupper.providers.files.FileServiceProvider
-import com.koupper.providers.files.JSONFileHandler
-import com.koupper.providers.files.TextFileHandler
+import com.koupper.providers.files.*
 import com.koupper.providers.http.HtppClient
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.jwt.JWT
@@ -121,87 +118,54 @@ class OctopusTest : AnnotationSpec() {
 
     private var envs: Map<String, String> = mapOf(
         "MODEL_BACK_PROJECT_URL" to "/Users/jacobacosta/Code/model-project",
+        "OPTIMIZED_PROCESS_MANAGER_URL" to "https://koupper.s3.us-east-2.amazonaws.com/cli/optimized/octopus-4.0.0.jar",
+        "OCTOPUS_VERSION" to "4.0.0",
+        "KOUPPER_PATH" to "/Users/jacobacosta/Code/koupper/octopus/src/test/resources/init.kts"
     )
 
     data class Post2(val prop1: Int, val prop2: String)
 
-    @Ignore
     @Test
     fun `should build a route`() {
         data class Body(val prop1: Int, val prop2: String)
 
+        every {
+            container.createInstanceOf(TextFileHandler::class)
+        } answers {
+            TextFileHandlerImpl()
+        }
+
+        every {
+            container.createInstanceOf(FileHandler::class)
+        } answers {
+            FileHandlerImpl()
+        }
+
         withEnvironment(envs) {
             Route(this.container).registerRouters {
                 path { "post" }
-                controllerName { "Post" }
-                consumes { listOf("application/json") }
-                produces { listOf("application/json") }
-                post {
-                    path { "/helloWorld/{example}" }
-                    identifier { "createPost" }
-                    middlewares { listOf("jwt-auth") }
-                    queryParams { mapOf("name" to String::class) }
-                    matrixParams {
-                        mapOf(
-                            "lat" to String::class,
-                            "long" to String::class,
-                            "scale" to String::class,
-                        )
-                    }
-                    headerParams { mapOf("name" to String::class) }
-                    cookieParams { mapOf("sessionId" to String::class) }
-                    formParams { mapOf("user" to String::class) }
-                    body { Body::class }
-                    response { Int::class }
-                    script { "create-post" }
-                    produces { listOf("application/json") }
-                    consumes { listOf("application/json") }
-                }
-
-                put {
-                    path { "/helloWorld/{example}" }
-                    identifier { "updatePost" }
-                    middlewares { listOf("jwt-auth") }
-                    queryParams { mapOf("name" to String::class) }
-                    cookieParams { mapOf("sessionId" to String::class) }
-                    body { Body::class }
-                    response { Int::class }
-                    script { "create-post" }
-                    produces { listOf("application/json") }
-                    consumes { listOf("application/json") }
-                }
+                controllerName { "PostController" }
 
                 get {
                     path { "/helloWorld/{example}" }
                     identifier { "getPost" }
                     middlewares { listOf("jwt-auth") }
                     queryParams { mapOf("name" to String::class) }
-                    cookieParams { mapOf("sessionId" to String::class) }
                     response { Int::class }
                     script { "create-post" }
                     produces { listOf("application/json") }
                     consumes { listOf("application/json") }
                 }
 
-                delete {
-                    path { "/helloWorld/{example}" }
-                    identifier { "deletePost" }
-                    middlewares { listOf("jwt-auth") }
-                    queryParams { mapOf("name" to String::class) }
-                    cookieParams { mapOf("sessionId" to String::class) }
-                    response { Int::class }
-                    script { "create-post" }
-                    produces { listOf("application/json") }
-                    consumes { listOf("application/json") }
-                }
             }.deployOn {
                 port = 8080
-                rootUrl = "http://localhost/"
+                rootUrl = "example"
             }.setup {
                 name = "hello"
                 type = Type.JERSEY
                 buildingTool = ProjectType.GRADLE
                 version = "2.0.1"
+                packageName = "io.example"
             }.build()
         }
     }

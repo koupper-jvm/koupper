@@ -15,6 +15,7 @@ class ProjectBuilder private constructor(
     var type: Type = Type.JERSEY,
     var name: String = "undefined",
     var version: String = "undefined",
+    var packageName: String = "undefined",
     private var routeDefinition: RouteDefinition? = null
 ) {
 
@@ -25,6 +26,7 @@ class ProjectBuilder private constructor(
         builder.type,
         builder.name,
         builder.version,
+        builder.packageName,
         builder.routeDefinition,
     )
 
@@ -34,20 +36,19 @@ class ProjectBuilder private constructor(
     }
 
     fun build() {
-        ModuleMaker(this.container).register(
-            this.name,
-            mapOf(
-                "moduleType" to "CONTROLLER",
-                "moduleVersion" to this.version,
-                "methods" to this.getRegisteredScripts(),
-                "projectLocation" to this.location
-            )
-        ).run()
+        if (this.buildingTool == ProjectType.GRADLE && this.type == Type.JERSEY) {
+            ModuleMaker(this.container).register(
+                this.name,
+                mapOf(
+                    "moduleType" to "GRYZZLY2_GRADLE_JERSEY",
+                    "moduleVersion" to this.version,
+                    "methods" to this.getRegisteredScripts(),
+                    "projectLocation" to this.location,
+                    "packageName" to this.packageName,
+                )
+            ).run()
 
-        if (this.routeDefinition != null) {
-            if (this.type == Type.JERSEY) {
-                this.setupJersey()
-            }
+            this.setupJersey()
         }
     }
 
@@ -70,6 +71,8 @@ class ProjectBuilder private constructor(
     }
 
     private fun setupJersey() {
+        val self = this
+
         JerseyControllerBuilder.build(this.name) {
             this.path = routeDefinition!!.path()
 
@@ -78,6 +81,8 @@ class ProjectBuilder private constructor(
             this.controllerProduces = routeDefinition!!.produces()
 
             this.controllerName = routeDefinition!!.controllerName()
+
+            this.packageName = self.packageName
 
             val pm = postMethods()
 
@@ -222,6 +227,7 @@ class ProjectBuilder private constructor(
         var type = Type.JERSEY
         var name = Property.UNDEFINED.name
         var version = "1.0.0"
+        var packageName = Property.UNDEFINED.name
         var routeDefinition: RouteDefinition? = null
 
         fun build() = ProjectBuilder(this)

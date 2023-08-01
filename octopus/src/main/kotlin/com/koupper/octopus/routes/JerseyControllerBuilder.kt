@@ -40,18 +40,20 @@ class JerseyControllerBuilder private constructor(
     private val controllerConsumes: List<String> = emptyList(),
     private val controllerProduces: List<String> = emptyList(),
     private val controllerName: String = Property.UNDEFINED.name,
+    private val packageName: String = Property.UNDEFINED.name,
     private val methods: MutableList<Method> = mutableListOf()
 ) {
     private val textFileHandler = TextFileHandlerImpl()
     private val finalCustomController = StringBuilder()
-    private val spaces = String.format("%-4s", " ");
+    private val spaces = String.format("%-4s", " ")
 
     private constructor(builder: Builder) : this(
-        "${builder.location}/src/main/kotlin/controllers/ModelController.kt",
+        "${builder.location}/src/main/kotlin/${builder.packageName.replace(".", "/")}/controllers/ModelController.kt",
         builder.path,
         builder.controllerConsumes,
         builder.controllerProduces,
         builder.controllerName,
+        builder.packageName,
         builder.methods
     )
 
@@ -121,7 +123,7 @@ class JerseyControllerBuilder private constructor(
         val scripts = StringBuilder()
 
         this.methods.forEach { item ->
-            val scriptImport = "import scripts.${this.changeScriptName(item.script)}"
+            val scriptImport = "import ${packageName}.scripts.${this.changeScriptName(item.script)}"
 
             if (!scripts.contains(scriptImport)) {
                 scripts.append(scriptImport).appendLine()
@@ -135,8 +137,9 @@ class JerseyControllerBuilder private constructor(
         imports.forEach {
             var lineContent = this.textFileHandler.getContentForLine(it)
 
-            if (lineContent == "import scripts.script" && scripts.isNotEmpty()) {
-                lineContent = lineContent.replace("import scripts.script", scripts.toString())
+            if (lineContent == "import io.mp.scripts.script" && scripts.isNotEmpty()) {
+                lineContent = lineContent.replace("import io.mp.scripts.script", scripts.toString())
+                print(lineContent)
             }
 
             this.finalCustomController.append(lineContent).appendLine()
@@ -325,7 +328,7 @@ class JerseyControllerBuilder private constructor(
     }
 
     private fun addMethodClosing(responseClass: KClass<*>) {
-        this.finalCustomController.append("${spaces}): Any {".replace("Any", responseClass.simpleName!!)).appendLine()
+        this.finalCustomController.append("\n${spaces}): Any {".replace("Any", responseClass.simpleName!!)).appendLine()
     }
 
     private fun addMethodBody(method: Method) {
@@ -376,7 +379,7 @@ class JerseyControllerBuilder private constructor(
         )
     }
 
-¡    private fun addDataClasses(method: Method) {
+    private fun addDataClasses(method: Method) {
         if (this.isElegibleForBeanCreation(method)) {
             this.locateDataClass(this.buildBeanDataClass(method))
         }
@@ -475,6 +478,7 @@ class JerseyControllerBuilder private constructor(
         var controllerConsumes: List<String> = emptyList()
         var controllerProduces: List<String> = emptyList()
         var controllerName: String = Property.UNDEFINED.name
+        var packageName: String = Property.UNDEFINED.name
         var methods: MutableList<Method> = mutableListOf()
 
         fun build() = JerseyControllerBuilder(this)

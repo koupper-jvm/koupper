@@ -102,7 +102,7 @@ class ModuleMaker(private val container: Container) : Process {
             this.moduleType.equals("BACK", true) -> {
 
             }
-            this.moduleType.equals("CONTROLLER", true) -> {
+            this.moduleType.equals("GRYZZLY2_GRADLE_JERSEY", true) -> {
                 val location = this.metadata["projectLocation"] as String
 
                 this.location = location
@@ -113,9 +113,11 @@ class ModuleMaker(private val container: Container) : Process {
 
                 this.addLibs(location)
 
+                this.renamePackageTo(this.metadata["packageName"] as String)
+
                 this.locateScriptsForController(this.metadata["methods"] as List<RouteDefinition>, location)
 
-                Files.delete(Paths.get("$location/src/main/kotlin/scripts/script.kt"))
+                Files.delete(Paths.get("$location/src/main/kotlin/${(metadata["packageName"] as String).replace(".", "/")}/scripts/script.kt"))
 
                 Files.move(Paths.get(location), Paths.get(this.name))
             }
@@ -139,6 +141,35 @@ class ModuleMaker(private val container: Container) : Process {
 
                 Files.move(Paths.get(modelProject.name), Paths.get(this.name))
             }
+        }
+    }
+
+    private fun renamePackageTo(packageName: String) {
+        val oldDirectoryName = "io/mp"
+        val newDirectoryName = packageName.replace(".", "/")
+
+        val oldDirectory = File("$location/src/main/kotlin/$oldDirectoryName")
+        val newDirectory = File("$location/src/main/kotlin/$newDirectoryName")
+
+        val renamed = oldDirectory.renameTo(newDirectory)
+
+        if (!renamed) {
+            return
+        }
+
+        val kotlinFilesDirectory = File("$location/src/main/kotlin/$newDirectoryName")
+
+        if (kotlinFilesDirectory.exists() && kotlinFilesDirectory.isDirectory) {
+            kotlinFilesDirectory.walkTopDown().forEach { file ->
+                if (file.isFile && file.extension == "kt") {
+                    val content = file.readText()
+                    val updatedContent = content.replace("package ${oldDirectoryName.replace("/", ".")}", "package $packageName")
+                    file.writeText(updatedContent)
+                }
+            }
+            println("Package names updated successfully.")
+        } else {
+            println("Kotlin files directory not found.")
         }
     }
 
@@ -172,8 +203,6 @@ class ModuleMaker(private val container: Container) : Process {
             val callableReturnType = this.textFileHandler.getContentBetweenContent("->", "=", filePath = scriptFile.path)[0].trim()
 
             if (route.response()?.simpleName != callableReturnType) {
-                if ()
-
                 this.rollback()
                 throw Exception("[$callableReturnType] return type in script [$script] does not match controller return type [${route.response()?.simpleName}].")
             }
@@ -210,9 +239,8 @@ class ModuleMaker(private val container: Container) : Process {
         val finalScriptName = getRealScriptNameFrom(script)
 
         if (finalScriptName.isNotEmpty()) {
-            if (Files.notExists(Paths.get("$targetPath/src/main/kotlin/scripts/${finalScriptName.replace(".kts", ".kt")}"))) {
-                val finalScriptPath = "$targetPath/src/main/kotlin/scripts/${finalScriptName.replace(".kts", ".kt")}"
-
+            val finalScriptPath = "$targetPath/src/main/kotlin/${(metadata["packageName"] as String).replace(".", "/")}/scripts/${finalScriptName.replace(".kts", ".kt")}"
+            if (Files.notExists(Paths.get(finalScriptPath))) {
                 this.commitScript(finalScriptName, finalScriptPath)
 
                 this.changeCallbackVariable(finalScriptName, finalScriptPath)
@@ -236,7 +264,7 @@ class ModuleMaker(private val container: Container) : Process {
 
             scriptFile.forEachLine { line ->
                 if (lineNumber == 0) {
-                    writer.println("package scripts\n\n$line")
+                    writer.println("package ${(metadata["packageName"] as String).replace("/", ".")}.scripts\n\n$line")
                 } else {
                     writer.println(line)
                 }
@@ -316,9 +344,9 @@ class ModuleMaker(private val container: Container) : Process {
         val finalNameWhitDash = this.getCallbackFinalName(scriptName, "_")
 
         finalValName = if (finalNameWhitHyphen.isNotEmpty()) {
-            finalNameWhitHyphen
+            finalNameWhitHyphen.substringBeforeLast(".")
         } else if (finalNameWhitDash.isNotEmpty()) {
-            finalNameWhitDash
+            finalNameWhitDash.substringBeforeLast(".")
         } else {
             throw Exception("Script file can not be empty.")
         }

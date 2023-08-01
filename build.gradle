@@ -72,8 +72,8 @@ project(':octopus') {
         implementation project(':configurations')
         implementation project(':os')
         implementation "org.jetbrains.kotlin:kotlin-reflect"
-        implementation "org.jetbrains.kotlin:kotlin-script-util"
-        implementation "org.jetbrains.kotlin:kotlin-script-runtime"
+        //implementation "org.jetbrains.kotlin:kotlin-script-util"
+        //implementation "org.jetbrains.kotlin:kotlin-script-runtime"
         implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable"
         implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable"
         implementation 'net.java.dev.jna:jna:5.5.0'

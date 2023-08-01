@@ -53,7 +53,8 @@ sealed interface RouteDefinition {
     fun stop()
 }
 
-private var modelProject: File = FileHandlerImpl().unzipFile(env("MODEL_BACK_PROJECT_URL"))
+private var modelProject: File =
+    File(env("MODEL_BACK_PROJECT_URL"))//FileHandlerImpl().unzipFile(env("MODEL_BACK_PROJECT_URL"))
 
 open class Route(private val container: Container) : RouteDefinition {
     private var path: String = "/"
@@ -227,6 +228,10 @@ open class Route(private val container: Container) : RouteDefinition {
         this.projectBuilder?.build()
 
         if (this.deploymentBuilder != null) {
+            this.deploymentBuilder!!.apply {
+                packageName = projectBuilder!!.packageName
+                projectName = projectBuilder!!.name
+            }
             this.deploymentBuilder?.build()
         }
     }

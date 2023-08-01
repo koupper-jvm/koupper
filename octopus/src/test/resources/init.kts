@@ -1,7 +1,5 @@
-import com.koupper.octopus.process.ScriptProcess
+import com.koupper.container.interfaces.Container
 
-val init: (ScriptProcess) -> ScriptProcess = {
-    it.runScript("yourScript.kts") // the params are optional as a map in second place to 'runScript' function.
-
-    //it.runScript("yourScript.kts", mapOf("key", value))
+val script: (Container, Map<String, Any>) -> Int = { container, params ->
+    7
 }
