@@ -6,6 +6,7 @@ allprojects {
     apply plugin: 'java'
     repositories {
         mavenCentral()
+        maven { url 'https://repo.gradle.org/gradle/libs-releases' }
     }
     test {
         useJUnitPlatform()
@@ -55,6 +56,7 @@ project(':bootstrap') {
         implementation "org.glassfish.jersey.inject:jersey-hk2:${jerseyVersion}"
         implementation "org.glassfish.jersey.media:jersey-media-json-jackson:${jerseyVersion}"
         implementation "org.glassfish.jersey.ext:jersey-entity-filtering:${jerseyVersion}"
+        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3"
     }
 }
 
@@ -77,6 +79,8 @@ project(':octopus') {
         implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable"
         implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable"
         implementation 'net.java.dev.jna:jna:5.5.0'
+        implementation 'org.gradle:gradle-tooling-api:8.2.1'
+        runtimeOnly 'org.slf4j:slf4j-simple:1.7.10'
     }
 }
 
