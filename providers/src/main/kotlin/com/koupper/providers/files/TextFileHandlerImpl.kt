@@ -73,7 +73,7 @@ class TextFileHandlerImpl : TextFileHandler {
         for ((lineNumber, content) in lines.iterator().withIndex()) {
             if ((lineNumber + 1) == linePosition) {
                 if (lineNumber == lines.size - 1) {
-                    newContentBase.append(content)
+                    newContentBase.append(newContent)
                 } else {
                     newContentBase.append("$newContent\n")
                 }
