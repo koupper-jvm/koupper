@@ -5,6 +5,7 @@ class ModuleAnalyzer : Process {
     override lateinit var metadata: MutableMap<String, Any>
     override lateinit var moduleType: String
     override lateinit var location: String
+    override lateinit var version: String
 
     override fun register(name: String, metadata: Map<String, Any>): Process {
         TODO("Not yet implemented")

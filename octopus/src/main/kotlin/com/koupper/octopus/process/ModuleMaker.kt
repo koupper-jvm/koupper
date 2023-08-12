@@ -41,6 +41,7 @@ class ModuleMaker(private val container: Container) : Process {
     private val fileHandler = this.container.createInstanceOf(FileHandler::class)
     private val textFileHandler = this.container.createInstanceOf(TextFileHandler::class)
     private val registeredScripts = mutableListOf<String?>()
+    override lateinit var version: String
 
     override fun register(name: String, metadata: Map<String, Any>): Process {
         this.name = name
@@ -109,6 +110,7 @@ class ModuleMaker(private val container: Container) : Process {
 
                 GradleBuilder.build(this.name, this.location, this.container) {
                     this.version = self.metadata["moduleVersion"] as String
+                    this.packageName = self.metadata["packageName"] as String
                 }.build()
 
                 this.addLibs(location)

@@ -70,7 +70,6 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
                         result(targetCallback.invoke(container, params))
                     }
-
                 }
                 isModuleProcess(sentence) -> {
                     eval(sentence)

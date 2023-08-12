@@ -5,6 +5,7 @@ interface Process {
     var metadata: MutableMap<String, Any>
     var moduleType: String
     var location: String
+    var version: String
 
     fun register(name: String, metadata: Map<String, Any> = emptyMap()) : Process
 

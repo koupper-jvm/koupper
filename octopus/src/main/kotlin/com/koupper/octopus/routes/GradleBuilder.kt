@@ -8,6 +8,7 @@ class GradleBuilder private constructor(
     private val location: String,
     private val container: Container,
     private val version: String,
+    private val packageName: String,
 ) {
     private var textFileHandler: TextFileHandler = this.container.createInstanceOf(TextFileHandler::class)
 
@@ -15,7 +16,8 @@ class GradleBuilder private constructor(
         builder.name,
         builder.location,
         builder.container,
-        builder.version
+        builder.version,
+        builder.packageName,
     )
 
     companion object {
@@ -48,6 +50,7 @@ class GradleBuilder private constructor(
 
     class Builder(val name: String, val location: String, val container: Container) {
         var version: String = "1.0.0"
+        var packageName: String = "undefined"
 
         fun build() = GradleBuilder(this)
     }

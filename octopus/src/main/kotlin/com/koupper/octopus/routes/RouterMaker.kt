@@ -221,6 +221,7 @@ open class Route(private val container: Container) : RouteDefinition {
             print("Creating gradle [undefined] project version: 1.0.0.")
 
             this.projectBuilder = ProjectBuilder.build(this.location, this.container) {
+                version = projectBuilder!!.version
                 this.routeDefinition = self
             }
         }
@@ -231,6 +232,7 @@ open class Route(private val container: Container) : RouteDefinition {
             this.deploymentBuilder!!.apply {
                 packageName = projectBuilder!!.packageName
                 projectName = projectBuilder!!.name
+                version = projectBuilder!!.version
             }
             this.deploymentBuilder?.build()
         }
