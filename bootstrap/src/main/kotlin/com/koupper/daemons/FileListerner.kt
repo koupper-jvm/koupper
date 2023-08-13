@@ -4,7 +4,7 @@ import kotlinx.coroutines.*
 import java.nio.file.*
 
 fun main() {
-    val filePath = Paths.get("path/to/your/file.txt")
+    /*val filePath = Paths.get("path/to/your/file.txt")
     val watchService = FileSystems.getDefault().newWatchService()
     val watchKey = filePath.parent.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY)
 
@@ -32,5 +32,5 @@ fun main() {
         readLine()
         fileWatcherJob.cancelAndJoin()
         watchKey.cancel()
-    }
+    }*/
 }
