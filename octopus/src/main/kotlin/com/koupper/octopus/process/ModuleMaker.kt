@@ -19,7 +19,6 @@ import java.nio.file.Paths
 import java.util.*
 import javax.script.ScriptEngineManager
 import kotlin.system.exitProcess
-import kotlin.io.path.createTempFile
 
 val getRealScriptNameFrom: (String) -> String = { script ->
     val scriptId = if (script.endsWith(".kts")) script else "${script}.kts"
@@ -257,9 +256,9 @@ class ModuleMaker(private val container: Container) : Process {
     private fun commitScript(scriptPath: String, targetPath: String) {
         val scriptFile = this.validateScript(scriptPath)
 
-        val tmpPath = createTempFile("k-s-", ".kt")
+        val tmpPath = Files.createTempFile("k-s-", ".kt").toFile()
 
-        val tmpFile = File(tmpPath.toAbsolutePath().toString())
+        val tmpFile = File(tmpPath.absolutePath)
 
         tmpFile.printWriter().use { writer ->
             var lineNumber = 0
