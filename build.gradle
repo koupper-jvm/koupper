@@ -1,5 +1,5 @@
 plugins {
-    id "org.jetbrains.kotlin.jvm" version "1.5.21"
+    id "org.jetbrains.kotlin.jvm" version "1.6.0"
 }
 
 allprojects {
@@ -11,11 +11,21 @@ allprojects {
     test {
         useJUnitPlatform()
     }
+    dependencies {
+        implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.6.0'
+    }
 }
 
 version = '4.0.0'
 
-def kotestVersion = '4.4.0'
+def kotlinVersion = '1.6.0'
+def kotestVersion = '4.5.0'
+def mockkVersion = '1.12.0'
+def jerseyVersion = '3.0.3'
+def coroutinesVersion = '1.6.0'
+def vertxVersion = '4.1.1'
+def jacksonVersion = '2.13.0'
+def slf4jVersion = '1.7.32'
 
 subprojects {
     group = 'com.koupper'
@@ -31,19 +41,13 @@ subprojects {
     }
 
     dependencies {
-        testImplementation project(':assertions')
-        // Use the Kotlin test library.
-        testImplementation 'org.jetbrains.kotlin:kotlin-test'
-        // Use the Kotlin JUnit integration.
-        testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.4.30'
-        testImplementation "io.kotest:kotest-runner-junit5:${kotestVersion}"
-        testImplementation "io.kotest:kotest-assertions-core:${kotestVersion}"
-        testImplementation 'io.mockk:mockk:1.9.3.kotlin12'
-        testImplementation 'io.mockk:mockk:1.10.0'
+        testImplementation "org.jetbrains.kotlin:kotlin-test"
+        testImplementation "org.jetbrains.kotlin:kotlin-test-junit:1.4.30"
+        testImplementation "io.kotest:kotest-runner-junit5:$kotestVersion"
+        testImplementation "io.kotest:kotest-assertions-core:$kotestVersion"
+        testImplementation "io.mockk:mockk:$mockkVersion"
     }
 }
-
-def jerseyVersion = "3.0.3"
 
 project(':bootstrap') {
     dependencies {
@@ -51,18 +55,18 @@ project(':bootstrap') {
         implementation project(':container')
         implementation project(':providers')
         implementation project(':configurations')
-        implementation "org.jetbrains.kotlin:kotlin-reflect"
-        implementation "org.glassfish.jersey.containers:jersey-container-grizzly2-http:${jerseyVersion}"
-        implementation "org.glassfish.jersey.inject:jersey-hk2:${jerseyVersion}"
-        implementation "org.glassfish.jersey.media:jersey-media-json-jackson:${jerseyVersion}"
-        implementation "org.glassfish.jersey.ext:jersey-entity-filtering:${jerseyVersion}"
-        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3"
+        implementation "org.glassfish.jersey.containers:jersey-container-grizzly2-http:$jerseyVersion"
+        implementation "org.glassfish.jersey.inject:jersey-hk2:$jerseyVersion"
+        implementation "org.glassfish.jersey.media:jersey-media-json-jackson:$jerseyVersion"
+        implementation "org.glassfish.jersey.ext:jersey-entity-filtering:$jerseyVersion"
+        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion"
     }
 }
 
 project(':container') {
     dependencies {
-        implementation "org.jetbrains.kotlin:kotlin-reflect"
+        implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
+        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
     }
 }
 
@@ -73,40 +77,34 @@ project(':octopus') {
         implementation project(':providers')
         implementation project(':configurations')
         implementation project(':os')
-        implementation "org.jetbrains.kotlin:kotlin-reflect"
-        //implementation "org.jetbrains.kotlin:kotlin-script-util"
-        //implementation "org.jetbrains.kotlin:kotlin-script-runtime"
-        implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable"
-        implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable"
+        implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
+        implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:$kotlinVersion"
+        implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:$kotlinVersion"
         implementation 'net.java.dev.jna:jna:5.5.0'
-        implementation 'org.gradle:gradle-tooling-api:8.2.1'
-        runtimeOnly 'org.slf4j:slf4j-simple:1.7.10'
-    }
-}
-
-project(':shared') {
-    dependencies {
-        implementation project(':configurations')
+        implementation "org.gradle:gradle-tooling-api:8.2.1"
+        runtimeOnly "org.slf4j:slf4j-simple:$slf4jVersion"
     }
 }
 
 project(':providers') {
     dependencies {
-        implementation project(':shared')
         implementation project(':container')
         implementation project(':os')
+        implementation project(':shared')
         implementation 'javax.mail:mail:1.4.7'
         implementation 'io.zeko:zeko-sql-builder:1.2.4'
-        implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.3'
         implementation 'io.vertx:vertx-jdbc-client:4.0.3'
         implementation 'org.postgresql:postgresql:42.2.19'
-        testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.4.3"
         implementation 'org.xerial:sqlite-jdbc:3.7.2'
         implementation 'org.slf4j:slf4j-nop:1.7.30'
         implementation 'io.github.rybalkinsd:kohttp:0.12.0'
         implementation 'com.auth0:java-jwt:3.18.1'
         implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.12.0'
         implementation 'com.beust:klaxon:5.5'
+        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion"
+        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion"
+        implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
+        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
     }
 }
 
