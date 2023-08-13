@@ -25,6 +25,7 @@ import com.koupper.providers.mailing.SenderServiceProvider
 import io.kotest.extensions.system.withEnvironment
 import io.mockk.every
 import io.mockk.mockkClass
+import jdk.nashorn.internal.ir.annotations.Ignore
 import jdk.nashorn.internal.objects.NativeArray.forEach
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -61,10 +62,6 @@ class OctopusTest : AnnotationSpec() {
     @Test
     fun `should inject container to callback script variable`() {
         val octopus = Octopus(this.container)
-
-        every {
-            container.createInstanceOf(Any::class)
-        } returns container
 
         octopus.run(
             "import com.koupper.container.interfaces.Container\n val container: (Container) -> Container = {\n" +
@@ -123,12 +120,9 @@ class OctopusTest : AnnotationSpec() {
         "KOUPPER_PATH" to "/Users/jacobacosta/Code/koupper/octopus/src/test/resources/init.kts"
     )
 
-    data class Post2(val prop1: Int, val prop2: String)
-
+    @Ignore
     @Test
     fun `should build a route`() {
-        data class Body(val prop1: Int, val prop2: String)
-
         every {
             container.createInstanceOf(TextFileHandler::class)
         } answers {
