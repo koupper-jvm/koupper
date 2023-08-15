@@ -110,7 +110,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
         callable: (container: Container, params: Map<String, Any>) -> T,
         params: Map<String, Any>
     ): T {
-        return callable(container, emptyMap())
+        return callable(container, params)
     }
 
     private fun convertStringParamsToListParams(args: String): Map<String, Any> {
