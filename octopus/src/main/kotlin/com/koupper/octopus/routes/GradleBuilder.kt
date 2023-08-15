@@ -42,7 +42,7 @@ class GradleBuilder private constructor(
     private fun setVersion() {
         this.textFileHandler.using("${this.location}/build.gradle")
         this.textFileHandler.replaceLine(
-            this.textFileHandler.getNumberLineFor("version = '{VERSION}'"),
+            this.textFileHandler.getNumberLineFor("version = '0.0.0'"),
             "version = '${this.version}'",
             overrideOriginal = true
         )

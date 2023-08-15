@@ -35,7 +35,7 @@ class DeploymentBuilder private constructor(
 
     fun build() {
         val packageLineNumber = this.textFileHandler.getNumberLineFor(
-            "packages(\"{PACKAGE}\")",
+            "packages(\"io.mp\")",
             "$projectName/src/main/kotlin/server/Setup.kt"
         )
 
@@ -47,7 +47,7 @@ class DeploymentBuilder private constructor(
         )
 
         val rootLineNumber =
-            this.textFileHandler.getNumberLineFor("{ROOT}", "$projectName/src/main/kotlin/server/Setup.kt")
+            this.textFileHandler.getNumberLineFor("root", "$projectName/src/main/kotlin/server/Setup.kt")
 
         this.textFileHandler.replaceLine(
             rootLineNumber,
