@@ -1,6 +1,5 @@
 package com.koupper.providers
 
-import com.koupper.providers.controllers.ControllerServiceProvider
 import com.koupper.providers.crypto.CryptoServiceProvider
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.providers.db.DBServiceProvider
@@ -26,7 +25,6 @@ class ServiceProviderManagerTest : AnnotationSpec() {
                     JWTServiceProvider::class,
                     LoggerServiceProvider::class,
                     SenderServiceProvider::class,
-                    ControllerServiceProvider::class,
                 )
             )
         }

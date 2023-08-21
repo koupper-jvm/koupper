@@ -71,17 +71,22 @@ class TextFileHandlerImpl : TextFileHandler {
         val lines = file.readLines()
 
         for ((lineNumber, content) in lines.iterator().withIndex()) {
-            when {
-                (lineNumber + 1) == linePosition -> {
+            if ((lineNumber + 1) == linePosition) {
+                if (lineNumber == lines.size - 1) {
+                    newContentBase.append(newContent)
+                } else {
                     newContentBase.append("$newContent\n")
                 }
-                lineNumber == lines.size -> {
-                    newContentBase.append(content)
-                }
-                else -> {
-                    newContentBase.append("$content\n")
-                }
+
+                continue
             }
+
+            if (lineNumber == lines.size - 1) {
+                newContentBase.append(content)
+                continue
+            }
+
+            newContentBase.append("$content\n")
         }
 
         return if (!overrideOriginal) {
@@ -201,17 +206,24 @@ class TextFileHandlerImpl : TextFileHandler {
         val lineNumberForSecondMatch = this.getRangeOfOccurrence(
             file,
             secondContent,
-            onOccurrenceNumber,
+            1,
             lineNumberForFirstMatch.first().key
         ).entries
 
         if (lineNumberForFirstMatch.isNotEmpty() && lineNumberForSecondMatch.isNotEmpty()) {
-            result = this.getContentBetweenLines(
-                lineNumberForFirstMatch.first().key,
-                lineNumberForSecondMatch.first().key,
-                file.path,
-                inclusiveMode
-            )
+            result = if (lineNumberForFirstMatch.first().key == lineNumberForSecondMatch.first().key) {
+                listOf(
+                    this.getContentForLine(lineNumberForFirstMatch.first().key, file.path)
+                        .substring((lineNumberForFirstMatch.first().value.last + 1) until lineNumberForSecondMatch.first().value.first)
+                )
+            } else {
+                this.getContentBetweenLines(
+                    lineNumberForFirstMatch.first().key,
+                    lineNumberForSecondMatch.first().key,
+                    file.path,
+                    inclusiveMode
+                )
+            }
         }
 
         return result

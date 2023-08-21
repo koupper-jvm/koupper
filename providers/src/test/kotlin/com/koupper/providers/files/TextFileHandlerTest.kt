@@ -157,10 +157,10 @@ class TextFileHandlerTest : AnnotationSpec() {
     fun `should read a file`() {
         val fileHandler = TextFileHandlerImpl()
 
-        val content = fileHandler.read("https://iglyemailtemplates.s3.amazonaws.com/welcome-igly.html")
+        val content = fileHandler.read("resource://index.html")
 
         assertTrue {
-            content.contains("<html>")
+            content.contains("<html lang=\"en\">")
         }
     }
 

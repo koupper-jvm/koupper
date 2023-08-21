@@ -1,6 +1,5 @@
 package com.koupper.providers
 
-import com.koupper.providers.controllers.ControllerServiceProvider
 import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBServiceProvider
 import com.koupper.providers.files.FileServiceProvider
@@ -48,7 +47,6 @@ class ServiceProviderManager {
             FileServiceProvider::class,
             JWTServiceProvider::class,
             CryptoServiceProvider::class,
-            ControllerServiceProvider::class
         )
     }
 }

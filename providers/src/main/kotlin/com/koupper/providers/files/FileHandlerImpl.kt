@@ -97,6 +97,18 @@ class FileHandlerImpl : FileHandler {
     }
 
     override fun unzipFile(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
+        if (targetPath == "N/A") {
+            val fileName = filePath.substring(filePath.lastIndexOf('/') + 1, filePath.lastIndexOf('.'))
+
+            val finalFile = File(fileName)
+
+            if (finalFile.exists()) {
+                println("A similar named folder exist in the current path.")
+
+                return finalFile
+            }
+        }
+
         var unzippedFolderName: String? = null
 
         val zipFile = this.load(filePath)

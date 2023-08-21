@@ -30,7 +30,10 @@ interface ScriptExecutor {
      * @param scripts a map of script paths
      * @param result a callback
      */
-    fun <T> runScriptFiles(scripts: MutableMap<String, Map<String, Any>>, result: (value: T, scriptName: String) -> Unit)
+    fun <T> runScriptFiles(
+        scripts: MutableMap<String, Map<String, Any>>,
+        result: (value: T, scriptName: String) -> Unit
+    )
 
     /**
      * Runs a sentence with params under ScriptEngineManager implementation and

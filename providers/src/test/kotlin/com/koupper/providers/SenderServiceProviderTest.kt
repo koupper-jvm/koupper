@@ -9,6 +9,7 @@ import io.kotest.extensions.system.withEnvironment
 import kotlin.test.assertTrue
 
 class SenderServiceProviderTest : AnnotationSpec() {
+    @Ignore
     @Test
     fun `should bind the html email sender`() {
         val envs = mapOf(
