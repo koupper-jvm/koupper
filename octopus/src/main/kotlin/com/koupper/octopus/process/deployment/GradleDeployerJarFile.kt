@@ -42,7 +42,6 @@ class GradleDeployerJarFile(private val container: Container) : Process {
 
         val jarFilePath = "${this.name}/build/libs/${this.name}-${this.version}.jar"
 
-
         try {
             val processBuilder = ProcessBuilder("java", "-cp", "$jarFilePath:${this.name}/build/libs/lib/*", "server.SetupKt")
             processBuilder.redirectErrorStream(true) // Redirect error stream to output stream
