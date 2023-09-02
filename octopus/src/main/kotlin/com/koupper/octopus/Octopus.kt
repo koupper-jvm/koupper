@@ -207,7 +207,7 @@ fun checkForUpdates(): Boolean {
     val httpClient = app.createInstanceOf(HtppClient::class)
 
     val response = httpClient.get {
-        url = checkForUpdateUrl!!
+        url = checkForUpdateUrl
     }
 
     val textJsonParser = app.createInstanceOf(JSONFileHandler::class) as JSONFileHandlerImpl<*>

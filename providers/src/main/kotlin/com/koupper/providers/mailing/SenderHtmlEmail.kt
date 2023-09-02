@@ -2,10 +2,16 @@ package com.koupper.providers.mailing
 
 import com.koupper.os.env
 import com.koupper.providers.Setup
+import java.io.File
+import java.security.Security
 import java.util.*
+import javax.activation.DataHandler
+import javax.activation.FileDataSource
 import javax.mail.*
 import javax.mail.internet.InternetAddress
+import javax.mail.internet.MimeBodyPart
 import javax.mail.internet.MimeMessage
+import javax.mail.internet.MimeMultipart
 
 class SenderHtmlEmail : Sender, Setup() {
     private var from: String? = ""
@@ -14,13 +20,25 @@ class SenderHtmlEmail : Sender, Setup() {
     private var message: String = ""
     private lateinit var session: Session
     private var properties: Properties = Properties()
+    private val attachments: MutableList<File> = mutableListOf()
+    private var content: String = ""
+    private var contentType: String = "text/html" // Default content type is HTML
 
     init {
         this.configMailProperties()
     }
 
     override fun withContent(content: String) {
-        this.message = content
+        this.content = content
+        this.contentType = contentType
+    }
+
+    override fun addAttachment(filePath: String) {
+        val file = File(filePath)
+
+        if (file.exists()) {
+            this.attachments.add(file)
+        }
     }
 
     override fun sendTo(targetEmail: String): Boolean {
@@ -63,7 +81,24 @@ class SenderHtmlEmail : Sender, Setup() {
         message.setRecipient(Message.RecipientType.TO, InternetAddress(this.targetEmail))
         message.subject = this.subject
         message.sentDate = Date()
-        message.setContent(this.message, "text/html")
+
+        val multipart = MimeMultipart()
+
+        // Add content as the first part
+        val contentPart = MimeBodyPart()
+        contentPart.setContent(content, contentType)
+        multipart.addBodyPart(contentPart)
+
+        // Add attachments
+        for (attachment in attachments) {
+            val attachmentPart = MimeBodyPart()
+            val dataSource = FileDataSource(attachment)
+            attachmentPart.dataHandler = DataHandler(dataSource)
+            attachmentPart.fileName = attachment.name
+            multipart.addBodyPart(attachmentPart)
+        }
+
+        message.setContent(multipart)
 
         return message
     }

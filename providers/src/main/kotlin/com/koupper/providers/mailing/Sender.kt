@@ -5,6 +5,8 @@ import java.util.*
 interface Sender {
     fun withContent(content: String)
 
+    fun addAttachment(filePath: String)
+
     fun sendTo(targetEmail: String): Boolean
 
     fun subject(subject: String)
