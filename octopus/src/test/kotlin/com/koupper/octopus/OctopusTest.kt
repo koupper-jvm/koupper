@@ -25,8 +25,6 @@ import com.koupper.providers.mailing.SenderServiceProvider
 import io.kotest.extensions.system.withEnvironment
 import io.mockk.every
 import io.mockk.mockkClass
-import jdk.nashorn.internal.ir.annotations.Ignore
-import jdk.nashorn.internal.objects.NativeArray.forEach
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
