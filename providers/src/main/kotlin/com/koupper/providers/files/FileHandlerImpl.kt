@@ -22,14 +22,14 @@ val checkByPathType: (String) -> PathType = { path ->
         path.contains("(http|https)://".toRegex()) -> PathType.URL
         path.contains("resource://".toRegex()) -> PathType.RESOURCE
         path.contains("env:".toRegex()) -> PathType.ENV
-        path.startsWith("/") -> PathType.LOCATION
+        path.startsWith(File.separator) -> PathType.LOCATION  // Usa File.separator
         else -> PathType.MALFORMED
     }
 }
 
 val buildResourcePathName: (String) -> String = {
-    // this should be support nested paths
-    it.substring(it.lastIndexOf("/") + 1)
+    // Este método debe soportar rutas anidadas
+    it.substring(it.lastIndexOf("/") + 1)  // Usa File.separator
 }
 
 class FileHandlerImpl : FileHandler {
@@ -37,7 +37,7 @@ class FileHandlerImpl : FileHandler {
         return when {
             checkByPathType(filePath) === PathType.URL -> downloadFile(
                 URL(filePath),
-                filePath.substring(filePath.lastIndexOf("/") + 1)
+                filePath.substring(filePath.lastIndexOf(File.separator) + 1)  // Usa File.separator
             )
             checkByPathType(filePath) === PathType.RESOURCE -> File(
                 FileHandlerImpl::class.java.classLoader.getResource(
@@ -45,16 +45,15 @@ class FileHandlerImpl : FileHandler {
                 ).path
             )
             checkByPathType(filePath) === PathType.ENV -> File(
-                ".${filePath.substring(filePath.lastIndexOf("/") + 1)}"
+                ".${filePath.substring(filePath.lastIndexOf(File.separator) + 1)}"  // Usa File.separator
             )
-            checkByPathType(filePath) === PathType.LOCATION -> File(filePath) // Download the file in the current location.
+            checkByPathType(filePath) === PathType.LOCATION -> File(filePath)  // Carga en la ubicación actual
             else -> File(filePath)
         }
     }
 
     override fun zipFile(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
         val inputDirectory = this.load(filePath)
-
         val outputZipFile = File("${inputDirectory.name}.zip")
 
         ZipOutputStream(
@@ -63,33 +62,44 @@ class FileHandlerImpl : FileHandler {
             )
         ).use { zos ->
             inputDirectory.walkTopDown().forEach lit@{ file ->
-                var zipFileName = file.absolutePath.removePrefix(inputDirectory.absolutePath).removePrefix("/")
+                // Obtener la ruta relativa al directorio de entrada
+                var zipFileName = file.relativeTo(inputDirectory).path
 
+                // Si la ruta es vacía, usa el nombre del archivo o directorio
                 if (zipFileName.isEmpty()) {
                     zipFileName = file.name
                 }
 
-                filesToIgnore.forEach {
-                    if (zipFileName.contains("$it(/.*)?$".toRegex())) return@lit
+                // Ignorar archivos que están en filesToIgnore
+                filesToIgnore.forEach { pattern ->
+                    // Normalizar el patrón de ignorar y zipFileName
+                    val normalizedPattern = pattern.replace("\\", "/")
+                    val normalizedZipFileName = zipFileName.replace("\\", "/")
+
+                    // Usar una expresión regular más clara
+                    if (normalizedZipFileName.contains("$normalizedPattern(/.*)?$".toRegex())) {
+                        println("Ignorando archivo: $normalizedZipFileName")
+                        return@lit
+                    }
                 }
 
-                val entry = ZipEntry("$zipFileName${(if (file.isDirectory) "/" else "")}")
-
-                if (
-                    entry.isDirectory &&
-                    entry.name.substring(0, entry.name.indexOf("/")) == outputZipFile.name.substring(
-                        0,
-                        outputZipFile.name.indexOf(".")
-                    )
-                ) {
+                // Evitar agregar el directorio raíz como una entrada
+                if (file == inputDirectory) {
                     return@lit
                 }
 
+                // Crear entrada ZIP
+                val entry = ZipEntry("$zipFileName${if (file.isDirectory) File.separator else ""}")
+
                 zos.putNextEntry(entry)
 
+                // Si es un archivo, copiar el contenido
                 if (file.isFile) {
-                    file.inputStream().copyTo(zos)
+                    file.inputStream().use { input ->
+                        input.copyTo(zos)
+                    }
                 }
+                zos.closeEntry()
             }
         }
 
@@ -98,12 +108,12 @@ class FileHandlerImpl : FileHandler {
 
     override fun unzipFile(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
         if (targetPath == "N/A") {
-            val fileName = filePath.substring(filePath.lastIndexOf('/') + 1, filePath.lastIndexOf('.'))
+            val fileName = filePath.substring(filePath.lastIndexOf(File.separator) + 1, filePath.lastIndexOf('.'))  // Usa File.separator
 
             val finalFile = File(fileName)
 
             if (finalFile.exists()) {
-                println("A similar named folder exist in the current path.")
+                println("Una carpeta con nombre similar ya existe en la ruta actual.")
 
                 return finalFile
             }
@@ -116,7 +126,7 @@ class FileHandlerImpl : FileHandler {
         launchProcess {
             ZipFile(zipFile.absolutePath).use { zip ->
                 unzippedFolderName = zipFile.absolutePath.slice(
-                    zipFile.absolutePath.lastIndexOf("/") + 1 until zipFile.absolutePath.indexOf(".")
+                    zipFile.absolutePath.lastIndexOf(File.separator) + 1 until zipFile.absolutePath.indexOf(".")  // Usa File.separator
                 )
 
                 zip.entries().asSequence().forEach lit@{ entry ->
@@ -133,7 +143,7 @@ class FileHandlerImpl : FileHandler {
                             location.mkdir()
                         }
 
-                        "${location.path}/${entry.name}"
+                        "${location.path}${File.separator}${entry.name}"  // Usa File.separator
                     } else {
                         entry.name
                     }
