@@ -3,6 +3,8 @@ package com.koupper.os
 import com.koupper.shared.getProperty
 import java.io.File
 
+val envs = mutableListOf<String>()
+
 fun env(variableName: String): String {
     if (System.getenv("GLOBAL_ENV_FILE") != null) {
         if (File(System.getenv("GLOBAL_ENV_FILE")).getProperty(variableName) === "undefined") {
@@ -25,6 +27,8 @@ fun env(variableName: String): String {
             throw Exception("The $variableName should be present in: an environment variable||an env file (.env) to use this provider")
         }
     }
+
+    envs.add(envValue)
 
     return envValue
 }

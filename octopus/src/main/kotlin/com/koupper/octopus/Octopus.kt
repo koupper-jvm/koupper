@@ -4,9 +4,9 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
 import com.koupper.configurations.utilities.ANSIColors.ANSI_WHITE
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
-import com.koupper.octopus.process.ModuleMaker
 import com.koupper.octopus.process.Process
-import com.koupper.octopus.routes.Route
+import com.koupper.octopus.modules.http.Route
+import com.koupper.octopus.process.ScriptProcessor
 import com.koupper.os.env
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
@@ -50,6 +50,8 @@ class Octopus(private var container: Container) : ScriptExecutor {
     override fun <T> run(sentence : String, params: Map<String, Any>, result: (value: T) -> Unit) {
         System.setProperty("kotlin.script.classpath", currentClassPath)
 
+        System.setProperty("idea.use.native.fs.for.win", "false")
+
         with(ScriptEngineManager().getEngineByExtension("kts")) {
             val endOfVariableNameInSentence = sentence.indexOf(":")
 
@@ -60,6 +62,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             when {
                 isContainerType(sentence) -> {
                     eval(sentence)
+
 
                     if (params.isEmpty()) {
                         val targetCallback = eval(valName) as (Container) -> T
@@ -77,11 +80,11 @@ class Octopus(private var container: Container) : ScriptExecutor {
                     if (params.isEmpty()) {
                         val targetCallback = eval(valName) as (Process) -> T
 
-                        result(targetCallback.invoke(ModuleMaker(container)))
+                        result(targetCallback.invoke(ScriptProcessor(container)))
                     } else {
                         val targetCallback = eval(valName) as (Process, Map<String, Any>) -> T
 
-                        result(targetCallback.invoke(ModuleMaker(container), params))
+                        result(targetCallback.invoke(ScriptProcessor(container), params))
                     }
                 }
                 isRoute(sentence) -> {
@@ -106,7 +109,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
     }
 
-    override fun <T> execute(
+    override fun <T> call(
         callable: (container: Container, params: Map<String, Any>) -> T,
         params: Map<String, Any>
     ): T {
@@ -119,7 +122,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
         val params = mutableMapOf<String, Any>()
 
         args.split(",").forEach { arg ->
-            val keyValue = arg.split(":")
+            val keyValue = arg.split("=")
 
             val key = keyValue[0]
 
@@ -189,13 +192,25 @@ fun main(args: Array<String>) {
     if (args.isNotEmpty() && args[0] == "UPDATING_CHECK") {
         checkForUpdates()
     } else {
-        var params = ""
+        var parameters : String
+        var scriptPath : String
 
-        if (args.size > 1) params = args[1]
+        val fileHandler = app.createInstanceOf(TextFileHandler::class)
 
-        val scriptPath = args[0]
+        try {
+            val content = fileHandler.using(System.getProperty("user.home") + File.separator + ".koupper" + File.separator + "helpers" + File.separator + "octopus-parameters.txt").read()
 
-        processManager.runFromScriptFile(scriptPath, params) { result: Any ->
+            parameters = content.substring(content.indexOf(".kts ") + 5)
+
+            scriptPath = content.substring(0, content.indexOf(".kts ") + 5)
+        } catch (e: FileNotFoundException) {
+            println("Parameters are necessary for Koupper functionality" +  e)
+            exitProcess(0)
+        } finally {
+            fileHandler.remove()
+        }
+
+        processManager.runFromScriptFile(scriptPath, parameters) { result: Any ->
             processCallback(processManager, scriptPath, result)
         }
     }
@@ -210,13 +225,13 @@ fun checkForUpdates(): Boolean {
         url = checkForUpdateUrl
     }
 
-    val textJsonParser = app.createInstanceOf(JSONFileHandler::class) as JSONFileHandlerImpl<*>
+    data class Versioning(val statusCode: String, val body: String)
+
+    val textJsonParser = app.createInstanceOf(JsonFileHandler::class) as JsonFileHandlerImpl<Versioning>
 
     textJsonParser.read(response?.asString()!!)
 
-    data class Versioning(val statusCode: String, val body: String)
-
-    val versioning = textJsonParser.toType() as Versioning
+    val versioning: Versioning = textJsonParser.toType()
 
     textJsonParser.read(versioning.body)
 
@@ -242,6 +257,8 @@ private fun processCallback(context: ScriptExecutor, scriptName: String, result:
         println("\nscript [$scriptName] ->\u001B[38;5;155m was executed.\u001B[0m")
     } else if (result is Process) {
         println("\r${ANSI_GREEN_155}📦 module ${ANSI_WHITE}${result.processName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
+    } else {
+        println(result)
     }
 }
 

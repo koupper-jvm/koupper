@@ -8,6 +8,7 @@ class FileServiceProvider : ServiceProvider() {
         this.registerFileHandler()
         this.registerTextFileHandler()
         this.registerJsonFileHandler()
+        this.registerYmlFileHandler()
     }
 
     private fun registerFileHandler() {
@@ -21,8 +22,14 @@ class FileServiceProvider : ServiceProvider() {
     }
 
     private fun registerJsonFileHandler() {
-        app.bind(JSONFileHandler::class, {
-            JSONFileHandlerImpl<Any>()
+        app.bind(JsonFileHandler::class, {
+            JsonFileHandlerImpl<Any>()
+        })
+    }
+
+    private fun registerYmlFileHandler() {
+        app.bind(YmlFileHandler::class, {
+            YmlFileHandlerImpl()
         })
     }
 }

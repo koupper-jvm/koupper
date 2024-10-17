@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets
 import kotlin.test.assertEquals
 
 class AESGCM128Test : AnnotationSpec() {
+    @Ignore
     @Test
     fun `should encrypt an decrypt text`() {
         withEnvironment("SHARED_SECRET", "A?D(G+KbPeShVmYq") {

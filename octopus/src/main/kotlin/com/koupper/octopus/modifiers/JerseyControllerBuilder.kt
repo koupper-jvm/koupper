@@ -1,4 +1,4 @@
-package com.koupper.octopus.routes
+package com.koupper.octopus.modifiers
 
 import com.koupper.octopus.toCamelCase
 import com.koupper.providers.files.TextFileHandlerImpl
@@ -34,18 +34,18 @@ data class Method(
     var body: KClass<*>? = null
 )
 
-class JerseyControllerBuilder private constructor(
-    private val location: String,
-    private val path: String,
-    private val controllerConsumes: List<String> = emptyList(),
-    private val controllerProduces: List<String> = emptyList(),
-    private val controllerName: String = Property.UNDEFINED.name,
-    private val packageName: String = Property.UNDEFINED.name,
-    private val methods: MutableList<Method> = mutableListOf()
+open class JerseyControllerBuilder protected constructor(
+    protected val location: String,
+    protected val path: String,
+    protected val controllerConsumes: List<String> = emptyList(),
+    protected val controllerProduces: List<String> = emptyList(),
+    protected val controllerName: String = Property.UNDEFINED.name,
+    protected val packageName: String = Property.UNDEFINED.name,
+    protected val methods: MutableList<Method> = mutableListOf()
 ) {
-    private val textFileHandler = TextFileHandlerImpl()
-    private val finalCustomController = StringBuilder()
-    private val spaces = String.format("%-4s", " ")
+    protected val textFileHandler = TextFileHandlerImpl()
+    protected val finalCustomController = StringBuilder()
+    protected val spaces = String.format("%-4s", " ")
 
     private constructor(builder: Builder) : this(
         "${builder.location}/src/main/kotlin/${builder.packageName.replace(".", "/")}/controllers/ModelController.kt",
@@ -62,7 +62,7 @@ class JerseyControllerBuilder private constructor(
             Builder(location).apply(block).build()
     }
 
-    fun build() {
+    open fun build() {
         this.textFileHandler.using(this.location)
         this.addPackage()
         this.addImports()
@@ -113,33 +113,32 @@ class JerseyControllerBuilder private constructor(
         bufferedWriter.close()
     }
 
-    private fun addPackage() {
-        this.finalCustomController.append(this.textFileHandler.getContentForLine(1)).appendLine("\n")
+    protected open fun addPackage() {
+        this.finalCustomController.append("package ${packageName}.controllers").appendLine("\n")
     }
 
-    private fun addImports() {
-        val imports = this.textFileHandler.getNumberLinesFor("import")
-
-        val scripts = StringBuilder()
+    protected open fun addImports() {
+        val importsFromTargetController = StringBuilder()
 
         this.methods.forEach { item ->
-            val scriptImport = "import ${packageName}.scripts.${this.changeScriptName(item.script)}"
+            val scriptImport = "import ${packageName}.extensions.${this.changeScriptName(item.script)}"
 
-            if (!scripts.contains(scriptImport)) {
-                scripts.append(scriptImport).appendLine()
+            if (!importsFromTargetController.contains(scriptImport)) {
+                importsFromTargetController.append(scriptImport).appendLine()
             }
         }
 
-        if (scripts.isNotEmpty()) {
-            scripts.deleteCharAt(scripts.length - 1)
+        if (importsFromTargetController.isNotEmpty()) {
+            importsFromTargetController.deleteCharAt(importsFromTargetController.length - 1)
         }
+
+        val imports = this.textFileHandler.getNumberLinesFor("import")
 
         imports.forEach {
             var lineContent = this.textFileHandler.getContentForLine(it)
 
-            if (lineContent == "import io.mp.scripts.script" && scripts.isNotEmpty()) {
-                lineContent = lineContent.replace("import io.mp.scripts.script", scripts.toString())
-                print(lineContent)
+            if (lineContent == "import $packageName.extensions.script" && importsFromTargetController.isNotEmpty()) {
+                lineContent = lineContent.replace("import $packageName.extensions.script", importsFromTargetController.toString())
             }
 
             this.finalCustomController.append(lineContent).appendLine()
@@ -148,17 +147,17 @@ class JerseyControllerBuilder private constructor(
         this.finalCustomController.appendLine()
     }
 
-    private fun changeScriptName(scriptName: String): String {
+    protected open fun changeScriptName(scriptName: String): String {
         return if (scriptName.contains("-")) scriptName.substring(0, scriptName.indexOf("-")) + scriptName.substring(
             scriptName.indexOf("-") + 1
         ).replaceFirstChar { it.uppercase() } else scriptName
     }
 
-    private fun addControllerPath() {
-        this.finalCustomController.append("@Path(\"${this.path}\")").appendLine()
+    protected open fun addControllerPath() {
+        this.finalCustomController.append(if (this.path.isNotEmpty()) "@Path(\"${this.path}\")" else "@Path").appendLine()
     }
 
-    private fun addControllerProduces() {
+    protected open fun addControllerProduces() {
         val produces = StringBuilder()
 
         this.controllerProduces.forEachIndexed { index, produce ->
@@ -172,13 +171,13 @@ class JerseyControllerBuilder private constructor(
         this.finalCustomController.append("@Produces($produces)").appendLine()
     }
 
-    private fun addClassDefinition() {
+    protected open fun addClassDefinition() {
         val classDeclaration = "class ${this.controllerName} {"
 
         this.finalCustomController.append(classDeclaration).appendLine()
     }
 
-    private fun addMethodAction(method: Action) {
+    protected open fun addMethodAction(method: Action) {
         if (method == Action.POST) {
             this.finalCustomController.append("$spaces@POST").appendLine()
         }
@@ -196,21 +195,21 @@ class JerseyControllerBuilder private constructor(
         }
     }
 
-    private fun addMethodPath(path: String) {
+    protected open fun addMethodPath(path: String) {
         this.finalCustomController.append("$spaces@Path(\"$path\")").appendLine()
     }
 
-    private fun addConsumesPath(consumes: List<String>) {
+    protected open fun addConsumesPath(consumes: List<String>) {
         this.finalCustomController.append("$spaces@Consumes(${this.buildMethodAnnotationParameters(consumes)})")
             .appendLine()
     }
 
-    private fun addMethodProduces(produces: List<String>) {
+    protected open fun addMethodProduces(produces: List<String>) {
         this.finalCustomController.append("$spaces@Produces(${this.buildMethodAnnotationParameters(produces)})")
             .appendLine()
     }
 
-    private fun buildMethodAnnotationParameters(parameters: List<String>): StringBuilder {
+    protected open fun buildMethodAnnotationParameters(parameters: List<String>): StringBuilder {
         val finalParameters = StringBuilder()
 
         parameters.forEachIndexed { index, parameter ->
@@ -224,11 +223,11 @@ class JerseyControllerBuilder private constructor(
         return finalParameters
     }
 
-    private fun addMethodOpening(name: String) {
+    protected open fun addMethodOpening(name: String) {
         this.finalCustomController.append("${spaces}fun $name(").appendLine()
     }
 
-    private fun addMethodParameters(method: Method) {
+    protected open fun addMethodParameters(method: Method) {
         if (this.isElegibleForBeanCreation(method)) {
             this.finalCustomController.append("$spaces$spaces@BeanParam inputBean: ${this.getDataClassName()}, ")
                 .appendLine()
@@ -275,7 +274,7 @@ class JerseyControllerBuilder private constructor(
         }
     }
 
-    private fun isElegibleForBeanCreation(method: Method): Boolean {
+    protected open fun isElegibleForBeanCreation(method: Method): Boolean {
         return method.queryParams.isNotEmpty() &&
                 method.matrixParams.isNotEmpty() &&
                 method.headerParams.isNotEmpty() &&
@@ -284,7 +283,7 @@ class JerseyControllerBuilder private constructor(
                 "\\{\\w+}".toRegex().findAll(method.path).toList().isNotEmpty()
     }
 
-    private fun buildPathParams(pathParams: List<MatchResult>) {
+    protected open fun buildPathParams(pathParams: List<MatchResult>) {
         pathParams.forEach { pathParam ->
             val param = pathParam.value.replace("{", "").replace("}", "")
 
@@ -292,46 +291,46 @@ class JerseyControllerBuilder private constructor(
         }
     }
 
-    private fun buildQueryParams(queryParams: Map<String, KClass<*>>) {
+    protected open fun buildQueryParams(queryParams: Map<String, KClass<*>>) {
         queryParams.forEach { queryParam ->
             this.finalCustomController.append("$spaces$spaces@QueryParam(\"${queryParam.key}\") ${queryParam.key}: ${queryParam.value.simpleName}, ")
                 .appendLine()
         }
     }
 
-    private fun buildMatrixParams(matrixParams: Map<String, KClass<*>>) {
+    protected open fun buildMatrixParams(matrixParams: Map<String, KClass<*>>) {
         matrixParams.forEach { matrixParam ->
             this.finalCustomController.append("$spaces$spaces@MatrixParam(\"${matrixParam.key}\") ${matrixParam.key}: ${matrixParam.value.simpleName}, ")
                 .appendLine()
         }
     }
 
-    private fun buildHeaderParams(headerParams: Map<String, KClass<*>>) {
+    protected open fun buildHeaderParams(headerParams: Map<String, KClass<*>>) {
         headerParams.forEach { headerParam ->
             this.finalCustomController.append("$spaces$spaces@HeaderParam(\"${headerParam.key}\") ${headerParam.key}: ${headerParam.value.simpleName}, ")
                 .appendLine()
         }
     }
 
-    private fun buildCookieParams(cookieParams: Map<String, KClass<*>>) {
+    protected open fun buildCookieParams(cookieParams: Map<String, KClass<*>>) {
         cookieParams.forEach { cookieParam ->
             this.finalCustomController.append("$spaces$spaces@CookieParam(\"${cookieParam.key}\") ${cookieParam.key}: ${cookieParam.value.simpleName}, ")
                 .appendLine()
         }
     }
 
-    private fun buildFormParams(formParams: Map<String, KClass<*>>) {
+    protected open fun buildFormParams(formParams: Map<String, KClass<*>>) {
         formParams.forEach { formParam ->
             this.finalCustomController.append("$spaces$spaces@FormParam(\"${formParam.key}\") ${formParam.key}: ${formParam.value.simpleName}, ")
                 .appendLine()
         }
     }
 
-    private fun addMethodClosing(responseClass: KClass<*>) {
+    protected open fun addMethodClosing(responseClass: KClass<*>) {
         this.finalCustomController.append("\n${spaces}): Any {".replace("Any", responseClass.simpleName!!)).appendLine()
     }
 
-    private fun addMethodBody(method: Method) {
+    protected open fun addMethodBody(method: Method) {
         val returnStructure = StringBuilder()
 
         if (this.isElegibleForBeanCreation(method)) {
@@ -371,7 +370,7 @@ class JerseyControllerBuilder private constructor(
         }
 
         this.finalCustomController.append(
-            "${spaces}${spaces}return executor.execute(\n${spaces}${spaces}${spaces}${
+            "${spaces}${spaces}return executor.call(\n${spaces}${spaces}${spaces}${
                 this.changeScriptName(
                     method.script
                 )
@@ -379,7 +378,7 @@ class JerseyControllerBuilder private constructor(
         )
     }
 
-    private fun addDataClasses(method: Method) {
+    protected open fun addDataClasses(method: Method) {
         if (this.isElegibleForBeanCreation(method)) {
             this.locateDataClass(this.buildBeanDataClass(method))
         }
@@ -393,7 +392,7 @@ class JerseyControllerBuilder private constructor(
         }
     }
 
-    private fun buildDataClass(dataClass: KClass<*>): StringBuilder {
+    protected open fun buildDataClass(dataClass: KClass<*>): StringBuilder {
         val dataClassParams = StringBuilder()
 
         dataClass.memberProperties.forEach {
@@ -407,7 +406,7 @@ class JerseyControllerBuilder private constructor(
         return StringBuilder("data class ${dataClass.simpleName!!}(${dataClassParams})").appendLine()
     }
 
-    private fun buildBeanDataClass(method: Method): StringBuilder {
+    protected open fun buildBeanDataClass(method: Method): StringBuilder {
         val pathParams = "\\{\\w+}".toRegex().findAll(method.path).toList()
 
         val inputs = StringBuilder()
@@ -452,7 +451,7 @@ class JerseyControllerBuilder private constructor(
         return StringBuilder("data class ${this.getDataClassName()}($inputs)").appendLine()
     }
 
-    private fun getDataClassName(): String {
+    protected open fun getDataClassName(): String {
         var dataClassName = "InputBean"
 
         while (this.finalCustomController.contains("data class $dataClassName")) {
@@ -466,7 +465,7 @@ class JerseyControllerBuilder private constructor(
         return dataClassName
     }
 
-    private fun locateDataClass(dataClassBlock: StringBuilder) {
+    protected open fun locateDataClass(dataClassBlock: StringBuilder) {
         this.finalCustomController.insert(
             this.finalCustomController.indexOf("@Path(\"${this.path}\")") - 1,
             "\n$dataClassBlock"

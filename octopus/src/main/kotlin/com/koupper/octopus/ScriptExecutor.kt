@@ -46,10 +46,10 @@ interface ScriptExecutor {
     fun <T> run(sentence: String, params: Map<String, Any> = emptyMap(), result: (value: T) -> Unit)
 
     /**
-     * Execute a callback function
+     * call a  function
      *
-     * @param callable the script sentence
-     * @param params the script params
+     * @param callable the function
+     * @param params the params
      */
-    fun <T> execute(callable: (container: Container, params: Map<String, Any>) -> T, params: Map<String, Any>): T
+    fun <T> call(callable: (container: Container, params: Map<String, Any>) -> T, params: Map<String, Any>): T
 }

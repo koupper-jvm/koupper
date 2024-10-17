@@ -1,15 +1,11 @@
-package com.koupper.octopus.routes
+package com.koupper.octopus.modules.http
 
 import com.koupper.container.interfaces.Container
+import com.koupper.octopus.modifiers.DeploymentConfigurator
+import com.koupper.octopus.modules.http.service.GrizzlyGradleJerseyBuilder
 import com.koupper.os.env
-import com.koupper.providers.files.FileHandlerImpl
 import java.io.File
 import kotlin.reflect.KClass
-
-enum class Type {
-    JERSEY,
-    KTOR,
-}
 
 sealed interface RouteDefinition {
     fun path(path: () -> String)
@@ -46,10 +42,9 @@ sealed interface RouteDefinition {
     fun putMethods(): MutableList<RouteDefinition>
     fun delete(route: Delete.() -> Unit)
     fun deleteMethods(): MutableList<RouteDefinition>
-    fun registerRouters(route: RouteDefinition.() -> Unit): RouteDefinition
-    fun setup(config: ProjectBuilder.() -> Unit): RouteDefinition
-    fun deployOn(config: DeploymentBuilder.() -> Unit): RouteDefinition
-    fun build()
+    fun registerRouter(route: RouteDefinition.() -> Unit): RouteDefinition
+    fun setup(config: GrizzlyGradleJerseyBuilder.Builder.() -> Unit): RouteDefinition
+    fun deployOn(config: DeploymentConfigurator.Builder.() -> Unit): RouteDefinition
     fun stop()
 }
 
@@ -74,9 +69,9 @@ open class Route(private val container: Container) : RouteDefinition {
     private var getMethods: MutableList<RouteDefinition> = mutableListOf()
     private var putMethods: MutableList<RouteDefinition> = mutableListOf()
     private var deleteMethods: MutableList<RouteDefinition> = mutableListOf()
-    private var projectBuilder: ProjectBuilder? = null
-    private var deploymentBuilder: DeploymentBuilder? = null
     private var location: String = modelProject.path
+    private var port: String = "8000"
+    private var rootURL: String = ""
 
     init {
         File(location).delete()
@@ -192,50 +187,22 @@ open class Route(private val container: Container) : RouteDefinition {
 
     override fun deleteMethods() = this.deleteMethods
 
-    override fun registerRouters(route: RouteDefinition.() -> Unit): RouteDefinition {
+    override fun registerRouter(route: RouteDefinition.() -> Unit): RouteDefinition {
         route()
 
         return this
     }
 
-    override fun setup(config: ProjectBuilder.() -> Unit): RouteDefinition {
-        val self = this
-
-        this.projectBuilder = ProjectBuilder.build(this.location, this.container) {
-            routeDefinition = self
-        }.apply(config)
+    override fun setup(config: GrizzlyGradleJerseyBuilder.Builder.() -> Unit): RouteDefinition {
+        GrizzlyGradleJerseyBuilder.build(config)
 
         return this
     }
 
-    override fun deployOn(config: DeploymentBuilder.() -> Unit): RouteDefinition {
-        this.deploymentBuilder = DeploymentBuilder.build(this.location, this.container) {}.apply(config)
+    override fun deployOn(config: DeploymentConfigurator.Builder.() -> Unit): RouteDefinition {
+        DeploymentConfigurator.configure(config)
 
         return this
-    }
-
-    override fun build() {
-        val self = this
-
-        if (this.projectBuilder == null) {
-            print("Creating gradle [undefined] project version: 1.0.0.")
-
-            this.projectBuilder = ProjectBuilder.build(this.location, this.container) {
-                version = projectBuilder!!.version
-                this.routeDefinition = self
-            }
-        }
-
-        this.projectBuilder?.build()
-
-        if (this.deploymentBuilder != null) {
-            this.deploymentBuilder!!.apply {
-                packageName = projectBuilder!!.packageName
-                projectName = projectBuilder!!.name
-                version = projectBuilder!!.version
-            }
-            this.deploymentBuilder?.build()
-        }
     }
 
     override fun stop() {

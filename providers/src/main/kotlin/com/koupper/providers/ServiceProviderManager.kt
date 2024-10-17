@@ -1,5 +1,6 @@
 package com.koupper.providers
 
+import com.koupper.providers.aws.dynamo.AwsServiceProvider
 import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBServiceProvider
 import com.koupper.providers.files.FileServiceProvider
@@ -47,6 +48,7 @@ class ServiceProviderManager {
             FileServiceProvider::class,
             JWTServiceProvider::class,
             CryptoServiceProvider::class,
+            AwsServiceProvider::class
         )
     }
 }

@@ -8,8 +8,9 @@ interface TextFileHandler {
      * Uses a file as global file for all operations on this class.
      *
      * @property filePath the resource file path.
+     * @return the object implementation.
      */
-    fun using(filePath: String = "undefined")
+    fun using(filePath: String = "undefined"): TextFileHandler
 
     /**
      * Reads the content of a file from a path. The file path might be a resource, http or local storages.
@@ -177,4 +178,9 @@ interface TextFileHandler {
      * @return The binding content.
      */
     fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder
+
+    /**
+     * Remove the global file.
+     */
+    fun remove(): Boolean
 }

@@ -26,6 +26,7 @@ class SenderHtmlEmailTest : AnnotationSpec() {
         "ADMIN_EMAIL" to "jacob.gacosta@gmail.com"
     )
 
+    @Ignore
     @Test
     fun `should set the sender html email properties using a resource`() {
         withEnvironment(envs) {

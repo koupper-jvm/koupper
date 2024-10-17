@@ -1,24 +1,31 @@
-package com.koupper.octopus.process.deployment
+package com.koupper.octopus.process
 
 import com.koupper.container.interfaces.Container
-import com.koupper.octopus.process.Process
 import org.gradle.tooling.GradleConnector
 import java.io.*
 
 
-class GradleDeployerJarFile(private val container: Container) : Process {
-    override lateinit var name: String
-    override var metadata: MutableMap<String, Any> = mutableMapOf()
-    override lateinit var moduleType: String
-    override lateinit var location: String
-    override lateinit var version: String
+class LocalAWSDeployer(private val container: Container) : Process {
+    lateinit var name: String
+    private var metadata: MutableMap<String, Any> = mutableMapOf()
+    lateinit var moduleType: String
+    lateinit var version: String
+    lateinit var packageName: String
+    lateinit var scripts: MutableList<String>
 
-    override fun register(name: String, metadata: Map<String, Any>): Process {
+    override fun register(name: String,
+                          metadata: MutableMap<String, Any>,
+                          moduleType: String,
+                          version: String,
+                          packageName: String,
+                          scripts: MutableList<String>
+    ) : Process {
         this.name = name
-        this.metadata.putAll(metadata)
-        this.moduleType = this.metadata["moduleType"] as String
-        this.location = this.metadata["location"] as String
-        this.version = this.metadata["version"] as String
+        this.metadata = metadata
+        this.moduleType = moduleType
+        this.version = version
+        this.packageName = packageName
+        this.scripts = scripts
 
         return this
     }

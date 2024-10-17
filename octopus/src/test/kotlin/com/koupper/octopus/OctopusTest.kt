@@ -4,23 +4,13 @@ import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.interfaces.Container
 import com.koupper.container.KoupperContainer
 import com.koupper.container.app
-import com.koupper.octopus.routes.ProjectType
-import com.koupper.octopus.routes.Route
-import com.koupper.octopus.routes.Type
-import com.koupper.providers.crypto.Crypt0
+import com.koupper.octopus.modules.http.Route
 import com.koupper.providers.crypto.CryptoServiceProvider
-import com.koupper.providers.db.DBConnector
-import com.koupper.providers.db.DBPSQLConnector
 import com.koupper.providers.db.DBServiceProvider
 import com.koupper.providers.files.*
-import com.koupper.providers.http.HtppClient
 import com.koupper.providers.http.HttpServiceProvider
-import com.koupper.providers.jwt.JWT
 import com.koupper.providers.jwt.JWTServiceProvider
-import com.koupper.providers.logger.Logger
 import com.koupper.providers.logger.LoggerServiceProvider
-import com.koupper.providers.mailing.Sender
-import com.koupper.providers.mailing.SenderHtmlEmail
 import com.koupper.providers.mailing.SenderServiceProvider
 import io.kotest.extensions.system.withEnvironment
 import io.mockk.every
@@ -134,7 +124,7 @@ class OctopusTest : AnnotationSpec() {
         }
 
         withEnvironment(envs) {
-            Route(this.container).registerRouters {
+            Route(this.container).registerRouter {
                 path { "post" }
                 controllerName { "PostController" }
 
@@ -153,12 +143,10 @@ class OctopusTest : AnnotationSpec() {
                 port = 8080
                 rootUrl = "example"
             }.setup {
-                name = "hello"
-                type = Type.JERSEY
-                buildingTool = ProjectType.GRADLE
+                projectName = "hello"
                 version = "2.0.1"
                 packageName = "io.example"
-            }.build()
+            }
         }
     }
 }

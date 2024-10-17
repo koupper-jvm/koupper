@@ -7,12 +7,13 @@ allprojects {
     repositories {
         mavenCentral()
         maven { url 'https://repo.gradle.org/gradle/libs-releases' }
+        maven { url 'https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev' }
     }
     test {
         useJUnitPlatform()
     }
     dependencies {
-        implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.6.0'
+        implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.0.20'
     }
 }
 
@@ -26,6 +27,7 @@ def coroutinesVersion = '1.6.0'
 def vertxVersion = '4.1.1'
 def jacksonVersion = '2.13.0'
 def slf4jVersion = '1.7.32'
+def kotlinScriptUtil = '1.6.0'
 
 subprojects {
     group = 'com.koupper'
@@ -43,7 +45,9 @@ subprojects {
     dependencies {
         testImplementation "org.jetbrains.kotlin:kotlin-test"
         testImplementation "org.jetbrains.kotlin:kotlin-test-junit:1.4.30"
-        testImplementation "io.kotest:kotest-runner-junit5:$kotestVersion"
+        testImplementation("io.kotest:kotest-runner-junit5:$kotestVersion") {
+            exclude group: "org.jetbrains.kotlin", module: "kotlin-script-util"
+        }
         testImplementation "io.kotest:kotest-assertions-core:$kotestVersion"
         testImplementation "io.mockk:mockk:$mockkVersion"
     }
@@ -78,7 +82,7 @@ project(':octopus') {
         implementation project(':configurations')
         implementation project(':os')
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
-        implementation "org.jetbrains.kotlin:kotlin-script-util"
+        implementation "org.jetbrains.kotlin:kotlin-script-util:1.8.22"
         implementation "org.jetbrains.kotlin:kotlin-script-runtime"
         implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:$kotlinVersion"
         implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:$kotlinVersion"
@@ -107,11 +111,22 @@ project(':providers') {
         implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion"
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
         implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
+        implementation "software.amazon.awssdk:dynamodb:2.28.9"
+        implementation "software.amazon.awssdk:aws-core:2.28.9"
+        implementation "software.amazon.awssdk:utils:2.28.9"
+        implementation "org.yaml:snakeyaml:2.3"
+    }
+}
+
+project(':shared') {
+    dependencies {
+        implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
     }
 }
 
 project(':os') {
     dependencies {
         implementation project(':shared')
+        implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
     }
 }

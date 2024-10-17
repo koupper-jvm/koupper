@@ -11,9 +11,11 @@ class TextFileHandlerImpl : TextFileHandler {
     private var globalFilePath: String = "undefined"
     private lateinit var globalTargetFile: File
 
-    override fun using(filePath: String) {
+    override fun using(filePath: String) : TextFileHandler {
         this.globalFilePath = filePath
         this.globalTargetFile = this.fileHandler.load(this.globalFilePath)
+
+        return this
     }
 
     override fun getNumberLineFor(contentToFind: String, filePath: String): Int {
@@ -284,6 +286,10 @@ class TextFileHandlerImpl : TextFileHandler {
         }
 
         return content
+    }
+
+    override fun remove(): Boolean {
+        return globalTargetFile.delete()
     }
 
     private fun getRangeOfOccurrence(
