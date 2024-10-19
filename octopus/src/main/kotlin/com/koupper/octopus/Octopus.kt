@@ -192,8 +192,8 @@ fun main(args: Array<String>) {
     if (args.isNotEmpty() && args[0] == "UPDATING_CHECK") {
         checkForUpdates()
     } else {
-        var parameters : String
-        var scriptPath : String
+        val parameters : String
+        val scriptPath : String
 
         val fileHandler = app.createInstanceOf(TextFileHandler::class)
 
@@ -207,7 +207,7 @@ fun main(args: Array<String>) {
             println("Parameters are necessary for Koupper functionality" +  e)
             exitProcess(0)
         } finally {
-            fileHandler.remove()
+            //fileHandler.remove()
         }
 
         processManager.runFromScriptFile(scriptPath, parameters) { result: Any ->

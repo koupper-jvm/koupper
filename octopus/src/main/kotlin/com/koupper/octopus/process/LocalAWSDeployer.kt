@@ -11,14 +11,14 @@ class LocalAWSDeployer(private val container: Container) : Process {
     lateinit var moduleType: String
     lateinit var version: String
     lateinit var packageName: String
-    lateinit var scripts: MutableList<String>
+    lateinit var scripts: Map<String, String>
 
     override fun register(name: String,
                           metadata: MutableMap<String, Any>,
                           moduleType: String,
                           version: String,
                           packageName: String,
-                          scripts: MutableList<String>
+                          scripts: Map<String, String>
     ) : Process {
         this.name = name
         this.metadata = metadata

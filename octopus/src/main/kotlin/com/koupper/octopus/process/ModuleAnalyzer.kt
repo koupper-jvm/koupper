@@ -7,7 +7,7 @@ class ModuleAnalyzer : Process {
         moduleType: String,
         version: String,
         packageName: String,
-        scripts: MutableList<String>
+        scripts: Map<String, String>
     ): Process {
         TODO("Not yet implemented")
     }

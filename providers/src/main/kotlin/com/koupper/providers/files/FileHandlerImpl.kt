@@ -37,7 +37,7 @@ class FileHandlerImpl : FileHandler {
         return when {
             checkByPathType(filePath) === PathType.URL -> downloadFile(
                 URL(filePath),
-                filePath.substring(filePath.lastIndexOf(File.separator) + 1)  // Usa File.separator
+                filePath.substring(filePath.lastIndexOf("/") + 1)  // Usa File.separator
             )
             checkByPathType(filePath) === PathType.RESOURCE -> File(
                 FileHandlerImpl::class.java.classLoader.getResource(
@@ -54,51 +54,36 @@ class FileHandlerImpl : FileHandler {
 
     override fun zipFile(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
         val inputDirectory = this.load(filePath)
-        val outputZipFile = File("${inputDirectory.name}.zip")
 
-        ZipOutputStream(
-            BufferedOutputStream(
-                FileOutputStream(outputZipFile)
-            )
-        ).use { zos ->
-            inputDirectory.walkTopDown().forEach lit@{ file ->
-                // Obtener la ruta relativa al directorio de entrada
-                var zipFileName = file.relativeTo(inputDirectory).path
+        val outputZipFile = if (targetPath == "N/A") {
+            val fileName = "${inputDirectory.name}.zip"
+            val finalFile = File(fileName)
+            if (finalFile.exists()) return finalFile
+            finalFile
+        } else {
+            File(targetPath, "${inputDirectory.name}.zip")
+        }
 
-                // Si la ruta es vacía, usa el nombre del archivo o directorio
-                if (zipFileName.isEmpty()) {
-                    zipFileName = file.name
-                }
+        val ignoreSet = filesToIgnore.toSet()
 
-                // Ignorar archivos que están en filesToIgnore
-                filesToIgnore.forEach { pattern ->
-                    // Normalizar el patrón de ignorar y zipFileName
-                    val normalizedPattern = pattern.replace("\\", "/")
-                    val normalizedZipFileName = zipFileName.replace("\\", "/")
+        ZipOutputStream(BufferedOutputStream(FileOutputStream(outputZipFile))).use { zos ->
+            inputDirectory.walkTopDown().forEach { file ->
+                val zipFileName = file.relativeTo(inputDirectory).path.replace("\\", "/")
 
-                    // Usar una expresión regular más clara
-                    if (normalizedZipFileName.contains("$normalizedPattern(/.*)?$".toRegex())) {
-                        println("Ignorando archivo: $normalizedZipFileName")
-                        return@lit
-                    }
-                }
+                val isRootFileToIgnore = ignoreSet.contains(zipFileName)
+                val isInIgnoredDirectory = ignoreSet.any { ignorePath -> zipFileName.startsWith("$ignorePath/") }
 
-                // Evitar agregar el directorio raíz como una entrada
-                if (file == inputDirectory) {
-                    return@lit
-                }
+                if (isRootFileToIgnore || isInIgnoredDirectory) return@forEach
 
-                // Crear entrada ZIP
-                val entry = ZipEntry("$zipFileName${if (file.isDirectory) File.separator else ""}")
+                if (file == inputDirectory) return@forEach
 
+                val entry = ZipEntry(zipFileName + if (file.isDirectory) "/" else "")
                 zos.putNextEntry(entry)
 
-                // Si es un archivo, copiar el contenido
                 if (file.isFile) {
-                    file.inputStream().use { input ->
-                        input.copyTo(zos)
-                    }
+                    file.inputStream().use { input -> input.copyTo(zos) }
                 }
+
                 zos.closeEntry()
             }
         }
@@ -107,61 +92,47 @@ class FileHandlerImpl : FileHandler {
     }
 
     override fun unzipFile(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
-        if (targetPath == "N/A") {
-            val fileName = filePath.substring(filePath.lastIndexOf(File.separator) + 1, filePath.lastIndexOf('.'))  // Usa File.separator
+        val normalizedFilePath = filePath.replace("\\", "/")
+        val ignoreSet = filesToIgnore.map { it.replace("\\", "/") }.toSet()
 
-            val finalFile = File(fileName)
+        val zipFile = this.load(normalizedFilePath)
 
-            if (finalFile.exists()) {
-                println("Una carpeta con nombre similar ya existe en la ruta actual.")
-
-                return finalFile
-            }
+        val unzippedFolderName = if (targetPath == "N/A") {
+            normalizedFilePath.substring(normalizedFilePath.lastIndexOf("/") + 1, normalizedFilePath.lastIndexOf('.'))
+        } else {
+            targetPath
         }
 
-        var unzippedFolderName: String? = null
+        val targetDirectory = File(unzippedFolderName)
+        if (!targetDirectory.exists()) {
+            targetDirectory.mkdirs()
+        }
 
-        val zipFile = this.load(filePath)
+        ZipFile(zipFile.absolutePath).use { zip ->
+            zip.entries().asSequence().forEach { entry ->
+                val entryPath = entry.name.replace("\\", "/")
 
-        launchProcess {
-            ZipFile(zipFile.absolutePath).use { zip ->
-                unzippedFolderName = zipFile.absolutePath.slice(
-                    zipFile.absolutePath.lastIndexOf(File.separator) + 1 until zipFile.absolutePath.indexOf(".")  // Usa File.separator
-                )
+                val isIgnoredInRoot = entryPath == filesToIgnore.find { it == entryPath }
+                val isIgnoredInSubDir = ignoreSet.any { ignoreItem -> entryPath.startsWith("$ignoreItem/") }
 
-                zip.entries().asSequence().forEach lit@{ entry ->
-                    filesToIgnore.forEach filesToIgnore@{
-                        if (it.contains(entry.name)) return@filesToIgnore
-                    }
+                if (isIgnoredInRoot || isIgnoredInSubDir) return@forEach
 
-                    var directoryLocation = unzippedFolderName
+                val entryDestination = File(targetDirectory, entryPath)
 
-                    directoryLocation = if (directoryLocation!!.isNotEmpty()) {
-                        val location = File(directoryLocation)
-
-                        if (!location.exists()) {
-                            location.mkdir()
-                        }
-
-                        "${location.path}${File.separator}${entry.name}"  // Usa File.separator
-                    } else {
-                        entry.name
-                    }
-
-                    if (entry.isDirectory) {
-                        File(directoryLocation).mkdir()
-                    } else {
-                        zip.getInputStream(entry).use { input ->
-                            File(directoryLocation).outputStream().use { output ->
-                                input.copyTo(output)
-                            }
+                if (entry.isDirectory) {
+                    entryDestination.mkdirs()
+                } else {
+                    entryDestination.parentFile.mkdirs()
+                    zip.getInputStream(entry).use { input ->
+                        entryDestination.outputStream().use { output ->
+                            input.copyTo(output)
                         }
                     }
                 }
             }
-        }.join()
+        }
 
-        return File(unzippedFolderName)
+        return targetDirectory
     }
 
     override fun signFile(filePath: String, metadata: Map<String, String>): File {

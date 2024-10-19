@@ -31,14 +31,14 @@ class ScriptProcessor(val container: Container) : Process {
     private lateinit var moduleType: String
     private lateinit var version: String
     private lateinit var packageName: String
-    private lateinit var scripts: MutableList<String>
+    private lateinit var scripts: Map<String, String>
 
     override fun register(name: String,
                           metadata: MutableMap<String, Any>,
                           moduleType: String,
                           version: String,
                           packageName: String,
-                          scripts: MutableList<String>
+                          scripts: Map<String, String>
     ) : Process {
         this.name = name
         this.metadata = metadata
@@ -88,7 +88,7 @@ class ScriptProcessor(val container: Container) : Process {
                     projectName = self.name
                     version = self.version
                     packageName = self.packageName
-                    deployableScripts = self.scripts
+                    deployableScripts = self.scripts.values.toList()
                 }
             }
             this.moduleType.equals("DEPLOYABLE_AWS_LAMBDA_JAR", true) -> {
@@ -96,7 +96,7 @@ class ScriptProcessor(val container: Container) : Process {
                     projectName = self.name
                     version = self.version
                     packageName = self.packageName
-                    deployableScripts = self.scripts
+                    deployableScripts = self.scripts.values.toList()
                 }
             }
             this.moduleType.equals("EXECUTABLE_JAR", true) -> {
@@ -104,7 +104,7 @@ class ScriptProcessor(val container: Container) : Process {
                     projectName = self.name
                     version = self.version
                     packageName = self.packageName
-                    deployableScripts = self.scripts
+                    deployableScripts = self.scripts.values.toList()
                 }
             }
             this.moduleType.equals("LOCAL_AWS_DEPLOYMENT", true) -> {

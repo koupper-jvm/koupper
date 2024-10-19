@@ -8,6 +8,7 @@ import com.koupper.octopus.modules.http.Put
 import com.koupper.octopus.modules.http.Route
 import com.koupper.octopus.modules.http.RouteDefinition
 import com.koupper.octopus.modules.locateScriptsInPackage
+import com.koupper.octopus.process.getRealScriptNameFrom
 import com.koupper.os.env
 import com.koupper.providers.files.FileHandler
 import com.koupper.providers.files.TextFileHandler
@@ -17,6 +18,7 @@ import java.io.File
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.exists
 import kotlin.io.path.pathString
 import kotlin.reflect.KClass
 
@@ -24,14 +26,15 @@ class LocalAWSDeploymentBuilder(
     private val projectName: String,
     private val moduleVersion: String,
     private val packageName: String,
-    private val scripts: List<String>
+    private val deployableScripts: Map<String, String>
 ) : Module() {
 
     private val fileHandler = app.createInstanceOf(FileHandler::class)
     private val txtFileHandler = app.createInstanceOf(TextFileHandler::class)
-    private val routerMaker = app.createInstanceOf(Route::class)
+    private val routerMaker = Route(app)
     private lateinit var routeDefinition: RouteDefinition
     private lateinit var apiDefinition: Map<String, Any>
+    private lateinit var modelProject: File
 
     private constructor(builder: Builder) : this(
         builder.projectName,
@@ -49,7 +52,7 @@ class LocalAWSDeploymentBuilder(
     }
 
     override fun build() {
-        val modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
+        this.modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
 
         File("${modelProject.name}.zip").delete()
 
@@ -61,26 +64,26 @@ class LocalAWSDeploymentBuilder(
 
         print("\u001B[38;5;155m\nRequesting an optimized process manager... \u001B[0m")
 
-        File("$projectName/libs").mkdir()
+        File("${this.projectName}/libs").mkdir()
 
         downloadFile(
             URL(env("OPTIMIZED_PROCESS_MANAGER_URL")),
-            "$projectName/libs/octopus-${env("OCTOPUS_VERSION")}.jar"
+            "${this.modelProject.name}/libs/octopus-${env("OCTOPUS_VERSION")}.jar"
         )
 
         println("\u001B[38;5;155m✔\u001B[0m")
 
         println("\u001B[38;5;155mOptimized process manager located successfully.\u001B[0m")
 
-        locateScriptsInPackage(scripts, projectName, this.packageName)
+        locateScriptsInPackage(deployableScripts.values.toList(), this.modelProject.name, this.packageName)
 
-        this.createRequestHandlers(this.apiDefinition.getValue("handlers"))
+        this.createRequestHandlers(deployableScripts, this.apiDefinition.getValue("handlers"))
 
         this.createGenericModelController(this.apiDefinition)
 
-        Files.deleteIfExists(Paths.get("$projectName/src/main/kotlin/controllers/ModelController.kt"))
+        Files.deleteIfExists(Paths.get("${this.projectName}/src/main/kotlin/controllers/ModelController.kt"))
 
-        Files.move(Paths.get(modelProject.name), Paths.get(projectName))
+        Files.move(Paths.get(this.modelProject.name), Paths.get(this.projectName))
     }
 
     private fun createGenericModelController(apiDefinition: Map<String, Any>) {
@@ -147,7 +150,7 @@ class LocalAWSDeploymentBuilder(
 
         val self = this
 
-        RequestHandlerControllerBuilder.build(projectName) {
+        RequestHandlerControllerBuilder.build(this.modelProject.name) {
             this.path = routeDefinition.path()
 
             this.controllerConsumes = routeDefinition.consumes()
@@ -191,7 +194,7 @@ class LocalAWSDeploymentBuilder(
             }
         }
 
-        Files.copy(Paths.get("$projectName/src/main/kotlin/server/RequestHandler.kt"), Paths.get("$projectName/src/main/kotlin/server/${routeDefinition.controllerName()}"))
+        Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/RequestHandler.kt"), Paths.get("${this.modelProject.name}/src/main/kotlin/server/${routeDefinition.controllerName()}"))
     }
 
     private fun generateMethods(
@@ -218,14 +221,48 @@ class LocalAWSDeploymentBuilder(
         }
     }
 
-    private fun createRequestHandlers(handlers: Any) {
+    private fun createRequestHandlers(deployableScripts: Map<String, String>, handlers: Any) {
         val handlersList = handlers as List<String>
 
-        handlersList.forEachIndexed { index, handler ->
-            val destinationFile =
-                Paths.get("$projectName/src/main/kotlin/server/RequestHandler${handler.replaceFirstChar { it.uppercaseChar() }}.kt")
+        handlersList.forEachIndexed { _, handler ->
+            if (deployableScripts[handler] == null) {
+                return@forEachIndexed
+            }
 
-            Files.copy(Paths.get("$projectName/src/main/kotlin/server/RequestHandler.kt"), destinationFile)
+            val destinationFile =
+                Paths.get("${this.modelProject.name}/src/main/kotlin/server/RequestHandler${handler.replaceFirstChar { it.uppercaseChar() }}.kt")
+
+            if (destinationFile.exists()) {
+                return@forEachIndexed
+            }
+
+            Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/RequestHandler.kt"), destinationFile)
+
+            val script = deployableScripts[handler]
+
+            val lastSlash = script!!.lastIndexOf('/')
+
+            val lastBackslash = script.lastIndexOf('\\')
+
+            val lastIndexOfPath = maxOf(lastSlash, lastBackslash)
+
+            val scriptPath = script.substring(0, lastIndexOfPath + 1)
+
+            val scriptPackage = scriptPath.replace(Regex("""(?<!\\)[/\\](?!\\)"""), ".")
+
+            val scriptNameWithoutExtension = script.substring(lastIndexOfPath + 1).substring(0, script.lastIndexOf(".") - 1)
+
+            val finalNameWhitHyphen = this.getFunctionFinalName(getRealScriptNameFrom(scriptNameWithoutExtension), "-")
+
+            val finalNameWhitDash = this.getFunctionFinalName(getRealScriptNameFrom(scriptNameWithoutExtension), "_")
+
+            val finalScriptName: String = if (finalNameWhitHyphen.isNotEmpty()) {
+                finalNameWhitHyphen.substringBeforeLast(".")
+            } else if (finalNameWhitDash.isNotEmpty()) {
+                finalNameWhitDash.substringBeforeLast(".")
+            } else {
+                throw Exception("Script file can not be empty.")
+            }
 
             val fileContent = this.txtFileHandler.using(destinationFile.pathString)
 
@@ -233,15 +270,15 @@ class LocalAWSDeploymentBuilder(
 
             fileContent.replaceLine(
                 this.txtFileHandler.getNumberLineFor(importStatement),
-                importStatement.replace("functionName", handler),
+                importStatement.replace(importStatement, "import ${this.packageName}.extensions.$scriptPackage$finalScriptName"),
                 overrideOriginal = true
             )
 
-            val executorSentence = "executor.call(functionName, mapOf(\"key\" to \"value\"))"
+            val executorSentence = "executor.call(functionName, input)"
 
             fileContent.replaceLine(
                 this.txtFileHandler.getNumberLineFor(executorSentence),
-                executorSentence.replace("functionName", handler),
+                "${String.format("%-12s", " ")}$executorSentence".replace("functionName", finalScriptName),
                 overrideOriginal = true
             )
         }
@@ -296,7 +333,7 @@ class LocalAWSDeploymentBuilder(
         var projectName: String = "undefined"
         var version: String = "0.0.0"
         var packageName: String = ""
-        var deployableScripts = mutableListOf<String>()
+        var deployableScripts = mapOf<String, String>()
 
         fun build() = LocalAWSDeploymentBuilder(this)
     }

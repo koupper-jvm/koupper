@@ -6,6 +6,7 @@ import java.io.BufferedWriter
 import java.io.FileWriter
 import kotlin.reflect.KClass
 import kotlin.reflect.full.memberProperties
+import kotlin.reflect.jvm.internal.impl.resolve.calls.inference.CapturedType
 
 enum class Action {
     POST,
@@ -91,7 +92,11 @@ open class JerseyControllerBuilder protected constructor(
 
             this.addMethodParameters(it)
 
-            this.addMethodClosing(it.response as KClass<*>)
+            if (it.response == null) {
+                this.addMethodClosing()
+            } else {
+                this.addMethodClosing(it.response)
+            }
 
             this.addMethodBody(it)
 
@@ -326,8 +331,12 @@ open class JerseyControllerBuilder protected constructor(
         }
     }
 
-    protected open fun addMethodClosing(responseClass: KClass<*>) {
-        this.finalCustomController.append("\n${spaces}): Any {".replace("Any", responseClass.simpleName!!)).appendLine()
+    private fun addMethodClosing() {
+        this.finalCustomController.append("\n${spaces}): Any {").appendLine()
+    }
+
+    protected open fun addMethodClosing(responseClass: KClass<*>?) {
+        this.finalCustomController.append("\n${spaces}): Any {".replace("Any", responseClass!!.simpleName!!)).appendLine()
     }
 
     protected open fun addMethodBody(method: Method) {
@@ -351,9 +360,10 @@ open class JerseyControllerBuilder protected constructor(
             method.formParams.forEach {
                 returnStructure.append("${spaces}${spaces}${spaces}${spaces}\"${it.key}\" to ${it.key}, ").appendLine()
             }
+
             "\\{\\w+}".toRegex().findAll(method.path).toList().forEach {
                 returnStructure.append(
-                    "${spaces}${spaces}${spaces}${spaces}\"${it.value.replace("{", "").replace("}", "")}\" to ${
+                    "${String.format("%-4s", " ")}\"${it.value.replace("{", "").replace("}", "")}\" to ${
                         it.value.replace("{", "").replace("}", "")
                     }, "
                 ).appendLine()

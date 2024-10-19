@@ -65,7 +65,7 @@ class LambdaFunctionBuilder(private val projectName: String,
         var projectName : String = "undefined"
         var version : String = "0.0.0"
         var packageName: String = ""
-        var deployableScripts = mutableListOf<String>()
+        var deployableScripts = listOf<String>()
 
         fun build() = LambdaFunctionBuilder(this)
     }

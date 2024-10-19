@@ -28,6 +28,6 @@ val isRoute: (String) -> Boolean = {
 }
 
 val isModuleProcess: (String) -> Boolean = {
-    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Process\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
+    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(ScriptProcessor\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
             it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Process,\\s*Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }

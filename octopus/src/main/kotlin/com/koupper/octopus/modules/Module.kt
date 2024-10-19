@@ -18,30 +18,50 @@ abstract class Module {
     private val registeredScripts = mutableListOf<String?>()
     private val textFileHandler = app.createInstanceOf(TextFileHandler::class)
     private val fileHandler = app.createInstanceOf(FileHandler::class)
-    private var targetPath: String = "UNDEFINED"
+    private lateinit var scriptLocationPath: String
+
+    abstract fun build()
 
     companion object {
-        fun locateScripts(scripts: List<String>, targetPath: String, packageName: String) = locateScriptsInPackage(scripts, targetPath, packageName)
+        fun locateScripts(scripts: Map<String, String>, targetPath: String, packageName: String) = locateScriptsInPackage(scripts, targetPath, packageName)
 
-        private fun locateScriptsInPackage(scripts: List<String>, targetPath: String, packageName: String) {
+        private fun locateScriptsInPackage(scripts: Map<String, String>, targetPath: String, packageName: String) {
             locateScriptsInPackage(scripts, targetPath, packageName)
         }
     }
 
-    abstract fun build()
-
     fun locateScriptInPackage(script: String, targetPath: String, packageName: String) {
-        val finalScriptName = getRealScriptNameFrom(script)
+        val lastSlash = script.lastIndexOf('/')
 
-        this.targetPath = targetPath
+        val lastBackslash = script.lastIndexOf('\\')
 
-        if (finalScriptName.isNotEmpty()) {
-            val finalScriptPath = "$targetPath/src/main/kotlin/${packageName.replace(".", "/")}/$EXTENSIONS_FOLDER_NAME/${finalScriptName.replace(".kts", ".kt")}"
+        val lastIndexOfPath = maxOf(lastSlash, lastBackslash)
+
+        this.scriptLocationPath = script.substring(0, lastIndexOfPath + 1)
+
+        val scriptName = script.substringBeforeLast(".").substring(script.lastIndexOf("/") + 1)
+
+        val finalValName: String
+
+        val finalNameWhitHyphen = this.getFunctionFinalName(getRealScriptNameFrom(scriptName), "-")
+
+        val finalNameWhitDash = this.getFunctionFinalName(getRealScriptNameFrom(scriptName), "_")
+
+        finalValName = if (finalNameWhitHyphen.isNotEmpty()) {
+            finalNameWhitHyphen.substringBeforeLast(".")
+        } else if (finalNameWhitDash.isNotEmpty()) {
+            finalNameWhitDash.substringBeforeLast(".")
+        } else {
+            throw Exception("Script file can not be empty.")
+        }
+
+        if (script.isNotEmpty()) {
+            val finalScriptPath = "$targetPath/src/main/kotlin/${packageName.replace(".", "/")}/$EXTENSIONS_FOLDER_NAME/${this.scriptLocationPath}$finalValName.kt"
 
             if (Files.notExists(Paths.get(finalScriptPath))) {
-                commitScriptInPackage(finalScriptName, finalScriptPath, packageName)
+                commitScriptInPackage(script, finalScriptPath, packageName)
 
-                changeFunctionName(finalScriptName, finalScriptPath)
+                changeFunctionName(script, finalScriptPath)
 
                 print("${ANSIColors.ANSI_GREEN_155}$script${ANSIColors.ANSI_RESET}")
 
@@ -62,7 +82,10 @@ abstract class Module {
 
             scriptFile.forEachLine { line ->
                 if (lineNumber == 0) {
-                    writer.println("package ${packageName.replace("/", ".")}.$EXTENSIONS_FOLDER_NAME\n\n$line")
+                    var scriptPackage = this.scriptLocationPath.replace(Regex("""(?<!\\)[/\\](?!\\)"""), ".")
+                    scriptPackage = scriptPackage.substring(0, scriptPackage.lastIndexOf("."))
+
+                    writer.println("package $packageName.$EXTENSIONS_FOLDER_NAME.${scriptPackage}\n\n$line")
                 } else {
                     writer.println(line)
                 }
@@ -71,7 +94,9 @@ abstract class Module {
             }
         }
 
-        tmpFile.renameTo(File(targetPath))
+        val targetFile = File(targetPath)
+        targetFile.parentFile.mkdirs()
+        tmpFile.renameTo(targetFile)
     }
 
     private fun changeFunctionName(scriptName: String, scriptPath: String) {
@@ -83,9 +108,9 @@ abstract class Module {
 
         val finalValName: String
 
-        val finalNameWhitHyphen = this.getFunctionFinalName(scriptName, "-")
+        val finalNameWhitHyphen = this.getFunctionFinalName(getRealScriptNameFrom(scriptName), "-")
 
-        val finalNameWhitDash = this.getFunctionFinalName(scriptName, "_")
+        val finalNameWhitDash = this.getFunctionFinalName(getRealScriptNameFrom(scriptName), "_")
 
         finalValName = if (finalNameWhitHyphen.isNotEmpty()) {
             finalNameWhitHyphen.substringBeforeLast(".")
@@ -106,7 +131,7 @@ abstract class Module {
         this.textFileHandler.replaceLine(callableLine, renamedCallable, scriptPath, true)
     }
 
-    private fun getFunctionFinalName(scriptName: String, delimiter: String): String {
+    protected fun getFunctionFinalName(scriptName: String, delimiter: String): String {
         val parts = scriptName.split(delimiter)
 
         var finalValName = ""
@@ -147,7 +172,7 @@ abstract class Module {
             val fileInCurrentPath = this.fileHandler.load(scriptPath)
 
             if (!fileInCurrentPath.exists()) {
-                throw Exception("The script file does not exist in the current path.")
+                throw Exception("The script file $scriptPath does not exist in the current path.")
             } else {
                 scriptFile = fileInCurrentPath
             }
@@ -156,7 +181,7 @@ abstract class Module {
                 val fileInLibsPath = this.fileHandler.load("libs/$scriptPath")
 
                 if (!fileInLibsPath.exists()) {
-                    throw Exception("The script file does not exist in the libs folder.")
+                    throw Exception("The script file $scriptPath does not exist in the libs folder.")
                 } else {
                     scriptFile = fileInLibsPath
                 }
@@ -165,20 +190,12 @@ abstract class Module {
                     val fileInEnvVariablePath = this.fileHandler.load(env("KOUPPER_PATH"))
 
                     if (!fileInEnvVariablePath.exists()) {
-                        throw Exception("The script file does not exist in KOUPPER_PATH location.")
+                        throw Exception("The script file $scriptPath does not exist in KOUPPER_PATH location.")
                     } else {
                         scriptFile = fileInEnvVariablePath
                     }
                 } catch (e: Exception) {
-                    if (this.targetPath != "UNDEFINED") {
-                        val file = File(this.targetPath)
-
-                        if (file.exists()) {
-                            file.deleteRecursively()
-                        }
-                    }
-
-                    throw Exception("The script file does not exist.")
+                    throw Exception("The script file $scriptPath does not exist.")
                 }
             }
         }
