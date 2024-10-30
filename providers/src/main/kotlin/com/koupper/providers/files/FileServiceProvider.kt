@@ -22,8 +22,8 @@ class FileServiceProvider : ServiceProvider() {
     }
 
     private fun registerJsonFileHandler() {
-        app.bind(JsonFileHandler::class, {
-            JsonFileHandlerImpl<Any>()
+        app.bind(JSONFileHandler::class, {
+            JSONFileHandlerImpl<Any>()
         })
     }
 
