@@ -228,7 +228,7 @@ fun checkForUpdates(): Boolean {
 
     data class Versioning(val statusCode: String, val body: String)
 
-    val textJsonParser = app.createInstanceOf(JsonFileHandler::class) as JsonFileHandlerImpl<Versioning>
+    val textJsonParser = app.createInstanceOf(JSONFileHandler::class) as JSONFileHandlerImpl<Versioning>
 
     textJsonParser.read(response?.asString()!!)
 
