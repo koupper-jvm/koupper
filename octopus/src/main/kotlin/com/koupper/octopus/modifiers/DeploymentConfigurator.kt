@@ -16,8 +16,8 @@ class DeploymentConfigurator private constructor(
     constructor(builder: Builder) : this(
         builder.port,
         builder.rootUrl,
-        builder.projectName,
         builder.packageName,
+        builder.projectName,
         builder.version
     )
 
@@ -36,19 +36,11 @@ class DeploymentConfigurator private constructor(
             overrideOriginal = true
         )
 
-        val packageLineNumber = this.textFileHandler.getNumberLineFor("packages(\"io.mp\")")
+        val packageLineNumber = this.textFileHandler.getNumberLineFor("packages(\"io.mp.controllers\")")
 
         this.textFileHandler.replaceLine(
             packageLineNumber,
-            "${String.format("%-8s", " ")}packages(\"${this.packageName}\")",
-            overrideOriginal = true
-        )
-
-        val portLineNumber = this.textFileHandler.getNumberLineFor(".path(\"root\")")
-
-        this.textFileHandler.replaceLine(
-            portLineNumber,
-            "${String.format("%-8s", " ")}.path(${this.port})",
+            "${String.format("%-8s", " ")}packages(\"${this.packageName}.controllers\")",
             overrideOriginal = true
         )
     }

@@ -14,15 +14,17 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
 
-class ExecutableJarBuilder(private val projectName: String,
-                            private val moduleVersion: String,
-                            private val packageName: String,
-                            private val scripts: List<String>) : Module() {
+class ExecutableJarBuilder(
+    private val projectName: String,
+    private val moduleVersion: String,
+    private val packageName: String,
+    private val deployableScripts: Map<String, String>
+) : Module() {
 
     private val fileHandler = app.createInstanceOf(FileHandler::class)
     private val modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
 
-    private constructor(builder: Builder):  this (
+    private constructor(builder: Builder) : this(
         builder.projectName,
         builder.version,
         builder.packageName,
@@ -55,16 +57,16 @@ class ExecutableJarBuilder(private val projectName: String,
 
         println("\u001B[38;5;155mOptimized process manager located successfully.\u001B[0m")
 
-        locateScriptsInPackage(scripts, Paths.get(modelProject.name).absolutePathString(),this.packageName)
+        locateScriptsInPackage(deployableScripts, Paths.get(modelProject.name).absolutePathString(), this.packageName)
 
         Files.move(Paths.get(modelProject.name), Paths.get(projectName))
     }
 
     class Builder {
-        var projectName : String = "undefined"
-        var version : String = "0.0.0"
+        var projectName: String = "undefined"
+        var version: String = "0.0.0"
         var packageName: String = ""
-        var deployableScripts = listOf<String>()
+        var deployableScripts = mapOf<String, String>()
 
         fun build() = ExecutableJarBuilder(this)
     }

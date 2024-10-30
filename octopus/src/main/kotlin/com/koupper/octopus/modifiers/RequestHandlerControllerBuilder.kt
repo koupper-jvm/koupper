@@ -1,87 +1,116 @@
 package com.koupper.octopus.modifiers
 
+import com.koupper.octopus.modules.isPrimitive
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.Paths
 import kotlin.reflect.KClass
 
 class RequestHandlerControllerBuilder(
-    location: String,
     path: String,
     controllerConsumes: List<String> = emptyList(),
     controllerProduces: List<String> = emptyList(),
     controllerName: String,
     packageName: String,
-    methods: MutableList<Method> = mutableListOf()
+    methods: MutableList<Method> = mutableListOf(),
+    registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
 ) : JerseyControllerBuilder(
-    location,
     path,
     controllerConsumes,
     controllerProduces,
     controllerName,
     packageName,
-    methods
+    methods,
+    registeredScripts
 ) {
     private lateinit var pathParams: List<MatchResult>
 
     companion object {
-        inline fun build(location: String, block: Builder.() -> Unit) =
-            Builder(location).apply(block).build().build()
+        inline fun build(block: Builder.() -> Unit) =
+            Builder().apply(block).build().build()
     }
 
     private constructor(builder: Builder) : this(
-        "${builder.location}/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt",
         builder.path,
         builder.controllerConsumes,
         builder.controllerProduces,
         builder.controllerName,
         builder.packageName,
-        builder.methods
-    )
+        builder.methods,
+        builder.registeredScripts
+    ) {
+        super.baseControllerLocation = "model-project/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt"
+    }
+
+    override fun build() {
+        super.build()
+
+        val classDeclaration = this.textFileHandler.getNumberLineFor("class ${this.controllerName} {")
+
+        this.textFileHandler.putLineAfter(classDeclaration, getRequestProperties(), overrideOriginal = true)
+
+        Files.move(
+            Paths.get(this.baseControllerLocation),
+            Paths.get(
+                "model-project/src/main/kotlin/${
+                    this.packageName.replace(
+                        ".",
+                        File.separator
+                    )
+                }/controllers/${this.controllerName}.kt"
+            )
+        )
+    }
+
+    private fun getRequestProperties(): String {
+        val requestProperties = StringBuilder()
+
+        val contextAt = "${spaces}@Context"
+        val uriInfoSentence = "${spaces}private lateinit var uriInfo: UriInfo"
+        val headersSentence = "${spaces}private lateinit var inputHeaders: HttpHeaders"
+
+        return requestProperties.append(contextAt).appendLine().append(uriInfoSentence).appendLine().append(contextAt)
+            .appendLine().append(headersSentence).appendLine().toString()
+    }
 
     override fun addMethodParameters(method: Method) {
-        val genericParameters = "        @Context uriInfo: UriInfo,\n" +
-                "        @Context request: HttpServletRequest"
-
-        this.pathParams = "\\{\\w+}".toRegex().findAll(method.path).toList()
-
-        if (pathParams.isNotEmpty()) {
-            this.buildPathParams(pathParams)
+        if (method.action == Action.POST || method.action == Action.PUT) {
+            this.finalCustomController.append("${spaces}${spaces}bodyJson: String")
         }
-
-        this.finalCustomController.append(genericParameters)
 
         if (this.finalCustomController.endsWith(", \n")) {
             this.finalCustomController.setLength(this.finalCustomController.length - 3)
         }
     }
 
-    override fun addMethodBody(method: Method) {
-        super.textFileHandler.using(this.location)
-
-        var methodBody = super.textFileHandler.getContentBetweenContent("): Response {", "} // EOM").joinToString(separator = "\n")
-
-        val pathParamRegex = Regex("""val pathParam = mapOf\([\s\S]*?uriInfo.pathParameters.getFirst\("[\w-]+"\)[\s\S]*?\)""")
-
-        if (pathParamRegex.containsMatchIn(methodBody)) {
-            if (this.pathParams.isEmpty()) {
-                methodBody = methodBody.replace(pathParamRegex, "val pathParam = emptyMap<String, String>()")
-            } else {
-                val pathParamsString = this.pathParams.joinToString(separator = ",\n") { pathParam ->
-                    String.format("%-12s", " ") + "\"${pathParam.value.replace("{", "").replace("}", "")}\" to ${pathParam.value.replace("{", "").replace("}", "")}"
-                }
-
-                methodBody = methodBody.replace(
-                    pathParamRegex,
-                    "val pathParam = mapOf(\n$pathParamsString\n${String.format("%-8s", " ")})"
-                )
-            }
-        }
-
-        if (methodBody.contains("RequestHandler()")) {
-            val handler = "RequestHandler${method.script.replaceFirstChar { it.uppercaseChar() }}"
-            methodBody = methodBody.replace("RequestHandler()", "${handler.replaceFirstChar { it.uppercaseChar() }}()")
-        }
-
-        this.finalCustomController.append(methodBody)
+    override fun addMethodClosing() {
+        this.finalCustomController.append("\n${spaces}): APIGatewayProxyResponseEvent {").appendLine()
     }
+
+    override fun addMethodBody(method: Method) {
+        val body = this.textFileHandler.getContentBetweenContent("val apiGatewayProxyRequestEvent", "return requestHandler200S", inclusiveMode = true)
+        var requestEvent = body.joinToString(separator = "\n").replace("\"POST\"", "\"${method.action.name.uppercase()}\"")
+
+        if (method.action != Action.POST || method.action == Action.PUT) {
+            requestEvent = requestEvent.replace("body = bodyJson", "body = null")
+        }
+
+        val script = this.registeredScripts[method.script]
+        val scriptReturnType = script?.second ?: ""
+        val handlerName = "requestHandler${method.script.replaceFirstChar { it.uppercaseChar() }}"
+
+        if (scriptReturnType == "Unit" || isPrimitive(scriptReturnType)) {
+            requestEvent = replaceRequestHandler(requestEvent, handlerName)
+        }
+
+        this.finalCustomController.append(requestEvent)
+    }
+
+    private fun replaceRequestHandler(content: String, handlerName: String): String {
+        return content.replace("val requestHandler200S = RequestHandler200S()", "val $handlerName = ${handlerName.replaceFirstChar { it.uppercaseChar() }}()")
+            .replace("return requestHandler200S", "return $handlerName")
+    }
+
 
     override fun addMethodClosing(responseClass: KClass<*>?) {
         if (responseClass != null) {
@@ -89,13 +118,14 @@ class RequestHandlerControllerBuilder(
         }
     }
 
-    class Builder(var location: String) {
+    class Builder {
         var path: String = Property.UNDEFINED.name
         var controllerConsumes: List<String> = emptyList()
         var controllerProduces: List<String> = emptyList()
         var controllerName: String = Property.UNDEFINED.name
         var packageName: String = Property.UNDEFINED.name
         var methods: MutableList<Method> = mutableListOf()
+        var registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
 
         fun build() = RequestHandlerControllerBuilder(this)
     }

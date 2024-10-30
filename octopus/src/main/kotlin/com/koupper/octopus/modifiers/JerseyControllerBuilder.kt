@@ -3,7 +3,10 @@ package com.koupper.octopus.modifiers
 import com.koupper.octopus.toCamelCase
 import com.koupper.providers.files.TextFileHandlerImpl
 import java.io.BufferedWriter
+import java.io.File
 import java.io.FileWriter
+import java.nio.file.Files
+import java.nio.file.Paths
 import kotlin.reflect.KClass
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.jvm.internal.impl.resolve.calls.inference.CapturedType
@@ -36,20 +39,20 @@ data class Method(
 )
 
 open class JerseyControllerBuilder protected constructor(
-    protected val location: String,
     protected val path: String,
     protected val controllerConsumes: List<String> = emptyList(),
     protected val controllerProduces: List<String> = emptyList(),
     protected val controllerName: String = Property.UNDEFINED.name,
     protected val packageName: String = Property.UNDEFINED.name,
-    protected val methods: MutableList<Method> = mutableListOf()
+    protected val methods: MutableList<Method> = mutableListOf(),
+    protected val registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
 ) {
     protected val textFileHandler = TextFileHandlerImpl()
     protected val finalCustomController = StringBuilder()
     protected val spaces = String.format("%-4s", " ")
+    protected var baseControllerLocation = "model-project/src/main/kotlin/io/mp/controllers/ModelController.kt"
 
     private constructor(builder: Builder) : this(
-        "${builder.location}/src/main/kotlin/${builder.packageName.replace(".", "/")}/controllers/ModelController.kt",
         builder.path,
         builder.controllerConsumes,
         builder.controllerProduces,
@@ -64,13 +67,17 @@ open class JerseyControllerBuilder protected constructor(
     }
 
     open fun build() {
-        this.textFileHandler.using(this.location)
+        this.textFileHandler.using(this.baseControllerLocation)
         this.addPackage()
         this.addImports()
         this.addControllerPath()
 
         if (this.controllerProduces.isNotEmpty()) {
             this.addControllerProduces()
+        }
+
+        if (this.controllerConsumes.isNotEmpty()) {
+            this.addControllerConsumes()
         }
 
         this.addClassDefinition()
@@ -111,11 +118,13 @@ open class JerseyControllerBuilder protected constructor(
             append(finalCustomController)
         }
 
-        val fileWriter = FileWriter(this.location)
+        val fileWriter = FileWriter(this.baseControllerLocation)
 
         val bufferedWriter = BufferedWriter(fileWriter)
         bufferedWriter.write(streamBuilder)
         bufferedWriter.close()
+
+        File("model-project/src/main/kotlin/${this.packageName.replace(".", File.separator)}/controllers").mkdir()
     }
 
     protected open fun addPackage() {
@@ -143,7 +152,8 @@ open class JerseyControllerBuilder protected constructor(
             var lineContent = this.textFileHandler.getContentForLine(it)
 
             if (lineContent == "import $packageName.extensions.script" && importsFromTargetController.isNotEmpty()) {
-                lineContent = lineContent.replace("import $packageName.extensions.script", importsFromTargetController.toString())
+                lineContent =
+                    lineContent.replace("import $packageName.extensions.script", importsFromTargetController.toString())
             }
 
             this.finalCustomController.append(lineContent).appendLine()
@@ -159,7 +169,8 @@ open class JerseyControllerBuilder protected constructor(
     }
 
     protected open fun addControllerPath() {
-        this.finalCustomController.append(if (this.path.isNotEmpty()) "@Path(\"${this.path}\")" else "@Path").appendLine()
+        this.finalCustomController.append(if (this.path.isNotEmpty()) "@Path(\"${this.path}\")" else "@Path")
+            .appendLine()
     }
 
     protected open fun addControllerProduces() {
@@ -174,6 +185,20 @@ open class JerseyControllerBuilder protected constructor(
         }
 
         this.finalCustomController.append("@Produces($produces)").appendLine()
+    }
+
+    protected open fun addControllerConsumes() {
+        val consumes = StringBuilder()
+
+        this.controllerConsumes.forEachIndexed { index, consume ->
+            if (index == this.controllerConsumes.size - 1) {
+                consumes.append("\"${consume}\"")
+            } else {
+                consumes.append("\"${consume}\", ")
+            }
+        }
+
+        this.finalCustomController.append("@Consumes($consumes)").appendLine()
     }
 
     protected open fun addClassDefinition() {
@@ -264,12 +289,7 @@ open class JerseyControllerBuilder protected constructor(
             }
         }
 
-        if (method.action == Action.POST) {
-            this.finalCustomController.append("${spaces}${spaces}${(method.body as KClass<*>).simpleName!!.toCamelCase()}: ${(method.body as KClass<*>).simpleName}")
-                .appendLine()
-        }
-
-        if (method.action == Action.PUT) {
+        if (method.action == Action.POST || method.action == Action.PUT) {
             this.finalCustomController.append("${spaces}${spaces}${(method.body as KClass<*>).simpleName!!.toCamelCase()}: ${(method.body as KClass<*>).simpleName}")
                 .appendLine()
         }
@@ -331,12 +351,13 @@ open class JerseyControllerBuilder protected constructor(
         }
     }
 
-    private fun addMethodClosing() {
+    protected open fun addMethodClosing() {
         this.finalCustomController.append("\n${spaces}): Any {").appendLine()
     }
 
     protected open fun addMethodClosing(responseClass: KClass<*>?) {
-        this.finalCustomController.append("\n${spaces}): Any {".replace("Any", responseClass!!.simpleName!!)).appendLine()
+        this.finalCustomController.append("\n${spaces}): Any {".replace("Any", responseClass!!.simpleName!!))
+            .appendLine()
     }
 
     protected open fun addMethodBody(method: Method) {

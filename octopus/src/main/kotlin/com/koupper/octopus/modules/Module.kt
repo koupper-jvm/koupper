@@ -5,7 +5,6 @@ import com.koupper.container.app
 import com.koupper.octopus.process.getRealScriptNameFrom
 import com.koupper.os.env
 import com.koupper.providers.files.FileHandler
-import com.koupper.providers.files.TextFileHandler
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -14,82 +13,153 @@ import javax.script.ScriptEngineManager
 
 const val EXTENSIONS_FOLDER_NAME = "extensions"
 
+fun isPrimitive(typeName: String): Boolean {
+    val kotlinPrimitives = setOf("Int", "Double", "Float", "Long", "Short", "Byte", "Boolean", "Char", "String")
+    return typeName in kotlinPrimitives
+}
+
 abstract class Module {
-    private val registeredScripts = mutableListOf<String?>()
-    private val textFileHandler = app.createInstanceOf(TextFileHandler::class)
+    protected val registeredScriptPackages: MutableMap<String, String> = mutableMapOf()
+    protected val registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
+    protected val createdScripts: MutableMap<String, String> = mutableMapOf()
     private val fileHandler = app.createInstanceOf(FileHandler::class)
     private lateinit var scriptLocationPath: String
+    private lateinit var validatedScriptFile: File
 
     abstract fun build()
 
     companion object {
-        fun locateScripts(scripts: Map<String, String>, targetPath: String, packageName: String) = locateScriptsInPackage(scripts, targetPath, packageName)
+        fun locateScripts(scripts: Map<String, String>, targetPath: String, packageName: String) =
+            locateScriptsInPackage(scripts, targetPath, packageName)
 
         private fun locateScriptsInPackage(scripts: Map<String, String>, targetPath: String, packageName: String) {
             locateScriptsInPackage(scripts, targetPath, packageName)
         }
     }
 
-    fun locateScriptInPackage(script: String, targetPath: String, packageName: String) {
-        val lastSlash = script.lastIndexOf('/')
+    fun locateScriptInPackage(handler: Pair<String, String>, targetPath: String, packageName: String) {
+        val lastSlash = handler.second.lastIndexOf('/')
 
-        val lastBackslash = script.lastIndexOf('\\')
+        val lastBackslash = handler.second.lastIndexOf('\\')
 
         val lastIndexOfPath = maxOf(lastSlash, lastBackslash)
 
-        this.scriptLocationPath = script.substring(0, lastIndexOfPath + 1)
+        this.scriptLocationPath = handler.second.substring(0, lastIndexOfPath + 1)
 
-        val scriptName = script.substringBeforeLast(".").substring(script.lastIndexOf("/") + 1)
+        val scriptName = this.buildScriptName(handler.second)
 
-        val finalValName: String
+        val finalScriptPath = "$targetPath/src/main/kotlin/${
+            packageName.replace(
+                ".",
+                "/"
+            )
+        }/$EXTENSIONS_FOLDER_NAME/${this.scriptLocationPath}$scriptName.kt"
 
-        val finalNameWhitHyphen = this.getFunctionFinalName(getRealScriptNameFrom(scriptName), "-")
+        this.validatedScriptFile = validateScript(handler.second)
 
-        val finalNameWhitDash = this.getFunctionFinalName(getRealScriptNameFrom(scriptName), "_")
+        val functionSignatureRegex = Regex(""":\s*\((.*)\)\s*->\s*([^\s=]+)""")
 
-        finalValName = if (finalNameWhitHyphen.isNotEmpty()) {
+        this.validatedScriptFile.forEachLine { line ->
+            val matchResult = functionSignatureRegex.find(line)
+
+            if (matchResult != null) {
+                val rawParams = matchResult.groupValues[1]
+                val returnType = matchResult.groupValues[2]
+
+                val inputTypes = mutableListOf<String>()
+                var currentParam = StringBuilder()
+                var depth = 0
+
+                for (char in rawParams) {
+                    when {
+                        char == ',' && depth == 0 -> {
+                            inputTypes.add(currentParam.toString().trim())
+                            currentParam = StringBuilder()
+                        }
+
+                        char == '<' -> {
+                            depth++
+                            currentParam.append(char)
+                        }
+
+                        char == '>' -> {
+                            depth--
+                            currentParam.append(char)
+                        }
+
+                        else -> {
+                            currentParam.append(char)
+                        }
+                    }
+                }
+
+                if (currentParam.isNotBlank()) {
+                    inputTypes.add(currentParam.toString().trim())
+                }
+
+                this.registeredScripts[handler.first] = Pair(inputTypes, returnType)
+
+                this.registeredScriptPackages[handler.first] = this.scriptLocationPath.replace(Regex("""(?<!\\)[/\\](?!\\)"""), ".")
+            }
+        }
+
+        if (Files.notExists(Paths.get(finalScriptPath))) {
+            commitScriptInPackage(handler, finalScriptPath, packageName)
+
+            print("${ANSIColors.ANSI_GREEN_155}${handler.second}${ANSIColors.ANSI_RESET}")
+
+            println("\u001B[38;5;155m...[ok]\u001B[0m")
+        }
+    }
+
+    protected fun buildScriptName(scriptPath: String): String {
+        val finalNameWhitHyphen = this.getFunctionFinalName(getRealScriptNameFrom(scriptPath), "-")
+
+        val finalNameWhitDash = this.getFunctionFinalName(getRealScriptNameFrom(scriptPath), "_")
+
+        return if (finalNameWhitHyphen.isNotEmpty()) {
             finalNameWhitHyphen.substringBeforeLast(".")
         } else if (finalNameWhitDash.isNotEmpty()) {
             finalNameWhitDash.substringBeforeLast(".")
         } else {
             throw Exception("Script file can not be empty.")
         }
-
-        if (script.isNotEmpty()) {
-            val finalScriptPath = "$targetPath/src/main/kotlin/${packageName.replace(".", "/")}/$EXTENSIONS_FOLDER_NAME/${this.scriptLocationPath}$finalValName.kt"
-
-            if (Files.notExists(Paths.get(finalScriptPath))) {
-                commitScriptInPackage(script, finalScriptPath, packageName)
-
-                changeFunctionName(script, finalScriptPath)
-
-                print("${ANSIColors.ANSI_GREEN_155}$script${ANSIColors.ANSI_RESET}")
-
-                println("\u001B[38;5;155m...[ok]\u001B[0m")
-            }
-        }
     }
 
-    private fun commitScriptInPackage(scriptPath: String, targetPath: String, packageName: String) {
-        val scriptFile = validateScript(scriptPath)
+    private fun commitScriptInPackage(handler: Pair<String, String>, targetPath: String, packageName: String) {
+        if (this.createdScripts[handler.first] != null) {
+            println("\u001B[33m${this.buildScriptName(handler.second)} script exist. Ignoring relocation.\u001B[0m")
+            return
+        }
 
-        val tmpPath = Files.createTempFile("k-s-", ".kt").toFile()
+        val tmpFile = Files.createTempFile("k-s-", ".kt").toFile()
 
-        val tmpFile = File(tmpPath.absolutePath)
+        val callbackFunctionSignature = Regex(
+            """^val\s+\w+\s*:\s*\(?(?:[\w<>,\s]*)?\)?\s*->\s*[\w<>]*\s*=\s*\{.*"""
+        )
 
         tmpFile.printWriter().use { writer ->
             var lineNumber = 0
 
-            scriptFile.forEachLine { line ->
+            this.validatedScriptFile.forEachLine { line ->
                 if (lineNumber == 0) {
                     var scriptPackage = this.scriptLocationPath.replace(Regex("""(?<!\\)[/\\](?!\\)"""), ".")
                     scriptPackage = scriptPackage.substring(0, scriptPackage.lastIndexOf("."))
 
                     writer.println("package $packageName.$EXTENSIONS_FOLDER_NAME.${scriptPackage}\n\n$line")
+                } else if (callbackFunctionSignature.matches(line)) {
+                    val regex = Regex("""^val\s+(\w+)\s*(:\s*\(?[\w<>,\s]*\)?\s*->\s*[\w<>]*\s*=\s*\{.*)""")
+
+                    val newLine = line.replace(regex) {
+                        "val ${buildScriptName(handler.second)}${it.groupValues[2]}"
+                    }
+
+                    this.createdScripts[handler.first] = targetPath
+
+                    writer.println(newLine)
                 } else {
                     writer.println(line)
                 }
-
                 lineNumber++
             }
         }
@@ -99,39 +169,7 @@ abstract class Module {
         tmpFile.renameTo(targetFile)
     }
 
-    private fun changeFunctionName(scriptName: String, scriptPath: String) {
-        if (this.registeredScripts.contains(scriptName)) {
-            println("\u001B[33m$scriptName script exist. Ignoring relocation.\u001B[0m")
-            return
-        }
-        this.registeredScripts.add(scriptName)
-
-        val finalValName: String
-
-        val finalNameWhitHyphen = this.getFunctionFinalName(getRealScriptNameFrom(scriptName), "-")
-
-        val finalNameWhitDash = this.getFunctionFinalName(getRealScriptNameFrom(scriptName), "_")
-
-        finalValName = if (finalNameWhitHyphen.isNotEmpty()) {
-            finalNameWhitHyphen.substringBeforeLast(".")
-        } else if (finalNameWhitDash.isNotEmpty()) {
-            finalNameWhitDash.substringBeforeLast(".")
-        } else {
-            throw Exception("Script file can not be empty.")
-        }
-
-        val callableName = this.textFileHandler.getContentBetweenContent("val", ":", filePath = scriptPath)
-
-        val callableLine = this.textFileHandler.getNumberLineFor("val${callableName[0]}: (", scriptPath)
-
-        val callableLineContent = this.textFileHandler.getContentForLine(callableLine, scriptPath)
-
-        val renamedCallable = callableLineContent.replace(callableName[0], " $finalValName")
-
-        this.textFileHandler.replaceLine(callableLine, renamedCallable, scriptPath, true)
-    }
-
-    protected fun getFunctionFinalName(scriptName: String, delimiter: String): String {
+    private fun getFunctionFinalName(scriptName: String, delimiter: String): String {
         val parts = scriptName.split(delimiter)
 
         var finalValName = ""
@@ -204,19 +242,21 @@ abstract class Module {
     }
 }
 
-fun Module.locateScriptsInPackage(scripts: List<String>, targetPath: String, packageName: String) {
+fun Module.locateScriptsInPackage(scripts: Map<String, String>, targetPath: String, packageName: String) {
     if (scripts.isEmpty()) {
         println("\u001B[38;5;229mNo scripts configured...\u001B[0m")
 
         return
     }
 
-    scripts.forEach { script ->
-        if (script.isEmpty()) {
+    for ((key, value) in scripts) {
+        if (key.isEmpty() || value.isEmpty()) {
             throw Exception("A script should be specified.")
         }
 
-        locateScriptInPackage(script, targetPath, packageName)
+        val singleScriptMap = Pair(key, value)
+
+        locateScriptInPackage(singleScriptMap, targetPath, packageName)
     }
 
     println("\u001B[38;5;155mScripts located.\u001B[0m")

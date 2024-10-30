@@ -17,7 +17,7 @@ import kotlin.io.path.absolutePathString
 class LambdaFunctionBuilder(private val projectName: String,
                             private val moduleVersion: String,
                             private val packageName: String,
-                            private val scripts: List<String>) : Module() {
+                            private val scripts: Map<String, String>) : Module() {
 
     private val fileHandler = app.createInstanceOf(FileHandler::class)
 
@@ -65,7 +65,7 @@ class LambdaFunctionBuilder(private val projectName: String,
         var projectName : String = "undefined"
         var version : String = "0.0.0"
         var packageName: String = ""
-        var deployableScripts = listOf<String>()
+        var deployableScripts = mapOf<String, String>()
 
         fun build() = LambdaFunctionBuilder(this)
     }

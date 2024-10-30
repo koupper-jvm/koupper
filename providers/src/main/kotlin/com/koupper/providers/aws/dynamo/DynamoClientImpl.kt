@@ -273,5 +273,36 @@ class DynamoClientImpl : DynamoClient {
     override fun scanItems(tableName: String): List<Map<String, Any>> {
         TODO("Not yet implemented")
     }
+
+    override fun getAllItemsPaginated(tableName: String): List<Map<String, Any>> {
+        val items = mutableListOf<Map<String, Any>>()   // Lista que almacenará todos los ítems
+        var lastEvaluatedKey: Map<String, AttributeValue>? = null   // Clave para manejar la paginación
+
+        // Bucle que continuará mientras lastEvaluatedKey no sea null o vacío
+        do {
+            // Crear el ScanRequest y definir el punto de inicio si hay un lastEvaluatedKey
+            val scanRequestBuilder = ScanRequest.builder()
+                .tableName(tableName)
+
+            // Si hay un último ítem evaluado, configurar el inicio de la siguiente consulta
+            lastEvaluatedKey?.let {
+                scanRequestBuilder.exclusiveStartKey(it)
+            }
+
+            val scanRequest = scanRequestBuilder.build()  // Crear el objeto ScanRequest
+            val result = dynamoDbClient.scan(scanRequest) // Ejecutar el escaneo
+
+            // Añadir los ítems obtenidos al listado principal
+            items.addAll(result.items().map { item ->
+                item.mapValues { convertAttributeValue(it.value) ?: "" }
+            })
+
+            // Actualizar la clave para la siguiente iteración
+            lastEvaluatedKey = result.lastEvaluatedKey()
+        } while (lastEvaluatedKey != null && lastEvaluatedKey.isNotEmpty()) // Continuar si hay más ítems
+
+        return items  // Retornar la lista completa de ítems
+    }
+
 }
 

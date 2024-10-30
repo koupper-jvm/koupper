@@ -49,13 +49,56 @@ class TextFileHandlerImpl : TextFileHandler {
         return this.replaceLine(linePosition, newContent, filePath, overrideOriginal)
     }
 
+    private fun modifyLine(
+        linePosition: Int,
+        newContent: String,
+        filePath: String,
+        overrideOriginal: Boolean,
+        insertAfter: Boolean
+    ): File {
+        if (this.globalFilePath == "undefined" && filePath == "undefined") {
+            throw Exception("It's necessary a file to do operations.")
+        }
+
+        val file = if (this.globalFilePath != "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
+
+        val newContentBase = StringBuilder()
+        val lines = file.readLines()
+
+        for ((lineNumber, content) in lines.withIndex()) {
+            // Check if we are inserting after a line
+            if (insertAfter && (lineNumber + 1) == linePosition.inc()) {
+                newContentBase.append(newContent).append("\n") // Insert new content after the line
+            }
+
+            // Always append the current line
+            newContentBase.append(content).append("\n")
+
+            // Check if we are replacing a line
+            if (!insertAfter && (lineNumber + 1) == linePosition) {
+                // Skip appending the current line because it will be replaced
+                newContentBase.setLength(newContentBase.length - (content.length + 1)) // Remove last line appended
+                newContentBase.append(newContent).append("\n") // Append new content instead
+            }
+        }
+
+        return if (!overrideOriginal) {
+            val tmpFile = File(System.getProperty("java.io.tmpdir"), file.name)
+            tmpFile.writeText(newContentBase.toString())
+            tmpFile
+        } else {
+            file.printWriter().use { out -> out.print(newContentBase.toString()) }
+            file
+        }
+    }
+
     override fun putLineAfter(
         linePosition: Int,
         newContent: String,
         filePath: String,
         overrideOriginal: Boolean
     ): File {
-        return this.replaceLine(linePosition.inc(), newContent, filePath, overrideOriginal)
+        return modifyLine(linePosition, newContent, filePath, overrideOriginal, true)
     }
 
     override fun replaceLine(
@@ -64,43 +107,9 @@ class TextFileHandlerImpl : TextFileHandler {
         filePath: String,
         overrideOriginal: Boolean
     ): File {
-        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
-
-        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
-
-        val newContentBase = StringBuilder()
-
-        val lines = file.readLines()
-
-        for ((lineNumber, content) in lines.iterator().withIndex()) {
-            if ((lineNumber + 1) == linePosition) {
-                if (lineNumber == lines.size - 1) {
-                    newContentBase.append(newContent)
-                } else {
-                    newContentBase.append("$newContent\n")
-                }
-
-                continue
-            }
-
-            if (lineNumber == lines.size - 1) {
-                newContentBase.append(content)
-                continue
-            }
-
-            newContentBase.append("$content\n")
-        }
-
-        return if (!overrideOriginal) {
-            val tmpFile = File(System.getProperty("java.io.tmpdir") + file.name)
-            tmpFile.writeText(newContentBase.toString())
-            tmpFile
-        } else {
-            File(file.path).printWriter().use { out -> out.println(newContentBase.toString()) }
-
-            file
-        }
+        return modifyLine(linePosition, newContent, filePath, overrideOriginal, false)
     }
+
 
     override fun replaceMultipleLines(lines: Map<Int, String>, filePath: String, overrideOriginal: Boolean): File {
         TODO("Not yet implemented")

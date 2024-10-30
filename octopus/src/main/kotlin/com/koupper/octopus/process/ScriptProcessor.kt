@@ -88,7 +88,7 @@ class ScriptProcessor(val container: Container) : Process {
                     projectName = self.name
                     version = self.version
                     packageName = self.packageName
-                    deployableScripts = self.scripts.values.toList()
+                    deployableScripts = self.scripts
                 }
             }
             this.moduleType.equals("DEPLOYABLE_AWS_LAMBDA_JAR", true) -> {
@@ -96,7 +96,7 @@ class ScriptProcessor(val container: Container) : Process {
                     projectName = self.name
                     version = self.version
                     packageName = self.packageName
-                    deployableScripts = self.scripts.values.toList()
+                    deployableScripts = self.scripts
                 }
             }
             this.moduleType.equals("EXECUTABLE_JAR", true) -> {
@@ -104,7 +104,7 @@ class ScriptProcessor(val container: Container) : Process {
                     projectName = self.name
                     version = self.version
                     packageName = self.packageName
-                    deployableScripts = self.scripts.values.toList()
+                    deployableScripts = self.scripts
                 }
             }
             this.moduleType.equals("LOCAL_AWS_DEPLOYMENT", true) -> {
@@ -113,19 +113,19 @@ class ScriptProcessor(val container: Container) : Process {
                     version = self.version
                     packageName = self.packageName
                     deployableScripts = self.scripts
+                    rootPath = metadata["server.rootUrl"] as String
                 }
 
                 DeploymentConfigurator.configure {
-                    port = metadata["server.port"] as Int
-                    rootUrl = metadata["server.rootUrl"] as String
+                    port = metadata["server.port"]?.toString()?.toInt()!!
                     packageName = self.packageName
-                    projectName = self.packageName
+                    projectName = self.name
                     version = self.version
                 }
 
-                val deployer = LocalAWSDeployer(container = self.container)
+                /*val deployer = LocalAWSDeployer(container = self.container)
                 deployer.register(self.name, self.metadata, "LOCAL_AWS_DEPLOYMENT", this.version, this.packageName, this.scripts)
-                deployer.run()
+                deployer.run()*/
             }
         }
     }

@@ -7,4 +7,5 @@ interface JsonFileHandler<T> {
     fun toJsonString(data: T): String
     fun mapToJsonString(data: Map<String, Any>?): String
     fun listOfMapsToJsonString(data: List<Map<String, Any>>?): String
+    fun mapToJsonString(data: List<Map<String, Any>>): String
 }

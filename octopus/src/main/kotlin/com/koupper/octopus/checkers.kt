@@ -12,13 +12,13 @@ val dependsOfContainer: (String) -> Boolean = {
     it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Container\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }
 
-val isContainerType: (String) -> Boolean = {
+val isParameterizable: (String) -> Boolean = {
     it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Container\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
-            it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Container,\\s*Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
+            it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }
 
 val isScriptProcess: (String) -> Boolean = {
-    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(ScriptProcess\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
+    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(ScriptProcessor\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
             it.contains("val\\s[a-zA-Z0-9]+:\\s\\(ScriptProcess,\\s*Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }
 

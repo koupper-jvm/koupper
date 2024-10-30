@@ -51,5 +51,17 @@ interface ScriptExecutor {
      * @param callable the function
      * @param params the params
      */
-    fun <T> call(callable: (container: Container, params: Map<String, Any>) -> T, params: Map<String, Any>): T
+    fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T
+
+    /**
+     * Calls a  function
+     *
+     * @return A type
+     */
+    fun <T> call(callable: () -> T): T
+
+    /**
+     * Calls a  function without a return
+     */
+    fun call(callable: () -> Unit)
 }

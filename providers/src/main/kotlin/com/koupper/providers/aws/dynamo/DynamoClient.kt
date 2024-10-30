@@ -31,4 +31,5 @@ interface DynamoClient {
     fun listTables(): List<String> // Nuevo método para listar tablas
     fun queryItems(tableName: String, keyConditionExpression: String, expressionAttributeValues: Map<String, Any>): List<Map<String, Any>> // Nuevo método para consultas
     fun scanItems(tableName: String): List<Map<String, Any>> // Nuevo método para escaneo
+    fun getAllItemsPaginated(tableName: String): List<Map<String, Any>>
 }

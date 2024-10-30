@@ -25,7 +25,7 @@ fun String.toCamelCase(): String {
 }
 
 val isRelativeScriptFile: (String) -> Boolean = {
-    it.matches("^[a-zA-Z0-9]+.kts$".toRegex())
+    it.matches("^[a-zA-Z0-9_-]+\\.kts$".toRegex())
 }
 
 class Octopus(private var container: Container) : ScriptExecutor {
@@ -60,21 +60,15 @@ class Octopus(private var container: Container) : ScriptExecutor {
             val valName = sentence.substring(startOfSentence + "val".length, endOfVariableNameInSentence).trim()
 
             when {
-                isContainerType(sentence) -> {
+                isParameterizable(sentence) -> {
                     eval(sentence)
 
 
-                    if (params.isEmpty()) {
-                        val targetCallback = eval(valName) as (Container) -> T
+                    val targetCallback = eval(valName) as (Map<String, Any>) -> T
 
-                        result(targetCallback.invoke(container))
-                    } else {
-                        val targetCallback = eval(valName) as (Container, Map<String, Any>) -> T
-
-                        result(targetCallback.invoke(container, params))
-                    }
+                    result(targetCallback.invoke(params))
                 }
-                isModuleProcess(sentence) -> {
+                isScriptProcess(sentence) -> {
                     eval(sentence)
 
                     if (params.isEmpty()) {
@@ -103,17 +97,24 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 else -> {
                     eval(sentence)
 
-                    result(eval(sentence.substring(sentence.indexOf(" "), sentence.indexOf("=") - 1).trim()) as T)
+                    val targetCallback = eval(valName) as () -> T
+
+                    result(targetCallback.invoke())
                 }
             }
         }
     }
 
-    override fun <T> call(
-        callable: (container: Container, params: Map<String, Any>) -> T,
-        params: Map<String, Any>
-    ): T {
-        return callable(container, params)
+    override fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T {
+        return callable(params)
+    }
+
+    override fun <T> call(callable: () -> T): T {
+        return callable()
+    }
+
+    override fun call(callable: () -> Unit) {
+        callable()
     }
 
     private fun convertStringParamsToListParams(args: String): Map<String, Any> {

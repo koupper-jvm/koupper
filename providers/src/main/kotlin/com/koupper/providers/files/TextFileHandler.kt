@@ -28,7 +28,7 @@ interface TextFileHandler {
      *
      * @property firstContent the chunk of first-string content.
      * @property secondContent the chunk of second-string content.
-     * @property inOccurrenceNumber the number of occurrences to make the match.
+     * @property onOccurrenceNumber the number of occurrences to make the match.
      * @property filePath the resource file path.
      * @return List of strings between the string chunks.
      */
