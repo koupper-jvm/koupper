@@ -1,7 +1,7 @@
 package com.koupper.providers.aws.dynamo
 
 import com.koupper.os.env
-import com.koupper.providers.files.JsonFileHandlerImpl
+import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
@@ -91,7 +91,7 @@ class DynamoClientImpl : DynamoClient {
     }
 
     override fun insertItem(tableName: String, jsonItem: String) {
-        val mapper = JsonFileHandlerImpl<Map<String, Any?>>()
+        val mapper = JSONFileHandlerImpl<Map<String, Any?>>()
 
         val item: Map<String, Any?> = mapper.read(jsonItem).toType()
 

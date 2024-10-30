@@ -1,8 +1,8 @@
 package com.koupper.providers.files
 
-interface JsonFileHandler<T> {
-    fun readFrom(filePath: String): JsonFileHandler<T>
-    fun read(jsonTxt: String): JsonFileHandler<T>
+interface JSONFileHandler<T> {
+    fun readFrom(filePath: String): JSONFileHandler<T>
+    fun read(jsonTxt: String): JSONFileHandler<T>
     fun getText(): String
     fun toJsonString(data: T): String
     fun mapToJsonString(data: Map<String, Any>?): String
