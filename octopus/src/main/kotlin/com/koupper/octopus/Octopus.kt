@@ -205,10 +205,10 @@ fun main(args: Array<String>) {
 
             scriptPath = content.substring(0, content.indexOf(".kts ") + 5)
         } catch (e: FileNotFoundException) {
-            println("Parameters are necessary for Koupper functionality" +  e)
+            println("Parameters are necessary for Koupper functionality $e")
             exitProcess(0)
         } finally {
-            //fileHandler.remove()
+            fileHandler.remove()
         }
 
         processManager.runFromScriptFile(scriptPath, parameters) { result: Any ->
