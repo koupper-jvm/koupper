@@ -1,7 +1,5 @@
 package com.koupper.providers.logger
 
 interface Logger {
-    fun log()
-
-    fun configUsing(configuration: LoggerConfiguration): Logger
+    fun log(params: Map<String, Any>)
 }

@@ -1,13 +1,13 @@
 package com.koupper.providers
 
+import com.koupper.providers.crypto.CryptoServiceProvider
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.providers.db.DBServiceProvider
 import com.koupper.providers.files.FileServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
+import com.koupper.providers.jwt.JWTServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
-import com.koupper.providers.parsing.TextJsonParserServiceProvider
-import com.koupper.providers.parsing.TextParserServiceProvider
 import kotlin.test.assertTrue
 
 class ServiceProviderManagerTest : AnnotationSpec() {
@@ -17,15 +17,15 @@ class ServiceProviderManagerTest : AnnotationSpec() {
 
         assertTrue {
             serviceProviderManager.listProviders().containsAll(
-                    listOf(
-                            TextParserServiceProvider::class,
-                            DBServiceProvider::class,
-                            SenderServiceProvider::class,
-                            LoggerServiceProvider::class,
-                            HttpServiceProvider::class,
-                            TextJsonParserServiceProvider::class,
-                            FileServiceProvider::class
-                    )
+                listOf(
+                    CryptoServiceProvider::class,
+                    DBServiceProvider::class,
+                    FileServiceProvider::class,
+                    HttpServiceProvider::class,
+                    JWTServiceProvider::class,
+                    LoggerServiceProvider::class,
+                    SenderServiceProvider::class,
+                )
             )
         }
     }

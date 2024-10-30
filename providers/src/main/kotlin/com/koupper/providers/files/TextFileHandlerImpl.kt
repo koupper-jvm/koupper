@@ -1,136 +1,38 @@
 package com.koupper.providers.files
 
 import java.io.File
-import java.io.FileWriter
-import java.lang.StringBuilder
-import java.net.URL
+import java.lang.Exception
+import java.util.regex.Pattern
+import kotlin.math.abs
+import kotlin.text.StringBuilder
 
 class TextFileHandlerImpl : TextFileHandler {
-    override fun load(filePath: String, targetPath: String): File {
-        return when {
-            checkByPathType(filePath) === PathType.URL -> this.loadFileFromUrl(filePath, targetPath)
-            checkByPathType(filePath) === PathType.RESOURCE -> this.loadFileFromResource(filePath)
-            else -> File(filePath)
-        }
+    private val fileHandler: FileHandler = FileHandlerImpl()
+    private var globalFilePath: String = "undefined"
+    private lateinit var globalTargetFile: File
+
+    override fun using(filePath: String) : TextFileHandler {
+        this.globalFilePath = filePath
+        this.globalTargetFile = this.fileHandler.load(this.globalFilePath)
+
+        return this
     }
 
-    private fun loadFileFromUrl(fileUrl: String, targetPath: String): File {
-        val fileName = fileUrl.substring(fileUrl.lastIndexOf("/") + 1)
-
-        return if (targetPath === "N/A") {
-            downloadFile(URL(fileUrl), fileName) // Download the file in the current location.
-        } else {
-            downloadFile(URL(fileUrl), "$targetPath/${fileName}")
-        }
-    }
-
-    private fun loadFileFromResource(filePath: String): File {
-        return File(TextFileHandlerImpl::class.java.classLoader.getResource(buildResourcePathName(filePath)).path)
-    }
-
-    override fun zipFile(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
-        return when {
-            checkByPathType(filePath) === PathType.URL -> this.zipFileFromUrl(filePath, targetPath, filesToIgnore)
-            checkByPathType(filePath) === PathType.RESOURCE -> this.zipFileFromResource(filePath, targetPath, filesToIgnore)
-            else -> this.zipFileFromPath(filePath, targetPath, filesToIgnore)
-        }
-    }
-
-    private fun zipFileFromPath(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
-        val file = this.load(filePath, targetPath)
-
-        val targetLocation = buildFinalTargetPath(targetPath, file.name)
-
-        val zippedFile = buildZipFile(file.path, targetLocation, filesToIgnore)
-
-        file.delete()
-
-        return zippedFile
-    }
-
-    private fun zipFileFromUrl(fileUrl: String, targetPath: String, filesToIgnore: List<String>): File {
-        val file = this.loadFileFromUrl(fileUrl, targetPath)
-
-        val targetLocation = buildFinalTargetPath(targetPath, file.name)
-
-        val zippedFile = buildZipFile(file.name, targetLocation, filesToIgnore)
-
-        file.delete()
-
-        return zippedFile
-    }
-
-    private fun zipFileFromResource(fileName: String, targetPath: String, filesToIgnore: List<String>): File {
-        val resource = this.loadFileFromResource(buildResourcePathName(fileName))
-
-        val targetLocation = buildFinalTargetPath(targetPath, resource.name)
-
-        val zippedFile = buildZipFile(resource.path, targetLocation, filesToIgnore)
-
-        resource.delete()
-
-        return zippedFile
-    }
-
-    override fun unzipFile(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
-        return when {
-            checkByPathType(filePath) === PathType.URL -> this.unzipFileFromUrl(filePath, targetPath, filesToIgnore)
-            checkByPathType(filePath) === PathType.RESOURCE -> this.unzipFileFromResource(filePath, targetPath, filesToIgnore)
-            else -> this.unzipFileFromPath(filePath, targetPath, filesToIgnore)
-        }
-    }
-
-    private fun unzipFileFromPath(zipPath: String, targetPath: String, ignoring: List<String>): File {
-        val zipFile = this.load(zipPath)
-
-        return unzipFile(zipFile.path, ignoring, targetPath)
-    }
-
-    private fun unzipFileFromUrl(zipPath: String, targetPath: String, ignoring: List<String>): File {
-        val zipFile = this.loadFileFromUrl(zipPath, targetPath)
-
-        return unzipFile(zipFile.path, ignoring, targetPath)
-    }
-
-    private fun unzipFileFromResource(zipPath: String, targetPath: String, ignoring: List<String>): File {
-        val zipFile = this.loadFileFromResource(zipPath)
-
-        return unzipFile(zipFile.path, ignoring, zipFile.path.substring(0, zipFile.path.lastIndexOf("/")))
-    }
-
-    override fun signFile(filePath: String, metadata: Map<String, String>): File {
-        return File("")
-    }
-
-    override fun getNumberLineFor(contentToFind: String, filePath: String): Long {
+    override fun getNumberLineFor(contentToFind: String, filePath: String): Int {
         return this.getNumberLinesFor(contentToFind, filePath)[0]
     }
 
-    override fun getNumberLinesFor(contentToFind: String, filePath: String): List<Long> {
-        return when {
-            checkByPathType(filePath) === PathType.URL -> {
-                val file = this.loadFileFromUrl(filePath, System.getProperty("java.io.tmpdir"))
-                val numberOfLines = this.getNumberLinesFor(file, contentToFind)
-                file.delete()
-                numberOfLines
-            }
-            checkByPathType(filePath) === PathType.RESOURCE -> {
-                val file = this.loadFileFromResource(filePath)
-                this.getNumberLinesFor(file, contentToFind)
-            }
-            else -> {
-                val file = this.load(filePath)
-                this.getNumberLinesFor(file, contentToFind)
-            }
-        }
-    }
+    override fun getNumberLinesFor(contentToFind: String, filePath: String): List<Int> {
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
-    private fun getNumberLinesFor(file: File, contentToFind: String): List<Long> {
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
+
         var lineNumber = 1
-        val matchingLinesNumbers = emptyList<Long>().toMutableList()
+
+        val matchingLinesNumbers = emptyList<Int>().toMutableList()
 
         file.forEachLine {
-            if (it.contains(contentToFind)) matchingLinesNumbers.add(lineNumber.toLong())
+            if (it.contains(contentToFind)) matchingLinesNumbers.add(lineNumber.toInt())
 
             lineNumber++
         }
@@ -138,190 +40,212 @@ class TextFileHandlerImpl : TextFileHandler {
         return matchingLinesNumbers
     }
 
-    override fun putLineBefore(linePosition: Long, newLine: String, filePath: String, overrideOriginal: Boolean): File {
-        val file = this.load(filePath)
-
-        return this.putLine(linePosition, newLine, file, false)
+    override fun putLineBefore(
+        linePosition: Int,
+        newContent: String,
+        filePath: String,
+        overrideOriginal: Boolean
+    ): File {
+        return this.replaceLine(linePosition, newContent, filePath, overrideOriginal)
     }
 
-    override fun putLineAfter(linePosition: Long, newLine: String, filePath: String, overrideOriginal: Boolean): File {
-        return this.putLineBefore(linePosition.inc(), newLine, filePath, overrideOriginal)
-    }
-
-    override fun replaceLine(linePosition: Long, newLine: String, filePath: String, overrideOriginal: Boolean): File {
-        return when {
-            checkByPathType(filePath) === PathType.URL -> {
-                val file = this.loadFileFromUrl(filePath, System.getProperty("java.io.tmpdir"))
-
-                this.putLine(linePosition, newLine, file, overrideOriginal = false, replaceLine = true)
-            }
-            checkByPathType(filePath) === PathType.RESOURCE -> {
-                val file = this.loadFileFromResource(filePath)
-
-                this.putLine(linePosition, newLine, file, overrideOriginal, true)
-            }
-            else -> {
-                val file = this.load(filePath, System.getProperty("java.io.tmpdir"))
-
-                this.putLine(linePosition, newLine, file, overrideOriginal, true)
-            }
+    private fun modifyLine(
+        linePosition: Int,
+        newContent: String,
+        filePath: String,
+        overrideOriginal: Boolean,
+        insertAfter: Boolean
+    ): File {
+        if (this.globalFilePath == "undefined" && filePath == "undefined") {
+            throw Exception("It's necessary a file to do operations.")
         }
-    }
 
-    private fun putLine(linePosition: Long, newLine: String, file: File, overrideOriginal: Boolean, replaceLine: Boolean = false): File {
-        val newContent = StringBuilder()
+        val file = if (this.globalFilePath != "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
+        val newContentBase = StringBuilder()
         val lines = file.readLines()
 
-        for ((lineNumber, content) in lines.iterator().withIndex()) {
-            when {
-                (lineNumber + 1).toLong() == linePosition && !replaceLine -> {
-                    newContent.append(newLine)
-                    if (content.isEmpty()) {
-                        newContent.append("\n")
-                    } else {
-                        newContent.append("$content")
-                    }
-                }
-                (lineNumber + 1).toLong() == linePosition && replaceLine -> {
-                    newContent.append(newLine)
-                }
-                lineNumber == lines.size -> {
-                    newContent.append(content)
-                }
-                else -> {
-                    newContent.append("$content\n")
-                }
+        for ((lineNumber, content) in lines.withIndex()) {
+            // Check if we are inserting after a line
+            if (insertAfter && (lineNumber + 1) == linePosition.inc()) {
+                newContentBase.append(newContent).append("\n") // Insert new content after the line
+            }
+
+            // Always append the current line
+            newContentBase.append(content).append("\n")
+
+            // Check if we are replacing a line
+            if (!insertAfter && (lineNumber + 1) == linePosition) {
+                // Skip appending the current line because it will be replaced
+                newContentBase.setLength(newContentBase.length - (content.length + 1)) // Remove last line appended
+                newContentBase.append(newContent).append("\n") // Append new content instead
             }
         }
 
         return if (!overrideOriginal) {
-            val tmpFile = File(System.getProperty("java.io.tmpdir") + file.name)
-            tmpFile.writeText(newContent.toString())
-
+            val tmpFile = File(System.getProperty("java.io.tmpdir"), file.name)
+            tmpFile.writeText(newContentBase.toString())
             tmpFile
         } else {
-            FileWriter(file.path).write(newContent.toString())
-
+            file.printWriter().use { out -> out.print(newContentBase.toString()) }
             file
         }
     }
 
-    override fun appendContentBefore(content: String, inOccurrenceNumber: Int, contentToAdd: String, filePath: String, overrideOriginal: Boolean): File {
-        return this.appendContentBefore(this.load(filePath), content, inOccurrenceNumber, contentToAdd, overrideOriginal)
+    override fun putLineAfter(
+        linePosition: Int,
+        newContent: String,
+        filePath: String,
+        overrideOriginal: Boolean
+    ): File {
+        return modifyLine(linePosition, newContent, filePath, overrideOriginal, true)
     }
 
-    private fun appendContentBefore(file: File, contentToMatch: String, inOccurrenceNumber: Int, contentToAdd: String, overrideOriginal: Boolean): File {
-        val matchingInfo = this.getRangeOfOccurrence(file, contentToMatch, inOccurrenceNumber)
-
-        val matching = matchingInfo.entries.first()
-
-        val line = this.getContentForLine(matching.key.toLong(), file.path)
-
-        val finalLine = line.substring(0, matching.value.first).plus(contentToAdd.plus(line.substring(matching.value))).plus(line.substring(matching.value.last + 1))
-
-        return this.replaceLine(matching.key.toLong(), finalLine, file.path, overrideOriginal)
+    override fun replaceLine(
+        linePosition: Int,
+        newContent: String,
+        filePath: String,
+        overrideOriginal: Boolean
+    ): File {
+        return modifyLine(linePosition, newContent, filePath, overrideOriginal, false)
     }
 
-    override fun appendContentAfter(content: String, inOccurrenceNumber: Int, contentToAdd: String, filePath: String, overrideOriginal: Boolean): File {
-        return when {
-            checkByPathType(filePath) === PathType.URL -> {
-                val file = this.loadFileFromUrl(filePath, System.getProperty("java.io.tmpdir"))
 
-                this.appendContentAfter(file, content, inOccurrenceNumber, contentToAdd, overrideOriginal)
-            }
-            checkByPathType(filePath) === PathType.RESOURCE -> {
-                val file = this.loadFileFromResource(filePath)
-
-                this.appendContentAfter(file, content, inOccurrenceNumber, contentToAdd, overrideOriginal)
-            }
-            else -> {
-                val file = this.load(filePath, System.getProperty("java.io.tmpdir"))
-
-                this.appendContentAfter(file, content, inOccurrenceNumber, contentToAdd, overrideOriginal)
-            }
-        }
-    }
-
-    override fun getContentFromLines(initialLine: Int, finalLine: Int, filePath: String): List<String> {
+    override fun replaceMultipleLines(lines: Map<Int, String>, filePath: String, overrideOriginal: Boolean): File {
         TODO("Not yet implemented")
     }
 
-    private fun appendContentAfter(file: File, contentToMatch: String, inOccurrenceNumber: Int, contentToAdd: String, overrideOriginal: Boolean): File {
-        val rangeOfOccurrenceFound = this.getRangeOfOccurrence(file, contentToMatch, inOccurrenceNumber)
+    override fun appendContentBefore(
+        contentToFind: String,
+        inOccurrenceNumber: Int,
+        newContent: String,
+        filePath: String,
+        overrideOriginal: Boolean
+    ): File {
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
+
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
+
+        val matchingInfo = this.getRangeOfOccurrence(file, contentToFind, inOccurrenceNumber)
+
+        val matching = matchingInfo.entries.first()
+
+        val line = this.getContentForLine(matching.key, file.path)
+
+        val finalLine = line.substring(0, matching.value.first).plus(newContent.plus(line.substring(matching.value)))
+            .plus(line.substring(matching.value.last + 1))
+
+        return this.replaceLine(matching.key, finalLine, file.path, overrideOriginal)
+    }
+
+    override fun appendContentAfter(
+        contentToFind: String,
+        inOccurrenceNumber: Int,
+        newContent: String,
+        filePath: String,
+        overrideOriginal: Boolean
+    ): File {
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
+
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
+
+        val rangeOfOccurrenceFound = this.getRangeOfOccurrence(file, contentToFind, inOccurrenceNumber)
 
         val matching = rangeOfOccurrenceFound.entries.first()
 
-        val line = this.getContentForLine(matching.key.toLong(), file.path)
+        val line = this.getContentForLine(matching.key, file.path)
 
-        val finalLine = line.substring(0, matching.value.first).plus(line.substring(matching.value).plus(contentToAdd)).plus(line.substring(matching.value.last + 1))
+        val finalLine = line.substring(0, matching.value.first).plus(line.substring(matching.value).plus(newContent))
+            .plus(line.substring(matching.value.last + 1))
 
-        return this.replaceLine(matching.key.toLong(), finalLine, file.path, overrideOriginal)
+        return this.replaceLine(matching.key, finalLine, file.path, overrideOriginal)
     }
 
-    private fun getRangeOfOccurrence(file: File, contentToMatch: String, inOccurrenceNumber: Int): Map<Long, IntRange> {
-        var numberOfLine = 0
-        var numberOfMatching = 0
-        val matchingInfo = mutableMapOf<Long, IntRange>()
+    override fun getContentBetweenLines(
+        initialLine: Int,
+        finalLine: Int,
+        filePath: String,
+        inclusiveMode: Boolean
+    ): List<String> {
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
-        file.forEachLine lit@{ line ->
-            numberOfLine++
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
-            if (line.contains(contentToMatch)) {
-                val matches = contentToMatch.toRegex().findAll(line)
-
-                matches.iterator().forEach { matching ->
-                    numberOfMatching++
-
-                    if (inOccurrenceNumber == numberOfMatching) {
-                        matchingInfo[numberOfLine.toLong()] = matching.range
-
-                        return@lit
-                    }
-                }
-            }
-        }
-
-        return matchingInfo
-    }
-
-    override fun getContentBetweenLines(initialLine: Long, finalLine: Long, filePath: String): List<String> {
         var numberOfLine = 0
         val contentBetween = mutableListOf<String>()
 
-        this.load(filePath).forEachLine { line ->
+        file.forEachLine { line ->
             numberOfLine++
 
-            if (numberOfLine in (initialLine + 1) until finalLine) {
-                contentBetween.add(line)
+            if (inclusiveMode) {
+                if (numberOfLine in initialLine until finalLine + 1) {
+                    contentBetween.add(line)
+                }
+            } else {
+                if (numberOfLine in (initialLine + 1) until finalLine) {
+                    contentBetween.add(line)
+                }
             }
         }
 
         return contentBetween
     }
 
-    override fun getContentBetweenContent(firstContent: String, secondContent: String, inOccurrenceNumber: Int, filePath: String): List<String> {
-        val file = this.load(filePath)
+    override fun read(filePath: String): String {
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
 
-        val lineNumberForFirstMatch = this.getRangeOfOccurrence(file, firstContent, inOccurrenceNumber).entries.first().key
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
 
-        val lineNumberForSecondMatch = this.getRangeOfOccurrence(file, secondContent, inOccurrenceNumber).entries.first().key
-
-        return if (lineNumberForFirstMatch < lineNumberForSecondMatch) {
-            this.getContentBetweenLines(lineNumberForFirstMatch, lineNumberForSecondMatch, file.path)
-        } else  {
-            val rangeOfFirstMatching = this.getRangeOfOccurrence(file, firstContent, inOccurrenceNumber).entries.first().value
-
-            val rangeOfSecondMatching = this.getRangeOfOccurrence(file, secondContent, inOccurrenceNumber).entries.first().value
-
-            val originalLine = this.getContentForLine(lineNumberForFirstMatch, file.path)
-
-            listOf(originalLine.substring(rangeOfFirstMatching.last + 1, rangeOfSecondMatching.first))
-        }
+        return file.readText(Charsets.UTF_8)
     }
 
-    override fun getContentForLine(linePosition: Long, filePath: String): String {
-        val file = this.load(filePath)
+    override fun getContentBetweenContent(
+        firstContent: String,
+        secondContent: String,
+        onOccurrenceNumber: Int,
+        filePath: String,
+        inclusiveMode: Boolean
+    ): List<String> {
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
+
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
+
+        var result: List<String> = emptyList()
+
+        val lineNumberForFirstMatch = this.getRangeOfOccurrence(file, firstContent, onOccurrenceNumber).entries
+
+        val lineNumberForSecondMatch = this.getRangeOfOccurrence(
+            file,
+            secondContent,
+            1,
+            lineNumberForFirstMatch.first().key
+        ).entries
+
+        if (lineNumberForFirstMatch.isNotEmpty() && lineNumberForSecondMatch.isNotEmpty()) {
+            result = if (lineNumberForFirstMatch.first().key == lineNumberForSecondMatch.first().key) {
+                listOf(
+                    this.getContentForLine(lineNumberForFirstMatch.first().key, file.path)
+                        .substring((lineNumberForFirstMatch.first().value.last + 1) until lineNumberForSecondMatch.first().value.first)
+                )
+            } else {
+                this.getContentBetweenLines(
+                    lineNumberForFirstMatch.first().key,
+                    lineNumberForSecondMatch.first().key,
+                    file.path,
+                    inclusiveMode
+                )
+            }
+        }
+
+        return result
+    }
+
+    override fun getContentForLine(linePosition: Int, filePath: String): String {
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
+
+        val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
+
+        val file = this.fileHandler.load(finalFilePath)
 
         var numberOfLine = 0
         var content = ""
@@ -329,7 +253,7 @@ class TextFileHandlerImpl : TextFileHandler {
         file.forEachLine lit@{ line ->
             numberOfLine++
 
-            if (linePosition == numberOfLine.toLong()) {
+            if (linePosition == numberOfLine) {
                 content += line
 
                 return@lit
@@ -337,5 +261,89 @@ class TextFileHandlerImpl : TextFileHandler {
         }
 
         return content
+    }
+
+    override fun bind(data: Map<String, String?>, filePath: String): StringBuilder {
+        if (this.globalFilePath === "undefined" && filePath === "undefined") throw Exception("It's necessary a file to do operations.")
+
+        val finalFilePath = if (this.globalFilePath !== "undefined") this.globalFilePath else filePath
+
+        val content = StringBuilder(this.read(finalFilePath))
+
+        data.forEach { (key, value) ->
+            if (content.contains(key.toRegex())) {
+                val parsedVariable = content.replace(key.toRegex(), value.toString())
+
+                content.clear()
+
+                content.append(parsedVariable)
+            }
+        }
+
+        return content
+    }
+
+    override fun bind(data: Map<String, String?>, content: StringBuilder): java.lang.StringBuilder {
+        data.forEach { (key, value) ->
+            if (content.contains(key.toRegex())) {
+                val parsedVariable = content.replace(key.toRegex(), value.toString())
+
+                content.clear()
+
+                content.append(parsedVariable)
+            }
+        }
+
+        return content
+    }
+
+    override fun remove(): Boolean {
+        return globalTargetFile.delete()
+    }
+
+    private fun getRangeOfOccurrence(
+        file: File,
+        contentToMatch: String,
+        onOccurrenceNumber: Int,
+        fromLine: Int = 0
+    ): Map<Int, IntRange> {
+        if (onOccurrenceNumber == 0) {
+            return emptyMap()
+        }
+
+        var numberOfLine = 0
+        var numberOfMatching = 0
+        val matchingInfo = mutableMapOf<Int, IntRange>()
+        var matchFound = false
+
+        file.forEachLine lit@{ line ->
+            if (matchFound) return@lit
+
+            numberOfLine++
+
+            if (fromLine != 0 && numberOfLine < fromLine) {
+                return@lit
+            }
+
+            if (line.contains(contentToMatch)) {
+                val matches = Pattern.quote(contentToMatch).toRegex().findAll(line)
+
+                matches.iterator().forEach { matching ->
+                    numberOfMatching++
+
+                    if (numberOfMatching == abs(onOccurrenceNumber)) {
+                        matchingInfo[numberOfLine] = matching.range
+
+                        matchFound = true
+
+                        return@lit
+                    }
+                }
+            }
+        }
+
+        matchFound = false
+
+        return matchingInfo
     }
 }

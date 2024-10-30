@@ -1,15 +1,27 @@
 package com.koupper.octopus.process
 
 class ModuleAnalyzer : Process {
-    override fun register(name: String, metadata: Map<String, Any>): Process {
+    override fun register(
+        name: String,
+        metadata: MutableMap<String, Any>,
+        moduleType: String,
+        version: String,
+        packageName: String,
+        scripts: Map<String, String>
+    ): Process {
         TODO("Not yet implemented")
     }
 
-    override fun moduleName(): String {
+    override fun processName(): String {
+        TODO("Not yet implemented")
+    }
+
+    override fun processType(): String {
         TODO("Not yet implemented")
     }
 
     override fun run() {
         TODO("Not yet implemented")
     }
+
 }

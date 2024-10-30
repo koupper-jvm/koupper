@@ -20,7 +20,7 @@ class DBSQLiteConnectorTest : AnnotationSpec() {
     fun `should establish a connection to SQLite database`() = runBlocking {
         launch(Dispatchers.Main) {
             val connector = DBSQLiteConnector()
-            connector.configFromPath("yourPathEnv")
+            connector.configFrom("yourPathEnv")
 
             // Because the HikariDBSession has not a `create table` method or a raw query execution way
             connector.session().once { conn ->

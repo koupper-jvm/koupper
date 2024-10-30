@@ -7,13 +7,29 @@ class FileServiceProvider : ServiceProvider() {
     override fun up() {
         this.registerFileHandler()
         this.registerTextFileHandler()
+        this.registerJsonFileHandler()
+        this.registerYmlFileHandler()
     }
 
     private fun registerFileHandler() {
-        app.bind(FileHandler::class, { FileHandlerImpl() }, "FileHandlerImpl")
+        app.bind(FileHandler::class, { FileHandlerImpl() })
     }
 
     private fun registerTextFileHandler() {
-        app.bind(TextFileHandler::class, { TextFileHandlerImpl() }, "TextFileHandlerImpl")
+        app.bind(TextFileHandler::class, {
+            TextFileHandlerImpl()
+        })
+    }
+
+    private fun registerJsonFileHandler() {
+        app.bind(JsonFileHandler::class, {
+            JsonFileHandlerImpl<Any>()
+        })
+    }
+
+    private fun registerYmlFileHandler() {
+        app.bind(YmlFileHandler::class, {
+            YmlFileHandlerImpl()
+        })
     }
 }

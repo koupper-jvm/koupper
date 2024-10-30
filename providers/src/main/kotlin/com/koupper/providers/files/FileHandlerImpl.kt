@@ -1,139 +1,141 @@
 package com.koupper.providers.files
 
+import com.koupper.providers.launchProcess
+import java.io.BufferedOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.net.URL
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
 
 enum class PathType {
     URL,
     RESOURCE,
-    LOCATION
-}
-
-val buildFinalTargetPath: (String, String) -> String = { targetPath, fileName ->
-    if (targetPath === "N/A") {
-        if (fileName.contains(".")) {
-            "${fileName.substring(0, fileName.indexOf("."))}.zip"
-        } else {
-            "${fileName}.zip"
-        }
-    } else {
-        if (fileName.contains(".")) {
-            "$targetPath/${fileName.substring(0, fileName.indexOf("."))}.zip"
-        } else {
-            "$targetPath/${fileName}.zip"
-        }
-    }
+    LOCATION,
+    ENV,
+    MALFORMED,
 }
 
 val checkByPathType: (String) -> PathType = { path ->
     when {
         path.contains("(http|https)://".toRegex()) -> PathType.URL
         path.contains("resource://".toRegex()) -> PathType.RESOURCE
-        else -> PathType.LOCATION
+        path.contains("env:".toRegex()) -> PathType.ENV
+        path.startsWith(File.separator) -> PathType.LOCATION  // Usa File.separator
+        else -> PathType.MALFORMED
     }
 }
 
 val buildResourcePathName: (String) -> String = {
-    it.substring(it.lastIndexOf("/") + 1)
+    // Este método debe soportar rutas anidadas
+    it.substring(it.lastIndexOf("/") + 1)  // Usa File.separator
 }
 
 class FileHandlerImpl : FileHandler {
-    override fun load(filePath: String, targetPath: String): File {
+    override fun load(filePath: String): File {
         return when {
-            checkByPathType(filePath) === PathType.URL -> this.loadFileFromUrl(filePath, targetPath)
-            checkByPathType(filePath) === PathType.RESOURCE -> this.loadFileFromResource(filePath)
+            checkByPathType(filePath) === PathType.URL -> downloadFile(
+                URL(filePath),
+                filePath.substring(filePath.lastIndexOf("/") + 1)  // Usa File.separator
+            )
+            checkByPathType(filePath) === PathType.RESOURCE -> File(
+                FileHandlerImpl::class.java.classLoader.getResource(
+                    buildResourcePathName(filePath)
+                ).path
+            )
+            checkByPathType(filePath) === PathType.ENV -> File(
+                ".${filePath.substring(filePath.lastIndexOf(File.separator) + 1)}"  // Usa File.separator
+            )
+            checkByPathType(filePath) === PathType.LOCATION -> File(filePath)  // Carga en la ubicación actual
             else -> File(filePath)
         }
     }
 
-    private fun loadFileFromUrl(fileUrl: String, targetPath: String): File {
-        return if (targetPath === "N/A") {
-            downloadFile(URL(fileUrl), fileUrl.substring(fileUrl.lastIndexOf("/") + 1)) // Download the file in the current location.
-        } else {
-            downloadFile(URL(fileUrl), "$targetPath.zip")
-        }
-    }
-
-    private fun loadFileFromResource(filePath: String): File {
-        return File(FileHandlerImpl::class.java.classLoader.getResource(buildResourcePathName(filePath)).path)
-    }
-
     override fun zipFile(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
-        return when {
-            checkByPathType(filePath) === PathType.URL -> this.zipFileFromUrl(filePath, targetPath, filesToIgnore)
-            checkByPathType(filePath) === PathType.RESOURCE -> this.zipFileFromResource(filePath, targetPath, filesToIgnore)
-            else -> this.zipFileFromPath(filePath, targetPath, filesToIgnore)
+        val inputDirectory = this.load(filePath)
+
+        val outputZipFile = if (targetPath == "N/A") {
+            val fileName = "${inputDirectory.name}.zip"
+            val finalFile = File(fileName)
+            if (finalFile.exists()) return finalFile
+            finalFile
+        } else {
+            File(targetPath, "${inputDirectory.name}.zip")
         }
-    }
 
-    private fun zipFileFromPath(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
-        val file = this.load(filePath, targetPath)
+        val ignoreSet = filesToIgnore.toSet()
 
-        val targetLocation = buildFinalTargetPath(targetPath, file.name)
+        ZipOutputStream(BufferedOutputStream(FileOutputStream(outputZipFile))).use { zos ->
+            inputDirectory.walkTopDown().forEach { file ->
+                val zipFileName = file.relativeTo(inputDirectory).path.replace("\\", "/")
 
-        val zippedFile = buildZipFile(file.path, targetLocation, filesToIgnore)
+                val isRootFileToIgnore = ignoreSet.contains(zipFileName)
+                val isInIgnoredDirectory = ignoreSet.any { ignorePath -> zipFileName.startsWith("$ignorePath/") }
 
-        file.delete()
+                if (isRootFileToIgnore || isInIgnoredDirectory) return@forEach
 
-        return zippedFile
-    }
+                if (file == inputDirectory) return@forEach
 
-    private fun zipFileFromUrl(fileUrl: String, targetPath: String, filesToIgnore: List<String>): File {
-        val file = this.loadFileFromUrl(fileUrl, targetPath)
+                val entry = ZipEntry(zipFileName + if (file.isDirectory) "/" else "")
+                zos.putNextEntry(entry)
 
-        val targetLocation = buildFinalTargetPath(targetPath, file.name)
+                if (file.isFile) {
+                    file.inputStream().use { input -> input.copyTo(zos) }
+                }
 
-        val zippedFile = buildZipFile(file.name, targetLocation, filesToIgnore)
+                zos.closeEntry()
+            }
+        }
 
-        file.delete()
-
-        return zippedFile
-    }
-
-    private fun zipFileFromResource(fileName: String, targetPath: String, filesToIgnore: List<String>): File {
-        val resource = this.loadFileFromResource(buildResourcePathName(fileName))
-
-        val targetLocation = buildFinalTargetPath(targetPath, resource.name)
-
-        val zippedFile = buildZipFile(resource.path, targetLocation, filesToIgnore)
-
-        resource.delete()
-
-        return zippedFile
+        return outputZipFile
     }
 
     override fun unzipFile(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
-        return when {
-            checkByPathType(filePath) === PathType.URL -> this.unzipFileFromUrl(filePath, targetPath, filesToIgnore)
-            checkByPathType(filePath) === PathType.RESOURCE -> this.unzipFileFromResource(filePath, targetPath, filesToIgnore)
-            else -> this.unzipFileFromPath(filePath, targetPath, filesToIgnore)
+        val normalizedFilePath = filePath.replace("\\", "/")
+        val ignoreSet = filesToIgnore.map { it.replace("\\", "/") }.toSet()
+
+        val zipFile = this.load(normalizedFilePath)
+
+        val unzippedFolderName = if (targetPath == "N/A") {
+            normalizedFilePath.substring(normalizedFilePath.lastIndexOf("/") + 1, normalizedFilePath.lastIndexOf('.'))
+        } else {
+            targetPath
         }
-    }
 
-    private fun unzipFileFromPath(zipPath: String, targetPath: String, ignoring: List<String>): File {
-        val zipFile = this.load(zipPath)
+        val targetDirectory = File(unzippedFolderName)
+        if (!targetDirectory.exists()) {
+            targetDirectory.mkdirs()
+        }
 
-        return unzipFile(zipFile.path, ignoring, targetPath)
-    }
+        ZipFile(zipFile.absolutePath).use { zip ->
+            zip.entries().asSequence().forEach { entry ->
+                val entryPath = entry.name.replace("\\", "/")
 
-    private fun unzipFileFromUrl(zipPath: String, targetPath: String, ignoring: List<String>): File {
-        val zipFile = this.loadFileFromUrl(zipPath, targetPath)
+                val isIgnoredInRoot = entryPath == filesToIgnore.find { it == entryPath }
+                val isIgnoredInSubDir = ignoreSet.any { ignoreItem -> entryPath.startsWith("$ignoreItem/") }
 
-        val unzippedFile = unzipFile(zipFile.path, ignoring, targetPath)
+                if (isIgnoredInRoot || isIgnoredInSubDir) return@forEach
 
-        zipFile.delete()
+                val entryDestination = File(targetDirectory, entryPath)
 
-        return unzippedFile
-    }
+                if (entry.isDirectory) {
+                    entryDestination.mkdirs()
+                } else {
+                    entryDestination.parentFile.mkdirs()
+                    zip.getInputStream(entry).use { input ->
+                        entryDestination.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+            }
+        }
 
-    private fun unzipFileFromResource(zipPath: String, targetPath: String, ignoring: List<String>): File {
-        val zipFile = this.loadFileFromResource(zipPath)
-
-        return unzipFile(zipFile.path, ignoring, zipFile.path.substring(0, zipFile.path.lastIndexOf("/")))
+        return targetDirectory
     }
 
     override fun signFile(filePath: String, metadata: Map<String, String>): File {
         return File("")
     }
 }
-

@@ -1,8 +1,6 @@
 package com.koupper.web
 
-import com.koupper.web.config.JAXRSLoader
-
-open class KoupperBootstrapper : Bootstrapper {
+open class KoupperBootstrapper {/* : Bootstrapper {
     init {
         this.registerJAXRSComponents()
     }
@@ -12,4 +10,5 @@ open class KoupperBootstrapper : Bootstrapper {
 
         JAXRSLoader().scanTo(sourcePackage)
     }
+   */
 }

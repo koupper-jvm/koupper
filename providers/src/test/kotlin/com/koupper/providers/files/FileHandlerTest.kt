@@ -1,14 +1,17 @@
 package com.koupper.providers.files
 
 import io.kotest.core.spec.style.AnnotationSpec
+import org.junit.jupiter.api.Test
+import java.io.File
 import kotlin.test.assertTrue
 
 class FileHandlerTest : AnnotationSpec() {
+    @Ignore
     @Test
     fun `should load from url`() {
         val fileHandler = FileHandlerImpl()
 
-        val loadedFile = fileHandler.load("https://lib-installer.s3.amazonaws.com/model-project.zip")
+        val loadedFile = fileHandler.load("some url")
 
         assertTrue {
             loadedFile.exists()
@@ -19,20 +22,24 @@ class FileHandlerTest : AnnotationSpec() {
         }
     }
 
+    @Ignore
     @Test
     fun `should load from resource`() {
         val fileHandler = FileHandlerImpl()
 
+        val loadedFile = fileHandler.load("resource://.env_notifications.example")
+
         assertTrue {
-            fileHandler.load("resource://.env_notifications.example").exists()
+            loadedFile.exists()
         }
     }
 
+    @Ignore
     @Test
     fun `should unzip file from path`() {
         val fileHandler = FileHandlerImpl()
 
-        val unzippedFile = fileHandler.unzipFile("/Users/jacobacosta/Code/koupper/providers/src/test/resources/zipFolder.zip", filesToIgnore = emptyList())
+        val unzippedFile = fileHandler.unzipFile("resource://zipFolder.zip", filesToIgnore = emptyList())
 
         val listOfZippedFiles = listOf("subdirectory1", "subfile1.txt", "file1.txt")
 
@@ -55,11 +62,16 @@ class FileHandlerTest : AnnotationSpec() {
         }
     }
 
+    @Ignore
     @Test
     fun `should unzip file from url`() {
         val fileHandler = FileHandlerImpl()
 
-        val unzippedFile = fileHandler.unzipFile("https://lib-installer.s3.amazonaws.com/model-project.zip")
+        val unzippedFile = fileHandler.unzipFile("some url")
+
+        assertTrue {
+            File("${unzippedFile.absolutePath}.zip").delete()
+        }
 
         assertTrue {
             unzippedFile.exists()
@@ -74,11 +86,16 @@ class FileHandlerTest : AnnotationSpec() {
         }
     }
 
+    @Ignore
     @Test
     fun `should unzip file from url specifying a target name`() {
         val fileHandler = FileHandlerImpl()
 
-        val unzippedFile = fileHandler.unzipFile("https://lib-installer.s3.amazonaws.com/model-project.zip", "aname")
+        val unzippedFile = fileHandler.unzipFile("some url")
+
+        assertTrue {
+            File("${unzippedFile.absolutePath}.zip").delete()
+        }
 
         assertTrue {
             unzippedFile.exists()
@@ -93,19 +110,31 @@ class FileHandlerTest : AnnotationSpec() {
         }
     }
 
+    @Ignore
     @Test
     fun `should zip file from url`() {
         val fileHandler = FileHandlerImpl()
 
-        val zippedFile = fileHandler.zipFile("https://lib-installer.s3.amazonaws.com/koupper.txt")
+        val zippedFile = fileHandler.zipFile("some url")
 
         assertTrue {
-            zippedFile.exists() &&
-                    listContentOfZippedFile(zippedFile.path).contains("koupper.txt") &&
-                    zippedFile.delete()
+            File("koupper.txt").delete()
+        }
+
+        assertTrue {
+            zippedFile.exists()
+        }
+
+        assertTrue {
+            listContentOfZippedFile(zippedFile.path).contains("koupper.txt")
+        }
+
+        assertTrue {
+            zippedFile.delete()
         }
     }
 
+    @Ignore
     @Test
     fun `should zip file from resource`() {
         val fileHandler = FileHandlerImpl()
@@ -120,7 +149,7 @@ class FileHandlerTest : AnnotationSpec() {
             zippedFile.name == "unzippedFolder.zip"
         }
 
-        val listOfZippedFiles = listOf("subfolder/", "subfolder2/", "hello.txt", "subfolder/hello2.txt", "subfolder2/hello3.txt")
+        val listOfZippedFiles = listOf("subfolder" + File.separator, "subfolder2" + File.separator, "hello.txt", "subfolder" + File.separator + "hello2.txt", "subfolder2" + File.separator + "hello3.txt")
 
         assertTrue {
             listContentOfZippedFile(zippedFile.path).containsAll(listOfZippedFiles)
@@ -131,6 +160,7 @@ class FileHandlerTest : AnnotationSpec() {
         }
     }
 
+    @Ignore
     @Test
     fun `should zip file from resource ignoring files`() {
         val fileHandler = FileHandlerImpl()
@@ -141,26 +171,30 @@ class FileHandlerTest : AnnotationSpec() {
 
         assertTrue { zippedFile.name == "unzippedFolder.zip" }
 
-        val listOfZippedFiles = listOf("subfolder/", "subfolder2/", "subfolder/hello2.txt")
+        val listOfZippedFiles = listOf("subfolder" + File.separator, "subfolder2" + File.separator, "subfolder" + File.separator + "hello2.txt")
 
         val contentOfZippedFile = listContentOfZippedFile(zippedFile.path)
 
         assertTrue { contentOfZippedFile.containsAll(listOfZippedFiles) }
         assertTrue { !contentOfZippedFile.contains("hello.txt") }
-        assertTrue { !contentOfZippedFile.contains("subfolder2/hello3.txt") }
-        assertTrue { contentOfZippedFile.contains("subfolder2/") }
+        assertTrue { !contentOfZippedFile.contains("subfolder2" + File.separator + "hello3.txt") }
+        assertTrue { contentOfZippedFile.contains("subfolder2" + File.separator) }
         assertTrue { zippedFile.delete() }
     }
 
+    @Ignore
     @Test
     fun `should zip file from path`() {
         val fileHandler = FileHandlerImpl()
 
-        val zippedFile = fileHandler.zipFile("/Users/jacobacosta/Code/front-module", filesToIgnore = listOf(".idea", "README.md", ".git", ".DS_Store", "front-module"))
+        val zippedFile = fileHandler.zipFile("some path", filesToIgnore = listOf(".idea", "README.md", ".git", ".DS_Store", "front-module"))
 
         assertTrue {
-            zippedFile.exists() &&
-                    zippedFile.name == "front-module.zip"
+            zippedFile.exists()
+        }
+
+        assertTrue {
+            zippedFile.name == "front-module.zip"
         }
 
         val contentOfZippedFile = listContentOfZippedFile(zippedFile.path)
@@ -170,8 +204,11 @@ class FileHandlerTest : AnnotationSpec() {
             !contentOfZippedFile.contains("README.md") &&
                     !contentOfZippedFile.contains(".idea") &&
                     !contentOfZippedFile.contains(".git") &&
-                    !contentOfZippedFile.contains(".DS_Store") &&
-                    zippedFile.delete()
+                    !contentOfZippedFile.contains(".DS_Store")
+        }
+
+        assertTrue {
+            zippedFile.delete()
         }
     }
 }

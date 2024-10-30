@@ -1,37 +1,38 @@
 package com.koupper.octopus
 
 import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
-import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.configurations.utilities.ANSIColors.ANSI_WHITE
-import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.process.Process
-import com.koupper.octopus.process.SetupModule
+import com.koupper.octopus.modules.http.Route
+import com.koupper.octopus.process.ScriptProcessor
+import com.koupper.os.env
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
+import com.koupper.providers.files.*
 import com.koupper.providers.http.HtppClient
-import com.koupper.providers.parsing.JsonToObject
-import com.koupper.providers.parsing.TextJsonParser
-import com.koupper.providers.parsing.TextParser
-import com.koupper.providers.parsing.extensions.splitKeyValue
-import kotlinx.coroutines.*
 import java.io.*
 import java.net.URL
 import java.nio.file.Paths
+import java.util.*
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
 
+fun String.toCamelCase(): String {
+    return split(" ").joinToString("") { it.lowercase().replaceFirstChar { it.titlecase() } }
+}
+
 val isRelativeScriptFile: (String) -> Boolean = {
-    it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
+    it.matches("^[a-zA-Z0-9_-]+\\.kts$".toRegex())
 }
 
 class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
 
     override fun <T> runFromScriptFile(scriptPath: String, params: String, result: (value: T) -> Unit) {
-        val content = File(scriptPath).readText(Charsets.UTF_8)
+        val content = app.createInstanceOf(FileHandler::class).load(scriptPath).readText(Charsets.UTF_8)
 
         this.run(content, this.convertStringParamsToListParams(params)) { process: T ->
             result(process)
@@ -46,51 +47,74 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
     }
 
-    override fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
+    override fun <T> run(sentence : String, params: Map<String, Any>, result: (value: T) -> Unit) {
         System.setProperty("kotlin.script.classpath", currentClassPath)
+
+        System.setProperty("idea.use.native.fs.for.win", "false")
 
         with(ScriptEngineManager().getEngineByExtension("kts")) {
             val endOfVariableNameInSentence = sentence.indexOf(":")
 
             val startOfSentence = sentence.indexOf("val")
 
-            val valName = sentence.substring(startOfSentence + "al".length + 1, endOfVariableNameInSentence).trim()
+            val valName = sentence.substring(startOfSentence + "val".length, endOfVariableNameInSentence).trim()
 
             when {
-                isContainerType(sentence) -> {
+                isParameterizable(sentence) -> {
                     eval(sentence)
 
-                    if (params.isEmpty()) {
-                        val targetCallback = eval(valName) as (Container) -> T
 
-                        result(targetCallback.invoke(container))
-                    } else {
-                        val targetCallback = eval(valName) as (Container, Map<String, Any>) -> T
+                    val targetCallback = eval(valName) as (Map<String, Any>) -> T
 
-                        result(targetCallback.invoke(container, params))
-                    }
-
+                    result(targetCallback.invoke(params))
                 }
-                isModuleProcess(sentence) -> {
+                isScriptProcess(sentence) -> {
                     eval(sentence)
 
                     if (params.isEmpty()) {
                         val targetCallback = eval(valName) as (Process) -> T
 
-                        result(targetCallback.invoke(SetupModule(container)))
+                        result(targetCallback.invoke(ScriptProcessor(container)))
                     } else {
                         val targetCallback = eval(valName) as (Process, Map<String, Any>) -> T
 
-                        result(targetCallback.invoke(SetupModule(container), params))
+                        result(targetCallback.invoke(ScriptProcessor(container), params))
+                    }
+                }
+                isRoute(sentence) -> {
+                    eval(sentence)
+
+                    if (params.isEmpty()) {
+                        val targetCallback = eval(valName) as (Route) -> T
+
+                        result(targetCallback.invoke(Route(container)))
+                    } else {
+                        val targetCallback = eval(valName) as (Route, Map<String, Any>) -> T
+
+                        result(targetCallback.invoke(Route(container), params))
                     }
                 }
                 else -> {
                     eval(sentence)
 
-                    result(eval(sentence.substring(sentence.indexOf(" "), sentence.indexOf("=") - 1).trim()) as T)
+                    val targetCallback = eval(valName) as () -> T
+
+                    result(targetCallback.invoke())
                 }
             }
         }
+    }
+
+    override fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T {
+        return callable(params)
+    }
+
+    override fun <T> call(callable: () -> T): T {
+        return callable()
+    }
+
+    override fun call(callable: () -> Unit) {
+        callable()
     }
 
     private fun convertStringParamsToListParams(args: String): Map<String, Any> {
@@ -99,7 +123,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
         val params = mutableMapOf<String, Any>()
 
         args.split(",").forEach { arg ->
-            val keyValue = arg.split(":")
+            val keyValue = arg.split("=")
 
             val key = keyValue[0]
 
@@ -111,7 +135,10 @@ class Octopus(private var container: Container) : ScriptExecutor {
         return params
     }
 
-    override fun <T> runScriptFiles(scripts: MutableMap<String, Map<String, Any>>, result: (value: T, scriptName: String) -> Unit) {
+    override fun <T> runScriptFiles(
+        scripts: MutableMap<String, Map<String, Any>>,
+        result: (value: T, scriptName: String) -> Unit
+    ) {
         scripts.forEach { (scriptPath, params) ->
             if (scriptPath.isNotEmpty()) {
                 if (".kts" !in scriptPath) {
@@ -166,51 +193,57 @@ fun main(args: Array<String>) {
     if (args.isNotEmpty() && args[0] == "UPDATING_CHECK") {
         checkForUpdates()
     } else {
-        var params = ""
+        val parameters : String
+        val scriptPath : String
 
-        if (args.size > 1) params = args[1]
+        val fileHandler = app.createInstanceOf(TextFileHandler::class)
 
-        val scriptPath = args[0]
+        try {
+            val content = fileHandler.using(System.getProperty("user.home") + File.separator + ".koupper" + File.separator + "helpers" + File.separator + "octopus-parameters.txt").read()
 
-        processManager.runFromScriptFile(scriptPath, params) { result: Any ->
+            parameters = content.substring(content.indexOf(".kts ") + 5)
+
+            scriptPath = content.substring(0, content.indexOf(".kts ") + 5)
+        } catch (e: FileNotFoundException) {
+            println("Parameters are necessary for Koupper functionality" +  e)
+            exitProcess(0)
+        } finally {
+            //fileHandler.remove()
+        }
+
+        processManager.runFromScriptFile(scriptPath, parameters) { result: Any ->
             processCallback(processManager, scriptPath, result)
         }
     }
 }
 
 fun checkForUpdates(): Boolean {
-    val parser = app.createInstanceOf(TextParser::class)
-    parser.readFromResource(".env")
-
-    val properties = parser.splitKeyValue("=".toRegex())
-
-    val checkForUpdateUrl = properties["CHECK_FOR_UPDATED_URL"]
+    val checkForUpdateUrl = env("CHECK_FOR_UPDATED_URL")
 
     val httpClient = app.createInstanceOf(HtppClient::class)
 
     val response = httpClient.get {
-        url = checkForUpdateUrl!!
+        url = checkForUpdateUrl
     }
-
-    val apps = response?.asString()!!
-
-    val textJsonParser = app.createInstanceOf(TextJsonParser::class) as JsonToObject<*>
-
-    textJsonParser.load(apps)
 
     data class Versioning(val statusCode: String, val body: String)
 
-    val versioning = textJsonParser.toType<Versioning>()
+    val textJsonParser = app.createInstanceOf(JsonFileHandler::class) as JsonFileHandlerImpl<Versioning>
 
-    textJsonParser.load(versioning.body)
+    textJsonParser.read(response?.asString()!!)
+
+    val versioning: Versioning = textJsonParser.toType()
+
+    textJsonParser.read(versioning.body)
 
     data class Project(val name: String, val version: String)
 
     data class Info(val apps: ArrayList<Project>)
 
-    textJsonParser.toType<Info>().apps.forEach { project ->
-        if ((project.name == "octopus" && project.version != properties["OCTOPUS_VERSION"]) ||
-                (project.name == "koupper-installer" && project.version != properties["KOUPPER_CLI_VERSION"])) {
+    (textJsonParser.toType() as Info).apps.forEach { project ->
+        if ((project.name == "octopus" && project.version != env("OCTOPUS_VERSION")) ||
+            (project.name == "koupper-installer" && project.version != env("KOUPPER_CLI_VERSION"))
+        ) {
             print("AVAILABLE_UPDATES")
 
             exitProcess(0)
@@ -223,14 +256,14 @@ fun checkForUpdates(): Boolean {
 private fun processCallback(context: ScriptExecutor, scriptName: String, result: Any) {
     if (result is Container) {
         println("\nscript [$scriptName] ->\u001B[38;5;155m was executed.\u001B[0m")
-    } else if (result is SetupModule) {
-        println("\r${ANSI_GREEN_155}📦 module ${ANSI_WHITE}${result.moduleName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
+    } else if (result is Process) {
+        println("\r${ANSI_GREEN_155}📦 module ${ANSI_WHITE}${result.processName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
+    } else {
+        println(result)
     }
 }
 
-fun createDefaultConfiguration(): ScriptExecutor {
-    val container = app
-
+fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
     val octopus = Octopus(container)
     octopus.registerBuildInServicesProvidersInContainer()
 

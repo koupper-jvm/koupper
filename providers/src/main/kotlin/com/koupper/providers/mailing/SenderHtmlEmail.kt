@@ -1,70 +1,48 @@
 package com.koupper.providers.mailing
 
-import com.koupper.providers.logger.Logger
-import com.koupper.providers.parsing.TextReader
-import com.koupper.providers.parsing.extensions.splitKeyValue
+import com.koupper.os.env
+import com.koupper.providers.Setup
+import java.io.File
+import java.security.Security
 import java.util.*
+import javax.activation.DataHandler
+import javax.activation.FileDataSource
 import javax.mail.*
 import javax.mail.internet.InternetAddress
+import javax.mail.internet.MimeBodyPart
 import javax.mail.internet.MimeMessage
+import javax.mail.internet.MimeMultipart
 
-class SenderHtmlEmail : Sender {
-    private var host: String? = ""
-    private var port: String? = ""
+class SenderHtmlEmail : Sender, Setup() {
     private var from: String? = ""
-    private var userName: String? = ""
-    private var password: String? = ""
     private var targetEmail: String = ""
     private var subject: String? = ""
     private var message: String = ""
     private lateinit var session: Session
     private var properties: Properties = Properties()
-    private val textReader = TextReader()
-    private lateinit var text: String
+    private val attachments: MutableList<File> = mutableListOf()
+    private var content: String = ""
+    private var contentType: String = "text/html" // Default content type is HTML
 
-    override fun configFromPath(configPath: String): Sender {
-        this.textReader.readFromPath(configPath)
-
-        this.setup()
-
-        return this
-    }
-
-    override fun configFromUrl(configPath: String): Sender {
-        this.textReader.readFromURL(configPath)
-
-        this.setup()
-
-        return this
-    }
-
-    override fun configFromResource(configPath: String): Sender {
-        this.textReader.readFromResource(configPath)
-
-        this.setup()
-
-        return this
-    }
-
-    private fun setup() {
-        val values: Map<String?, String?> = this.textReader.splitKeyValue("=".toRegex())
-
-        this.host = values["MAIL_HOST"]
-        this.port = values["MAIL_PORT"]
-        this.from = values["MAIL_FROM_ADDRESS"]
-        this.subject = values["MAIL_FROM_NAME"]
-        this.userName = values["MAIL_USERNAME"]
-        this.password = values["MAIL_PASSWORD"]
+    init {
+        this.configMailProperties()
     }
 
     override fun withContent(content: String) {
-        this.message = content
+        this.content = content
+        this.contentType = contentType
+    }
+
+    override fun addAttachment(filePath: String) {
+        val file = File(filePath)
+
+        if (file.exists()) {
+            this.attachments.add(file)
+        }
     }
 
     override fun sendTo(targetEmail: String): Boolean {
         this.targetEmail = targetEmail
-
-        this.configMailProperties()
 
         this.createSession()
 
@@ -75,24 +53,22 @@ class SenderHtmlEmail : Sender {
         return true
     }
 
-    override fun trackUsing(logger: Logger): Boolean {
-        logger.log()
-
-        return true
+    override fun subject(subject: String) {
+        this.subject = subject
     }
 
     private fun configMailProperties() {
-        this.properties["mail.smtp.host"] = this.host
-        this.properties["mail.smtp.port"] = this.port
-        this.properties["mail.smtp.ssl.enable"] = "true"
+        this.properties["mail.smtp.host"] = env("MAIL_HOST")
+        this.properties["mail.smtp.port"] = env("MAIL_PORT")
         this.properties["mail.smtp.auth"] = "true"
         this.properties["mail.smtp.starttls.enable"] = "true"
+        this.properties["mail.smtp.ssl.protocols"] = "TLSv1.2"
     }
 
     private fun createSession() {
         val authenticator = object : Authenticator() {
             override fun getPasswordAuthentication(): PasswordAuthentication {
-                return PasswordAuthentication(userName, password)
+                return PasswordAuthentication(env("MAIL_USERNAME"), env("MAIL_PASSWORD"))
             }
         }
 
@@ -101,11 +77,28 @@ class SenderHtmlEmail : Sender {
 
     private fun buildMessage(): MimeMessage {
         val message = MimeMessage(this.session)
-        message.setFrom(InternetAddress(this.from))
+        message.setFrom(InternetAddress(env("MAIL_USERNAME")))
         message.setRecipient(Message.RecipientType.TO, InternetAddress(this.targetEmail))
         message.subject = this.subject
         message.sentDate = Date()
-        message.setContent(this.message, "text/html")
+
+        val multipart = MimeMultipart()
+
+        // Add content as the first part
+        val contentPart = MimeBodyPart()
+        contentPart.setContent(content, contentType)
+        multipart.addBodyPart(contentPart)
+
+        // Add attachments
+        for (attachment in attachments) {
+            val attachmentPart = MimeBodyPart()
+            val dataSource = FileDataSource(attachment)
+            attachmentPart.dataHandler = DataHandler(dataSource)
+            attachmentPart.fileName = attachment.name
+            multipart.addBodyPart(attachmentPart)
+        }
+
+        message.setContent(multipart)
 
         return message
     }

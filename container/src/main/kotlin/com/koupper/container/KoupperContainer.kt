@@ -208,9 +208,11 @@ class KoupperContainer() : Container {
         val resources = inputStream.bufferedReader().readLines()
 
         resources.forEach {
-            val kotlinResource = it.substring(0, it.indexOf("."))
+            if (it.contains(".")) {
+                val kotlinResource = it.substring(0, it.indexOf("."))
 
-            classes.add(Class.forName("$`package`.$kotlinResource").kotlin)
+                classes.add(Class.forName("$`package`.$kotlinResource").kotlin)
+            }
         }
 
         return classes

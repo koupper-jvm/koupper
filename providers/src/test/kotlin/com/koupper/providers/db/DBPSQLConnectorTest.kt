@@ -27,7 +27,7 @@ class DBPSQLConnectorTest : AnnotationSpec() {
             val sql = Query().fields("*").from("someTable").where("field" eq "value").toSql()
 
             val connector = DBPSQLConnector()
-            connector.configFromUrl("pathOfEnv")
+            connector.configFrom("pathOfEnv")
 
             lateinit var rows: List<User>
 

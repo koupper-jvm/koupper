@@ -10,7 +10,7 @@ class LoggerServiceProvider : ServiceProvider() {
 
     private fun registerDBLogger() {
         app.bind(Logger::class, {
-            DBLogger()
+            PSQLDBLogger()
         })
     }
 }

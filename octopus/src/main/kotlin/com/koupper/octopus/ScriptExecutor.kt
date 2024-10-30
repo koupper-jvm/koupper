@@ -1,5 +1,7 @@
 package com.koupper.octopus
 
+import com.koupper.container.interfaces.Container
+
 interface ScriptExecutor {
     /**
      * Loads a script from file, running it under ScriptEngineManager implementation and
@@ -28,7 +30,10 @@ interface ScriptExecutor {
      * @param scripts a map of script paths
      * @param result a callback
      */
-    fun <T> runScriptFiles(scripts: MutableMap<String, Map<String, Any>>, result: (value: T, scriptName: String) -> Unit)
+    fun <T> runScriptFiles(
+        scripts: MutableMap<String, Map<String, Any>>,
+        result: (value: T, scriptName: String) -> Unit
+    )
 
     /**
      * Runs a sentence with params under ScriptEngineManager implementation and
@@ -39,4 +44,24 @@ interface ScriptExecutor {
      * @param result a callback
      */
     fun <T> run(sentence: String, params: Map<String, Any> = emptyMap(), result: (value: T) -> Unit)
+
+    /**
+     * call a  function
+     *
+     * @param callable the function
+     * @param params the params
+     */
+    fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T
+
+    /**
+     * Calls a  function
+     *
+     * @return A type
+     */
+    fun <T> call(callable: () -> T): T
+
+    /**
+     * Calls a  function without a return
+     */
+    fun call(callable: () -> Unit)
 }
