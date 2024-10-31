@@ -257,7 +257,7 @@ private fun processCallback(context: ScriptExecutor, scriptName: String, result:
     if (isPrimitiveType(result)) {
         println(result)
     } else if (result is Process) {
-        println("\r${ANSI_GREEN_155}📦 module ${ANSI_WHITE}${result.processName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
+        println("\r${ANSI_GREEN_155}[*] module ${ANSI_WHITE}${result.processName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
     }
 }
 
