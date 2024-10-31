@@ -254,12 +254,17 @@ fun checkForUpdates(): Boolean {
 }
 
 private fun processCallback(context: ScriptExecutor, scriptName: String, result: Any) {
-    if (result is Container) {
-        println("\nscript [$scriptName] ->\u001B[38;5;155m was executed.\u001B[0m")
+    if (isPrimitiveType(result)) {
+        println(result)
     } else if (result is Process) {
         println("\r${ANSI_GREEN_155}📦 module ${ANSI_WHITE}${result.processName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
-    } else {
-        println(result)
+    }
+}
+
+fun isPrimitiveType(value: Any): Boolean {
+    return when (value) {
+        is Int, is Double, is Float, is Long, is Short, is Byte, is Boolean, is Char -> true
+        else -> false
     }
 }
 
