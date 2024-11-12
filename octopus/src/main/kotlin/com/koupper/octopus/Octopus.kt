@@ -1,7 +1,9 @@
 package com.koupper.octopus
 
 import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
+import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.configurations.utilities.ANSIColors.ANSI_WHITE
+import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.process.Process
@@ -32,7 +34,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
 
     override fun <T> runFromScriptFile(scriptPath: String, params: String, result: (value: T) -> Unit) {
-        val content = app.createInstanceOf(FileHandler::class).load(scriptPath).readText(Charsets.UTF_8)
+        val content = File(scriptPath).readText(Charsets.UTF_8)
 
         this.run(content, this.convertStringParamsToListParams(params)) { process: T ->
             result(process)
@@ -62,7 +64,6 @@ class Octopus(private var container: Container) : ScriptExecutor {
             when {
                 isParameterizable(sentence) -> {
                     eval(sentence)
-
 
                     val targetCallback = eval(valName) as (Map<String, Any>) -> T
 
@@ -254,10 +255,10 @@ fun checkForUpdates(): Boolean {
 }
 
 private fun processCallback(context: ScriptExecutor, scriptName: String, result: Any) {
-    if (isPrimitiveType(result)) {
+    if (isPrimitiveType(result) || result is String) {
         println(result)
     } else if (result is Process) {
-        println("\r${ANSI_GREEN_155}[*] module ${ANSI_WHITE}${result.processName()}$ANSI_GREEN_155 was created.\u001B[0m\n")
+        println("\n\rModule ${ANSI_GREEN_155}${result.processName()}$ANSI_RESET created.\u001B[0m\n")
     }
 }
 

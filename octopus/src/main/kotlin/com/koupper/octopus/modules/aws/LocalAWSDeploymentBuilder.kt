@@ -1,5 +1,6 @@
 package com.koupper.octopus.modules.aws
 
+import com.koupper.configurations.utilities.ANSIColors
 import com.koupper.container.app
 import com.koupper.octopus.modifiers.*
 import com.koupper.octopus.modules.Module
@@ -56,7 +57,7 @@ class LocalAWSDeploymentBuilder(
     }
 
     override fun build() {
-        print("\u001B[38;5;155m\nBuilding module... \u001B[0m")
+        print("\nBuilding module...")
         this.modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
 
         File("${modelProject.name}.zip").delete()
@@ -67,9 +68,7 @@ class LocalAWSDeploymentBuilder(
             this.version = moduleVersion
         }
 
-        println("\u001B[38;5;155m✔\u001B[0m")
-
-        print("\u001B[38;5;155m\nRequesting an optimized process manager... \u001B[0m")
+        print("\nRequesting an optimized process manager...")
 
         File("${this.projectName}/libs").mkdir()
 
@@ -78,9 +77,11 @@ class LocalAWSDeploymentBuilder(
             "${this.modelProject.name}/libs/octopus-${env("OCTOPUS_VERSION")}.jar"
         )
 
-        println("\u001B[38;5;155m✔\u001B[0m")
+        println("${ANSIColors.ANSI_GREEN_155}[\u2713]${ANSIColors.ANSI_RESET}")
 
-        println("\u001B[38;5;155mOptimized process manager located successfully.\u001B[0m")
+        print("optimized process manager located successfully...")
+
+        println("${ANSIColors.ANSI_GREEN_155}[\u2713]${ANSIColors.ANSI_RESET}")
 
         locateScriptsInPackage(deployableScripts, this.modelProject.name, this.packageName)
 

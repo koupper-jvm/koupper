@@ -106,9 +106,9 @@ abstract class Module {
         if (Files.notExists(Paths.get(finalScriptPath))) {
             commitScriptInPackage(handler, finalScriptPath, packageName)
 
-            print("${ANSIColors.ANSI_GREEN_155}${handler.second}${ANSIColors.ANSI_RESET}")
+            print("${handler.second}...")
 
-            println("\u001B[38;5;155m...[ok]\u001B[0m")
+            println("${ANSIColors.ANSI_GREEN_155}[\u2713]${ANSIColors.ANSI_RESET}")
         }
     }
 
@@ -259,5 +259,5 @@ fun Module.locateScriptsInPackage(scripts: Map<String, String>, targetPath: Stri
         locateScriptInPackage(singleScriptMap, targetPath, packageName)
     }
 
-    println("\u001B[38;5;155mScripts located.\u001B[0m")
+    println("${ANSIColors.ANSI_YELLOW_229}\nThe scripts were located.${ANSIColors.ANSI_RESET}")
 }

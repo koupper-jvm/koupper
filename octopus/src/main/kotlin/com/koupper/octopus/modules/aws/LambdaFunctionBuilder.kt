@@ -52,7 +52,7 @@ class LambdaFunctionBuilder(private val projectName: String,
             "$projectName/libs/octopus-${env("OCTOPUS_VERSION")}.jar"
         )
 
-        println("\u001B[38;5;155m✔\u001B[0m")
+        println("\u2713") 
 
         println("\u001B[38;5;155mOptimized process manager located successfully.\u001B[0m")
 

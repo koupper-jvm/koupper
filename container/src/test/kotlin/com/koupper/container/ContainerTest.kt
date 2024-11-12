@@ -13,6 +13,8 @@ class ContainerTest : AnnotationSpec() {
     fun `should bind a concrete class and return new one instances for multiple creations`() {
         val container = KoupperContainer()
 
+        data class Versioning(val statusCode: String, val body: String)
+
         container.bind(AbstractClass::class, {
             ConcreteClass()
         })

@@ -1,9 +1,7 @@
 package com.koupper.providers.crypto
 
 import com.koupper.os.env
-import com.koupper.os.setGlobalConfig
 import com.koupper.providers.Setup
-import com.koupper.providers.files.FileHandlerImpl
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
@@ -23,9 +21,7 @@ class AESGCM128 : Crypt0, Setup() {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
 
         cipher.init(
-            Cipher.ENCRYPT_MODE,
-            SecretKeySpec(this.secret.toByteArray(), "AES"),
-            GCMParameterSpec(128, IV)
+            Cipher.ENCRYPT_MODE, SecretKeySpec(this.secret.toByteArray(), "AES"), GCMParameterSpec(128, IV)
         )
 
         this.IV = IV
@@ -38,9 +34,7 @@ class AESGCM128 : Crypt0, Setup() {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
 
         cipher.init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(this.secret.toByteArray(), "AES"),
-            GCMParameterSpec(128, IVbytes)
+            Cipher.DECRYPT_MODE, SecretKeySpec(this.secret.toByteArray(), "AES"), GCMParameterSpec(128, IVbytes)
         )
 
         this.IV = IVbytes
