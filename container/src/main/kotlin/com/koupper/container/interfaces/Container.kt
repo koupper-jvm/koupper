@@ -7,7 +7,7 @@ interface Container {
 
     fun <T : Any, V : Any> bind(abstractClass: T, concreteClass: V, tag: String = "undefined")
 
-    fun <T : Any> createInstanceOf(kClass: KClass<T>, tagName: String = "undefined"): T
+    fun <T : Any> getInstance(kClass: KClass<T>, tagName: String = "undefined"): T
 
     fun <T : Any> singleton(abstractClass: T, callback: () -> T)
 

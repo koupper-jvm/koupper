@@ -7,21 +7,18 @@ import java.io.*
 
 class LocalAWSDeployer(private val container: Container) : Process {
     lateinit var name: String
-    private var metadata: MutableMap<String, Any> = mutableMapOf()
     lateinit var moduleType: String
     lateinit var version: String
     lateinit var packageName: String
     lateinit var scripts: Map<String, String>
 
     override fun register(name: String,
-                          metadata: MutableMap<String, Any>,
                           moduleType: String,
                           version: String,
                           packageName: String,
                           scripts: Map<String, String>
     ) : Process {
         this.name = name
-        this.metadata = metadata
         this.moduleType = moduleType
         this.version = version
         this.packageName = packageName
@@ -64,7 +61,6 @@ class LocalAWSDeployer(private val container: Container) : Process {
                 println(line)
             }
 
-            // Wait for the process to complete
             val exitCode = process.waitFor()
             println("Process exited with code: $exitCode")
         } catch (e: IOException) {

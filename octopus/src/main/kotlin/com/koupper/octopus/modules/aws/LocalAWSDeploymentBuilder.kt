@@ -33,8 +33,8 @@ class LocalAWSDeploymentBuilder(
     private val rootPath: String
 ) : Module() {
 
-    private val fileHandler = app.createInstanceOf(FileHandler::class)
-    private val txtFileHandler = app.createInstanceOf(TextFileHandler::class)
+    private val fileHandler = app.getInstance(FileHandler::class)
+    private val txtFileHandler = app.getInstance(TextFileHandler::class)
     private val routerMaker = Route(app)
     private lateinit var routeDefinition: RouteDefinition
     private var apiDefinition: List<API>
@@ -318,7 +318,7 @@ class LocalAWSDeploymentBuilder(
     }
 
     private fun loadAPIDefinitionFromConfiguration(): List<API> {
-        val ymlHandler = app.createInstanceOf(YmlFileHandler::class)
+        val ymlHandler = app.getInstance(YmlFileHandler::class)
 
         val content = ymlHandler.readFrom(env("CONFIG_DEPLOYMENT_FILE"))
 

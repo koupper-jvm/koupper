@@ -21,7 +21,7 @@ class PSQLDBLoggerTest : AnnotationSpec() {
             LoggerServiceProvider().up()
 
             assertTrue {
-                app.createInstanceOf(Logger::class) is PSQLDBLogger
+                app.getInstance(Logger::class) is PSQLDBLogger
             }
         }
     }

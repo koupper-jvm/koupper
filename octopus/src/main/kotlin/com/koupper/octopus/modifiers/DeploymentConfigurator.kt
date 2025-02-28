@@ -11,7 +11,7 @@ class DeploymentConfigurator private constructor(
     private val projectName: String,
     private val version: String
 ) {
-    private val textFileHandler = app.createInstanceOf(TextFileHandler::class)
+    private val textFileHandler = app.getInstance(TextFileHandler::class)
 
     constructor(builder: Builder) : this(
         builder.port,

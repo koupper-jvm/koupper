@@ -13,21 +13,21 @@ class FileServiceProviderTest : AnnotationSpec() {
     @Test
     fun `should bind the text file handler impl`() {
         assertTrue {
-            app.createInstanceOf(TextFileHandler::class, "TextFileHandlerImpl") is TextFileHandlerImpl
+            app.getInstance(TextFileHandler::class, "TextFileHandlerImpl") is TextFileHandlerImpl
         }
     }
 
     @Test
     fun `should bind the file handler impl`() {
         assertTrue {
-            app.createInstanceOf(FileHandler::class, "FileHandlerImpl") is FileHandlerImpl
+            app.getInstance(FileHandler::class, "FileHandlerImpl") is FileHandlerImpl
         }
     }
 
     @Test
     fun `should bind the json file  handler impl`() {
         assertTrue {
-            app.createInstanceOf(JSONFileHandler::class) is JSONFileHandlerImpl<*>
+            app.getInstance(JSONFileHandler::class) is JSONFileHandlerImpl<*>
         }
     }
 }

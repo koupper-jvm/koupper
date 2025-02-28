@@ -10,7 +10,7 @@ class GradleConfigurator private constructor(
     private val version: String,
     private val packageName: String,
 ) {
-    private var textFileHandler: TextFileHandler = app.createInstanceOf(TextFileHandler::class)
+    private var textFileHandler: TextFileHandler = app.getInstance(TextFileHandler::class)
 
     private constructor(builder: Builder) : this(
         builder.rootProjectName,

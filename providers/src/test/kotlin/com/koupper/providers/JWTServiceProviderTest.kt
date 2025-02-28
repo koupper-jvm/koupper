@@ -19,7 +19,7 @@ class JWTServiceProviderTest : AnnotationSpec() {
             JWTServiceProvider().up()
 
             assertTrue {
-                app.createInstanceOf(JWT::class) is JWTAgent
+                app.getInstance(JWT::class) is JWTAgent
             }
         }
     }

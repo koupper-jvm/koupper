@@ -21,7 +21,7 @@ class ExecutableJarBuilder(
     private val deployableScripts: Map<String, String>
 ) : Module() {
 
-    private val fileHandler = app.createInstanceOf(FileHandler::class)
+    private val fileHandler = app.getInstance(FileHandler::class)
     private val modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
 
     private constructor(builder: Builder) : this(

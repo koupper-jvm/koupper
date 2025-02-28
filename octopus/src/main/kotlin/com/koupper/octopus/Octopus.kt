@@ -2,8 +2,6 @@ package com.koupper.octopus
 
 import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
 import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
-import com.koupper.configurations.utilities.ANSIColors.ANSI_WHITE
-import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.process.Process
@@ -14,8 +12,11 @@ import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import com.koupper.providers.files.*
 import com.koupper.providers.http.HtppClient
+import kotlinx.coroutines.*
 import java.io.*
+import java.net.ServerSocket
 import java.net.URL
+import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util.*
 import javax.script.ScriptEngineManager
@@ -34,7 +35,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
 
     override fun <T> runFromScriptFile(scriptPath: String, params: String, result: (value: T) -> Unit) {
-        val content = File(scriptPath).readText(Charsets.UTF_8)
+        val content = app.getInstance(FileHandler::class).load(scriptPath).readText(Charsets.UTF_8)
 
         this.run(content, this.convertStringParamsToListParams(params)) { process: T ->
             result(process)
@@ -49,61 +50,112 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
     }
 
-    override fun <T> run(sentence : String, params: Map<String, Any>, result: (value: T) -> Unit) {
+    override fun <T> run(sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
         System.setProperty("kotlin.script.classpath", currentClassPath)
-
         System.setProperty("idea.use.native.fs.for.win", "false")
 
         with(ScriptEngineManager().getEngineByExtension("kts")) {
-            val endOfVariableNameInSentence = sentence.indexOf(":")
+            val exportFunctionName = extractExportFunctionName(sentence)
 
-            val startOfSentence = sentence.indexOf("val")
+            if (exportFunctionName != null) {
+                val exportFunctionSignature = extractExportFunctionSignature(sentence) ?: ""
 
-            val valName = sentence.substring(startOfSentence + "val".length, endOfVariableNameInSentence).trim()
+                fun <R> captureOutputAndResult(block: () -> R): String {
+                    val originalOut = System.out
+                    val originalErr = System.err
+                    val logFile = File("callback_${System.currentTimeMillis()}.log").apply { createNewFile() }
 
-            when {
-                isParameterizable(sentence) -> {
-                    eval(sentence)
+                    return try {
+                        val ps = PrintStream(logFile, StandardCharsets.UTF_8.name()).apply {
+                            System.setOut(this)
+                            System.setErr(this)
+                        }
 
-                    val targetCallback = eval(valName) as (Map<String, Any>) -> T
+                        val resultValue = block()
 
-                    result(targetCallback.invoke(params))
-                }
-                isScriptProcess(sentence) -> {
-                    eval(sentence)
+                        ps.println(resultValue)
 
-                    if (params.isEmpty()) {
-                        val targetCallback = eval(valName) as (Process) -> T
-
-                        result(targetCallback.invoke(ScriptProcessor(container)))
-                    } else {
-                        val targetCallback = eval(valName) as (Process, Map<String, Any>) -> T
-
-                        result(targetCallback.invoke(ScriptProcessor(container), params))
+                        logFile.absolutePath
+                    } catch (e: Exception) {
+                        e.printStackTrace(PrintStream(logFile, StandardCharsets.UTF_8.name()))
+                        logFile.absolutePath
+                    } finally {
+                        System.setOut(originalOut)
+                        System.setErr(originalErr)
                     }
                 }
-                isRoute(sentence) -> {
-                    eval(sentence)
 
-                    if (params.isEmpty()) {
-                        val targetCallback = eval(valName) as (Route) -> T
+                when {
+                    isParameterizable(exportFunctionSignature) -> {
+                        eval(sentence)
+                        val targetCallback = eval(exportFunctionName) as (Map<String, Any>) -> T
 
-                        result(targetCallback.invoke(Route(container)))
-                    } else {
-                        val targetCallback = eval(valName) as (Route, Map<String, Any>) -> T
+                        val callbackResult = captureOutputAndResult {
+                            targetCallback.invoke(params)
+                        }
+                        result(callbackResult as T)
+                    }
 
-                        result(targetCallback.invoke(Route(container), params))
+                    isScriptProcess(exportFunctionSignature) -> {
+                        eval(sentence)
+
+                        val callbackResult = captureOutputAndResult {
+                            if (params.isEmpty()) {
+                                val targetCallback = eval(exportFunctionName) as (Process) -> T
+                                targetCallback.invoke(ScriptProcessor(container))
+                            } else {
+                                val targetCallback = eval(exportFunctionName) as (Process, Map<String, Any>) -> T
+                                targetCallback.invoke(ScriptProcessor(container), params)
+                            }
+                        }
+                        result(callbackResult as T)
+                    }
+
+                    isRoute(exportFunctionSignature) -> {
+                        eval(sentence)
+
+                        val callbackResult = captureOutputAndResult {
+                            if (params.isEmpty()) {
+                                val targetCallback = eval(exportFunctionName) as (Route) -> T
+                                targetCallback.invoke(Route(container))
+                            } else {
+                                val targetCallback = eval(exportFunctionName) as (Route, Map<String, Any>) -> T
+                                targetCallback.invoke(Route(container), params)
+                            }
+                        }
+                        result(callbackResult as T)
+                    }
+
+                    else -> {
+                        eval(sentence)
+                        val targetCallback = eval(exportFunctionName) as () -> T
+
+                        val callbackResult = captureOutputAndResult {
+                            targetCallback.invoke()
+                        }
+                        result(callbackResult as T)
                     }
                 }
-                else -> {
-                    eval(sentence)
-
-                    val targetCallback = eval(valName) as () -> T
-
-                    result(targetCallback.invoke())
-                }
+            } else {
+                println("No se encontró una función anotada con @Export.")
             }
         }
+    }
+
+    private fun extractExportFunctionName(script: String): String? {
+        val exportPattern = "@Export\\s+val\\s+(\\S+)\\s*:"
+        val regex = Regex(exportPattern)
+
+        val matchResult = regex.find(script)
+        return matchResult?.groups?.get(1)?.value
+    }
+
+    private fun extractExportFunctionSignature(script: String): String? {
+        val exportPattern = "@Export\\s+val\\s+\\w+\\s*:\\s*([^=]+)"
+        val regex = Regex(exportPattern)
+
+        val matchResult = regex.find(script)
+        return matchResult?.groups?.get(1)?.value?.trim()
     }
 
     override fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T {
@@ -116,6 +168,16 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
     override fun call(callable: () -> Unit) {
         callable()
+    }
+
+    override fun <T> call(callables: Array<Pair<(Map<String, Any>) -> T, Map<String, Any>>>) {
+        runBlocking {
+            callables.forEach { (callable, params) ->
+                launch(Dispatchers.Default) {
+                    callable(params)
+                }
+            }
+        }
     }
 
     private fun convertStringParamsToListParams(args: String): Map<String, Any> {
@@ -186,34 +248,82 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
         return this.container.getBindings() as Map<KClass<*>, Any>
     }
-}
 
-fun main(args: Array<String>) {
-    val processManager = createDefaultConfiguration()
+    private fun extractFunctionNameWithExportAnnotation(sentence: String): String? {
+        val lines = sentence.lines()
 
-    if (args.isNotEmpty() && args[0] == "UPDATING_CHECK") {
-        checkForUpdates()
-    } else {
-        val parameters : String
-        val scriptPath : String
+        for (i in lines.indices) {
+            if (lines[i].trim().startsWith("@Export")) {
+                val nextLine = lines.getOrNull(i + 1)?.trim() ?: continue
 
-        val fileHandler = app.createInstanceOf(TextFileHandler::class)
-
-        try {
-            val content = fileHandler.using(System.getProperty("user.home") + File.separator + ".koupper" + File.separator + "helpers" + File.separator + "octopus-parameters.txt").read()
-
-            parameters = content.substring(content.indexOf(".kts ") + 5)
-
-            scriptPath = content.substring(0, content.indexOf(".kts ") + 5)
-        } catch (e: FileNotFoundException) {
-            println("Parameters are necessary for Koupper functionality $e")
-            exitProcess(0)
-        } finally {
-            fileHandler.remove()
+                if (nextLine.startsWith("val") || nextLine.startsWith("fun")) {
+                    return nextLine.split(" ")[1].split(":").first()
+                }
+            }
         }
 
-        processManager.runFromScriptFile(scriptPath, parameters) { result: Any ->
-            processCallback(processManager, scriptPath, result)
+        return null
+    }
+}
+
+fun main() = runBlocking {
+    val processManager = createDefaultConfiguration()
+
+    launch { listenForExternalCommands(processManager) }
+
+    while (true) delay(1000)
+}
+
+fun listenForExternalCommands(processManager: ScriptExecutor) {
+    val serverSocket = ServerSocket(9998)
+    println("🔄 Octopus escuchando en el puerto 9998...")
+
+    while (true) {
+        val clientSocket = serverSocket.accept()
+        println("🔗 Nueva conexión a octopus: ${clientSocket.inetAddress.hostAddress}")
+
+        CoroutineScope(Dispatchers.IO).launch {
+            clientSocket.use {
+                try {
+                    val reader = it.getInputStream().bufferedReader()
+                    val writer = it.getOutputStream().bufferedWriter()
+
+                    val command = reader.readLine()?.trim()
+                    if (command.isNullOrBlank() || command == "null") {
+                        return@launch
+                    }
+
+                    println("📥 Comando recibido en octopus: $command")
+
+                    when {
+                        command == "UPDATING_CHECK" -> {
+                            val updateMessage = checkForUpdates()
+                            //writer.write(updateMessage + "\n")
+                            //writer.flush()
+                        }
+                        command.contains(".kts ") -> {
+                            val scriptPath = command.substringBefore(".kts ") + ".kts"
+                            val parameters = command.substringAfter(".kts ").trim()
+
+                            println("📜 Ejecutando script: $scriptPath con params: $parameters")
+
+                            processManager.runFromScriptFile(scriptPath, parameters) { result: Any ->
+                                println("✅ Resultado del script: $result")
+
+                                writer.write(result.toString() + "\n")
+                                writer.flush()
+                            }
+                        }
+                        else -> {
+                            val errorMsg = "⚠️ Formato inválido en el comando: $command"
+                            writer.write(errorMsg + "\n")
+                            writer.flush()
+                        }
+                    }
+                } catch (e: Exception) {
+                    println("⚠️ Error en la conexión: ${e.message}")
+                }
+            }
         }
     }
 }
@@ -221,7 +331,7 @@ fun main(args: Array<String>) {
 fun checkForUpdates(): Boolean {
     val checkForUpdateUrl = env("CHECK_FOR_UPDATED_URL")
 
-    val httpClient = app.createInstanceOf(HtppClient::class)
+    val httpClient = app.getInstance(HtppClient::class)
 
     val response = httpClient.get {
         url = checkForUpdateUrl
@@ -229,7 +339,7 @@ fun checkForUpdates(): Boolean {
 
     data class Versioning(val statusCode: String, val body: String)
 
-    val textJsonParser = app.createInstanceOf(JSONFileHandler::class) as JSONFileHandlerImpl<Versioning>
+    val textJsonParser = app.getInstance(JSONFileHandler::class) as JSONFileHandlerImpl<Versioning>
 
     textJsonParser.read(response?.asString()!!)
 
@@ -256,7 +366,15 @@ fun checkForUpdates(): Boolean {
 
 private fun processCallback(context: ScriptExecutor, scriptName: String, result: Any) {
     if (isPrimitiveType(result) || result is String) {
-        println(result)
+        val logFile = File(System.getProperty("java.io.tmpdir"), "octopus.log")
+
+        logFile.writeText(
+            when (result) {
+                is String -> result
+                is Process -> "\n\rModule ${ANSI_GREEN_155}${result.processName()}$ANSI_RESET created.\u001B[0m\n"
+                else -> result.toString()
+            }
+        )
     } else if (result is Process) {
         println("\n\rModule ${ANSI_GREEN_155}${result.processName()}$ANSI_RESET created.\u001B[0m\n")
     }

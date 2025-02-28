@@ -83,9 +83,11 @@ project(':octopus') {
         implementation project(':os')
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
         implementation "org.jetbrains.kotlin:kotlin-script-util:1.8.22"
+        implementation "org.jetbrains.kotlin:kotlin-scripting-jvm"
         implementation "org.jetbrains.kotlin:kotlin-script-runtime"
         implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:$kotlinVersion"
         implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:$kotlinVersion"
+        implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2'
         implementation 'net.java.dev.jna:jna:5.5.0'
         implementation "org.gradle:gradle-tooling-api:8.2.1"
         runtimeOnly "org.slf4j:slf4j-simple:$slf4jVersion"

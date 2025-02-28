@@ -3,20 +3,23 @@ package com.koupper.providers.aws.dynamo
 import com.koupper.os.env
 import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.net.URI
 
 class DynamoClientImpl : DynamoClient {
-    private val credentials: AwsBasicCredentials = AwsBasicCredentials.create("fakeMyKeyId", "fakeSecretAccessKey")
-
     private val dynamoDbClient: DynamoDbClient = DynamoDbClient.builder()
         .region(Region.US_EAST_2)
-        .credentialsProvider(StaticCredentialsProvider.create(credentials))
-        .endpointOverride(URI(env("DYNAMO_URL")))
+        .credentialsProvider(DefaultCredentialsProvider.create())
+        .apply {
+            val dynamoUrl = env("DYNAMO_URL")
+
+            if (dynamoUrl.isNotBlank()) {
+                endpointOverride(URI(dynamoUrl))
+            }
+        }
         .build()
 
     override fun createTable(
@@ -140,21 +143,26 @@ class DynamoClientImpl : DynamoClient {
 
     override fun getItem(
         tableName: String,
-        partitionKeyName: String?,
-        partitionKeyValue: String?,
+        partitionKeyName: String,
+        partitionKeyValue: String,
         sortKeyName: String?,
         sortKeyValue: String?,
     ): Map<String, Any>? {
-        if (partitionKeyName == null || partitionKeyValue == null || sortKeyName == null || sortKeyValue == null) {
-            throw IllegalArgumentException("partitionKey, sortKey, and its values are required for this query.")
+        if (partitionKeyName.isBlank() || partitionKeyValue.isBlank()) {
+            throw IllegalArgumentException("Partition key and its value are required for this query.")
+        }
+
+        val key = mutableMapOf<String, AttributeValue>(
+            partitionKeyName to AttributeValue.builder().s(partitionKeyValue).build()
+        )
+
+        if (!sortKeyName.isNullOrBlank() && !sortKeyValue.isNullOrBlank()) {
+            key[sortKeyName] = AttributeValue.builder().s(sortKeyValue).build()
         }
 
         val getItemRequest = GetItemRequest.builder()
             .tableName(tableName)
-            .key(mapOf(
-                partitionKeyName to AttributeValue.builder().s(partitionKeyValue).build(),
-                sortKeyName to AttributeValue.builder().s(sortKeyValue).build()
-            ))
+            .key(key)
             .build()
 
         val getItemResult = dynamoDbClient.getItem(getItemRequest)

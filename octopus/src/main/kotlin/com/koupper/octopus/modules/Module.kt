@@ -22,7 +22,7 @@ abstract class Module {
     protected val registeredScriptPackages: MutableMap<String, String> = mutableMapOf()
     protected val registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
     protected val createdScripts: MutableMap<String, String> = mutableMapOf()
-    private val fileHandler = app.createInstanceOf(FileHandler::class)
+    private val fileHandler = app.getInstance(FileHandler::class)
     private lateinit var scriptLocationPath: String
     private lateinit var validatedScriptFile: File
 
@@ -144,9 +144,16 @@ abstract class Module {
             this.validatedScriptFile.forEachLine { line ->
                 if (lineNumber == 0) {
                     var scriptPackage = this.scriptLocationPath.replace(Regex("""(?<!\\)[/\\](?!\\)"""), ".")
-                    scriptPackage = scriptPackage.substring(0, scriptPackage.lastIndexOf("."))
 
-                    writer.println("package $packageName.$EXTENSIONS_FOLDER_NAME.${scriptPackage}\n\n$line")
+                    val packageStartIndex = scriptPackage.lastIndexOf(".")
+
+                    if (packageStartIndex > 0) {
+                        scriptPackage = ".${scriptPackage.substring(0, packageStartIndex)}"
+                    } else {
+                        scriptPackage = ""
+                    }
+
+                    writer.println("package $packageName.$EXTENSIONS_FOLDER_NAME${scriptPackage}\n\n$line")
                 } else if (callbackFunctionSignature.matches(line)) {
                     val regex = Regex("""^val\s+(\w+)\s*(:\s*\(?[\w<>,\s]*\)?\s*->\s*[\w<>]*\s*=\s*\{.*)""")
 

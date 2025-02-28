@@ -13,18 +13,20 @@ val dependsOfContainer: (String) -> Boolean = {
 }
 
 val isParameterizable: (String) -> Boolean = {
-    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Container\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
-            it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
+    it.contains("\\(Container\\)\\s*->\\s*[a-zA-Z0-9]+".toRegex()) ||
+            it.contains("\\(Map<String,\\s*Any>\\)\\s*->\\s*[a-zA-Z0-9]+".toRegex())
 }
+
 
 val isScriptProcess: (String) -> Boolean = {
-    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(ScriptProcessor\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
-            it.contains("val\\s[a-zA-Z0-9]+:\\s\\(ScriptProcess,\\s*Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
+    it.contains("\\(ScriptProcessor\\)\\s*->\\s*[a-zA-Z0-9]+".toRegex()) ||
+            it.contains("\\(ScriptProcess,\\s*Map<String,\\s*Any>\\)\\s*->\\s*[a-zA-Z0-9]+".toRegex())
 }
 
+
 val isRoute: (String) -> Boolean = {
-    it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Route\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex()) ||
-            it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Route,\\s*Map<String,\\s*Any>\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
+    it.contains("\\(Route\\)\\s*->\\s*[a-zA-Z0-9]+".toRegex()) ||
+            it.contains("\\(Route,\\s*Map<String,\\s*Any>\\)\\s*->\\s*[a-zA-Z0-9]+".toRegex())
 }
 
 val isModuleProcess: (String) -> Boolean = {

@@ -15,16 +15,16 @@ fun env(variableName: String): String {
     var envValue = System.getenv(variableName) ?: "undefined"
 
     if (envValue === "undefined") {
-        try {
+        envValue = try {
             val envValueOnFile = File(".env").getProperty(variableName)
 
             if (envValueOnFile === "undefined") {
-                throw Exception("The $variableName should be present in: an environment variable||an env file (.env) to use this provider")
+                ""
             } else {
-                envValue = envValueOnFile
+                envValueOnFile
             }
         } catch (e: Exception) {
-            throw Exception("The $variableName should be present in: an environment variable||an env file (.env) to use this provider")
+            ""
         }
     }
 

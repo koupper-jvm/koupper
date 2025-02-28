@@ -3,7 +3,6 @@ package com.koupper.providers.mailing
 import com.koupper.os.env
 import com.koupper.providers.Setup
 import java.io.File
-import java.security.Security
 import java.util.*
 import javax.activation.DataHandler
 import javax.activation.FileDataSource

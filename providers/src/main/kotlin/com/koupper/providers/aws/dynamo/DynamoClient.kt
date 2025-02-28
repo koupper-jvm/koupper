@@ -20,8 +20,8 @@ interface DynamoClient {
     ): List<Map<String, Any>>?
     fun getItem(
         tableName: String,
-        partitionKeyName: String? = null,
-        partitionKeyValue: String? = null,
+        partitionKeyName: String,
+        partitionKeyValue: String,
         sortKeyName: String? = null,
         sortKeyValue: String? = null,
     ): Map<String, Any>?

@@ -54,6 +54,13 @@ interface ScriptExecutor {
     fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T
 
     /**
+     * call an array of functions
+     *
+     * @param callables the functions
+     */
+    fun <T> call(callables: Array<Pair<(Map<String, Any>) -> T, Map<String, Any>>>)
+
+    /**
      * Calls a  function
      *
      * @return A type

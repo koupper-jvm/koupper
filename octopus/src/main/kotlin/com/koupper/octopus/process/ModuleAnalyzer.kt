@@ -3,7 +3,6 @@ package com.koupper.octopus.process
 class ModuleAnalyzer : Process {
     override fun register(
         name: String,
-        metadata: MutableMap<String, Any>,
         moduleType: String,
         version: String,
         packageName: String,

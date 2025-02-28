@@ -2,6 +2,7 @@ package com.koupper.octopus.process
 
 import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
+import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.isRelativeScriptFile
 import com.koupper.octopus.modifiers.DeploymentConfigurator
@@ -10,6 +11,8 @@ import com.koupper.octopus.modules.aws.ExecutableJarBuilder
 import com.koupper.octopus.modules.aws.LambdaFunctionBuilder
 import com.koupper.octopus.modules.aws.LocalAWSDeploymentBuilder
 import com.koupper.octopus.modules.http.service.GrizzlyGradleJerseyBuilder
+import com.koupper.os.env
+import com.koupper.providers.files.YmlFileHandler
 import java.io.File
 import kotlin.system.exitProcess
 
@@ -27,21 +30,18 @@ val getRealScriptNameFrom: (String) -> String = { script ->
 
 class ScriptProcessor(val container: Container) : Process {
     private lateinit var name: String
-    private var metadata: MutableMap<String, Any> = mutableMapOf()
     private lateinit var moduleType: String
     private lateinit var version: String
     private lateinit var packageName: String
     private lateinit var scripts: Map<String, String>
 
     override fun register(name: String,
-                          metadata: MutableMap<String, Any>,
                           moduleType: String,
                           version: String,
                           packageName: String,
                           scripts: Map<String, String>
     ) : Process {
         this.name = name
-        this.metadata = metadata
         this.moduleType = moduleType
         this.version = version
         this.packageName = packageName
@@ -80,6 +80,33 @@ class ScriptProcessor(val container: Container) : Process {
     }
 
     private fun buildByType() {
+        val ymlHandler = app.getInstance(YmlFileHandler::class)
+
+        val content = ymlHandler.readFrom(env("CONFIG_DEPLOYMENT_FILE"))
+
+        val server = content["server"]
+        var serverPort = 8080
+        var contextPath = "/"
+
+        if (server != null) {
+            val properties: List<Map<String, String>> = server as List<Map<String, String>>
+
+            for (serverItem: Map<String, String> in properties) {
+                if (serverItem.contains("port")) {
+                    if (serverItem["port"] != null || serverItem["port"]!!.isNotEmpty()) {
+                        val portValue = serverItem["port"]?.toIntOrNull()
+                            ?: 8080
+
+                        serverPort = portValue
+                    }
+                } else if (serverItem.contains("contextPath")) {
+                    if (serverItem["contextPath"] != null || serverItem["contextPath"]!!.isNotEmpty()) {
+                        contextPath = serverItem["contextPath"]!!
+                    }
+                }
+            }
+        }
+
         val self = this
 
         when {
@@ -113,11 +140,11 @@ class ScriptProcessor(val container: Container) : Process {
                     version = self.version
                     packageName = self.packageName
                     deployableScripts = self.scripts
-                    rootPath = metadata["server.rootUrl"] as String
+                    rootPath = contextPath
                 }
 
                 DeploymentConfigurator.configure {
-                    port = metadata["server.port"]?.toString()?.toInt()!!
+                    port = serverPort
                     packageName = self.packageName
                     projectName = self.name
                     version = self.version

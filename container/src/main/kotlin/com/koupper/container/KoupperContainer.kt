@@ -117,7 +117,7 @@ class KoupperContainer() : Container {
         }
     }
 
-    override fun <T : Any> createInstanceOf(kClass: KClass<T>, tagName: String): T {
+    override fun <T : Any> getInstance(kClass: KClass<T>, tagName: String): T {
         if (tagName != "undefined") {
             val filteredBinding = mutableMapOf<Any, Any>()
 
@@ -138,7 +138,7 @@ class KoupperContainer() : Container {
             this.bindings = filteredBinding
         }
 
-        return createInstance(this, kClass)
+        return getInstance(this, kClass)
     }
 
     override fun <T : Any> singleton(abstractClass: T, callback: () -> T) {
@@ -230,11 +230,11 @@ class KoupperContainer() : Container {
         return instance
     }
 
-    fun <T : Any> createInstanceOf(kClass: KClass<T>): T {
-        return createInstance(this, kClass)
+    fun <T : Any> getInstance(kClass: KClass<T>): T {
+        return getInstance(this, kClass)
     }
 
-    private fun <T : Any> createInstance(container: Container, kClass: KClass<T>): T {
+    private fun <T : Any> getInstance(container: Container, kClass: KClass<T>): T {
         val instance = when {
             container.getBindings()[kClass] is Function<*> -> {
                 (container.getBindings()[kClass] as () -> T).invoke()
@@ -270,7 +270,7 @@ class KoupperContainer() : Container {
         return instance
     }
 
-    fun <T : Any> createInstanceOf(name: String): T {
+    fun <T : Any> getInstance(name: String): T {
         var instance: T? = null
 
         this.getBindings().forEach lit@{ key, value ->

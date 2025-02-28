@@ -18,7 +18,7 @@ class GrizzlyGradleJerseyBuilder(private val projectName: String,
                                  private val packageName: String,
                                  private val scripts: Map<String, String>) : Module() {
 
-    private val fileHandler = app.createInstanceOf(FileHandler::class)
+    private val fileHandler = app.getInstance(FileHandler::class)
 
     private constructor(builder: Builder):  this (
         builder.projectName,

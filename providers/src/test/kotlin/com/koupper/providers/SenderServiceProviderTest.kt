@@ -23,7 +23,7 @@ class SenderServiceProviderTest : AnnotationSpec() {
             SenderServiceProvider().up()
 
             assertTrue {
-                app.createInstanceOf(Sender::class) is SenderHtmlEmail
+                app.getInstance(Sender::class) is SenderHtmlEmail
             }
         }
     }
