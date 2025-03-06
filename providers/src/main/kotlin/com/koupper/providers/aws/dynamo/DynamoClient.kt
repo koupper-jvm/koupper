@@ -1,5 +1,7 @@
 package com.koupper.providers.aws.dynamo
 
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+
 interface DynamoClient {
     fun createTable(
         tableName: String,
@@ -32,4 +34,10 @@ interface DynamoClient {
     fun queryItems(tableName: String, keyConditionExpression: String, expressionAttributeValues: Map<String, Any>): List<Map<String, Any>> // Nuevo método para consultas
     fun scanItems(tableName: String): List<Map<String, Any>> // Nuevo método para escaneo
     fun getAllItemsPaginated(tableName: String): List<Map<String, Any>>
+    fun getItemCount(
+        tableName: String?,
+        gsiName: String? = null, // Ahora opcional
+        filterExpression: String? = null,
+        expressionValues: Map<String, AttributeValue>? = null
+    ): Int
 }

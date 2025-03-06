@@ -3,6 +3,8 @@ package com.koupper.providers.aws.dynamo
 import com.koupper.os.env
 import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
+import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
@@ -12,12 +14,16 @@ import java.net.URI
 class DynamoClientImpl : DynamoClient {
     private val dynamoDbClient: DynamoDbClient = DynamoDbClient.builder()
         .region(Region.US_EAST_2)
-        .credentialsProvider(DefaultCredentialsProvider.create())
         .apply {
             val dynamoUrl = env("DYNAMO_URL")
 
             if (dynamoUrl.isNotBlank()) {
                 endpointOverride(URI(dynamoUrl))
+                credentialsProvider {
+                    AwsBasicCredentials.create("fakeAccessKey", "fakeSecretKey") // 🔥 Esto evita el error
+                }
+            } else {
+                credentialsProvider(DefaultCredentialsProvider.create())
             }
         }
         .build()
@@ -311,6 +317,35 @@ class DynamoClientImpl : DynamoClient {
 
         return items  // Retornar la lista completa de ítems
     }
+
+    override fun getItemCount(
+        tableName: String?,
+        gsiName: String?, // Ahora opcional
+        filterExpression: String?,
+        expressionValues: Map<String, AttributeValue>?
+    ): Int {
+        val scanRequestBuilder = ScanRequest.builder()
+            .tableName(tableName)
+            .select(Select.COUNT) // 🔥 Solo contamos, no traemos los ítems
+
+        // Si se especifica un GSI, lo usamos
+        if (!gsiName.isNullOrEmpty()) {
+            scanRequestBuilder.indexName(gsiName)
+        }
+
+        // Si hay filtros, los aplicamos
+        if (!filterExpression.isNullOrEmpty()) {
+            scanRequestBuilder.filterExpression(filterExpression)
+        }
+        if (!expressionValues.isNullOrEmpty()) {
+            scanRequestBuilder.expressionAttributeValues(expressionValues)
+        }
+
+        val result = dynamoDbClient.scan(scanRequestBuilder.build())
+
+        return result.count() // 🔥 Retorna el número de elementos
+    }
+
 
 }
 
