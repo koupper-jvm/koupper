@@ -15,6 +15,7 @@ import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
 
 class ExecutableJarBuilder(
+    private val context: String,
     private val projectName: String,
     private val moduleVersion: String,
     private val packageName: String,
@@ -25,6 +26,7 @@ class ExecutableJarBuilder(
     private val modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
 
     private constructor(builder: Builder) : this(
+        builder.context,
         builder.projectName,
         builder.version,
         builder.packageName,
@@ -40,7 +42,6 @@ class ExecutableJarBuilder(
 
         GradleConfigurator.configure {
             this.rootProjectName = projectName
-            this.projectPath = modelProject.path
             this.version = moduleVersion
         }
 
@@ -57,12 +58,13 @@ class ExecutableJarBuilder(
 
         println("\u001B[38;5;155mOptimized process manager located successfully.\u001B[0m")
 
-        locateScriptsInPackage(deployableScripts, Paths.get(modelProject.name).absolutePathString(), this.packageName)
+        locateScriptsInPackage(context, deployableScripts, Paths.get(modelProject.name).absolutePathString(), this.packageName)
 
         Files.move(Paths.get(modelProject.name), Paths.get(projectName))
     }
 
     class Builder {
+        var context: String = ""
         var projectName: String = "undefined"
         var version: String = "0.0.0"
         var packageName: String = ""

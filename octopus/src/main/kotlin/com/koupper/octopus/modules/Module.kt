@@ -2,8 +2,10 @@ package com.koupper.octopus.modules;
 
 import com.koupper.configurations.utilities.ANSIColors
 import com.koupper.container.app
+import com.koupper.octopus.Octopus
+import com.koupper.octopus.Octopus.Companion.extractExportFunctionName
+import com.koupper.octopus.Octopus.Companion.extractExportFunctionSignature
 import com.koupper.octopus.process.getRealScriptNameFrom
-import com.koupper.os.env
 import com.koupper.providers.files.FileHandler
 import java.io.File
 import java.nio.file.Files
@@ -20,33 +22,52 @@ fun isPrimitive(typeName: String): Boolean {
 
 abstract class Module {
     protected val registeredScriptPackages: MutableMap<String, String> = mutableMapOf()
-    protected val registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
     protected val createdScripts: MutableMap<String, String> = mutableMapOf()
-    private val fileHandler = app.getInstance(FileHandler::class)
+    protected val registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
+    protected val registeredFunctionNames: MutableMap<String, String?> = mutableMapOf()
     private lateinit var scriptLocationPath: String
     private lateinit var validatedScriptFile: File
 
     abstract fun build()
 
     companion object {
-        fun locateScripts(scripts: Map<String, String>, targetPath: String, packageName: String) =
-            locateScriptsInPackage(scripts, targetPath, packageName)
+        fun locateScripts(context: String, scripts: Map<String, String>, targetPath: String, packageName: String) =
+            locateScriptsInPackage(context, scripts, targetPath, packageName)
 
-        private fun locateScriptsInPackage(scripts: Map<String, String>, targetPath: String, packageName: String) {
-            locateScriptsInPackage(scripts, targetPath, packageName)
+        private fun locateScriptsInPackage(context: String, scripts: Map<String, String>, targetPath: String, packageName: String) {
+            locateScriptsInPackage(context, scripts, targetPath, packageName)
         }
     }
 
-    fun locateScriptInPackage(handler: Pair<String, String>, targetPath: String, packageName: String) {
-        val lastSlash = handler.second.lastIndexOf('/')
+    private fun extractFunctionSignature(script: String): Pair<List<String>, String>? {
+        val scriptContent = File(script).readText()
 
-        val lastBackslash = handler.second.lastIndexOf('\\')
+        return extractExportFunctionSignature(scriptContent)
+    }
+
+    private fun getFunctionName(): String? {
+        val scriptContent = this.validatedScriptFile.readText()
+
+        return extractExportFunctionName(scriptContent)
+    }
+
+    private fun createValidatedScriptFile(context: String, scriptPath: String) {
+        val executableScriptFinalPath =
+            if (scriptPath.startsWith(File.separator)) scriptPath.substringAfter(File.separator) else scriptPath
+
+        this.validatedScriptFile = validateScript(context + File.separator + executableScriptFinalPath)
+    }
+
+    fun processScript(context: String, handlerToScript: Pair<String, String>, targetPath: String, packageName: String) {
+        val lastSlash = handlerToScript.second.lastIndexOf('/')
+
+        val lastBackslash = handlerToScript.second.lastIndexOf('\\')
 
         val lastIndexOfPath = maxOf(lastSlash, lastBackslash)
 
-        this.scriptLocationPath = handler.second.substring(0, lastIndexOfPath + 1)
+        this.scriptLocationPath = handlerToScript.second.substring(0, lastIndexOfPath + 1)
 
-        val scriptName = this.buildScriptName(handler.second)
+        val scriptName = buildScriptName(handlerToScript.second)
 
         val finalScriptPath = "$targetPath/src/main/kotlin/${
             packageName.replace(
@@ -55,58 +76,21 @@ abstract class Module {
             )
         }/$EXTENSIONS_FOLDER_NAME/${this.scriptLocationPath}$scriptName.kt"
 
-        this.validatedScriptFile = validateScript(handler.second)
+        createValidatedScriptFile(context, handlerToScript.second)
 
-        val functionSignatureRegex = Regex(""":\s*\((.*)\)\s*->\s*([^\s=]+)""")
+        val functionSignature = this.extractFunctionSignature(this.validatedScriptFile.path)
 
-        this.validatedScriptFile.forEachLine { line ->
-            val matchResult = functionSignatureRegex.find(line)
+        this.registeredScripts[handlerToScript.first] = functionSignature as Pair<List<String>, String>
 
-            if (matchResult != null) {
-                val rawParams = matchResult.groupValues[1]
-                val returnType = matchResult.groupValues[2]
+        this.registeredFunctionNames[handlerToScript.first] = this.getFunctionName()
 
-                val inputTypes = mutableListOf<String>()
-                var currentParam = StringBuilder()
-                var depth = 0
-
-                for (char in rawParams) {
-                    when {
-                        char == ',' && depth == 0 -> {
-                            inputTypes.add(currentParam.toString().trim())
-                            currentParam = StringBuilder()
-                        }
-
-                        char == '<' -> {
-                            depth++
-                            currentParam.append(char)
-                        }
-
-                        char == '>' -> {
-                            depth--
-                            currentParam.append(char)
-                        }
-
-                        else -> {
-                            currentParam.append(char)
-                        }
-                    }
-                }
-
-                if (currentParam.isNotBlank()) {
-                    inputTypes.add(currentParam.toString().trim())
-                }
-
-                this.registeredScripts[handler.first] = Pair(inputTypes, returnType)
-
-                this.registeredScriptPackages[handler.first] = this.scriptLocationPath.replace(Regex("""(?<!\\)[/\\](?!\\)"""), ".")
-            }
-        }
+        this.registeredScriptPackages[handlerToScript.first] =
+            this.scriptLocationPath.replace(Regex("""(?<!\\)[/\\](?!\\)"""), ".")
 
         if (Files.notExists(Paths.get(finalScriptPath))) {
-            commitScriptInPackage(handler, finalScriptPath, packageName)
+            commitScriptInPackage(handlerToScript, finalScriptPath, packageName.replace("""(?<!\\)[/\\](?!\\)""", "."))
 
-            print("${handler.second}...")
+            print("${handlerToScript.second}...")
 
             println("${ANSIColors.ANSI_GREEN_155}[\u2713]${ANSIColors.ANSI_RESET}")
         }
@@ -121,12 +105,10 @@ abstract class Module {
             finalNameWhitHyphen.substringBeforeLast(".")
         } else if (finalNameWhitDash.isNotEmpty()) {
             finalNameWhitDash.substringBeforeLast(".")
-        } else {
-            throw Exception("Script file can not be empty.")
-        }
+        } else getRealScriptNameFrom(scriptPath).substringBeforeLast(".")
     }
 
-    private fun commitScriptInPackage(handler: Pair<String, String>, targetPath: String, packageName: String) {
+    private fun commitScriptInPackage(handler: Pair<String, String>, finalScriptPath: String, packageName: String) {
         if (this.createdScripts[handler.first] != null) {
             println("\u001B[33m${this.buildScriptName(handler.second)} script exist. Ignoring relocation.\u001B[0m")
             return
@@ -134,9 +116,7 @@ abstract class Module {
 
         val tmpFile = Files.createTempFile("k-s-", ".kt").toFile()
 
-        val callbackFunctionSignature = Regex(
-            """^val\s+\w+\s*:\s*\(?(?:[\w<>,\s]*)?\)?\s*->\s*[\w<>]*\s*=\s*\{.*"""
-        )
+        val regex = Regex("""@Export\s+val\s+(\w+)\s*(:\s*\([^)]*\)\s*->\s*[\w<>,()\s]*\s*=\s*\{.*)""")
 
         tmpFile.printWriter().use { writer ->
             var lineNumber = 0
@@ -147,21 +127,19 @@ abstract class Module {
 
                     val packageStartIndex = scriptPackage.lastIndexOf(".")
 
-                    if (packageStartIndex > 0) {
-                        scriptPackage = ".${scriptPackage.substring(0, packageStartIndex)}"
+                    scriptPackage = if (packageStartIndex > 0) {
+                        ".${scriptPackage.substring(0, packageStartIndex)}"
                     } else {
-                        scriptPackage = ""
+                        ""
                     }
 
                     writer.println("package $packageName.$EXTENSIONS_FOLDER_NAME${scriptPackage}\n\n$line")
-                } else if (callbackFunctionSignature.matches(line)) {
-                    val regex = Regex("""^val\s+(\w+)\s*(:\s*\(?[\w<>,\s]*\)?\s*->\s*[\w<>]*\s*=\s*\{.*)""")
-
+                } else if (regex.matches(line)) {
                     val newLine = line.replace(regex) {
                         "val ${buildScriptName(handler.second)}${it.groupValues[2]}"
                     }
 
-                    this.createdScripts[handler.first] = targetPath
+                    this.createdScripts[handler.first] = finalScriptPath
 
                     writer.println(newLine)
                 } else {
@@ -171,7 +149,7 @@ abstract class Module {
             }
         }
 
-        val targetFile = File(targetPath)
+        val targetFile = File(finalScriptPath)
         targetFile.parentFile.mkdirs()
         tmpFile.renameTo(targetFile)
     }
@@ -197,50 +175,18 @@ abstract class Module {
     }
 
     private fun validateScript(scriptPath: String): File {
-        val scriptFile = searchFileInLocations(scriptPath)
+        val scriptFile = File(scriptPath)
 
         val sentence = scriptFile.readText(Charsets.UTF_8)
 
         if (sentence.isNotEmpty()) {
             with(ScriptEngineManager().getEngineByExtension("kts")) {
-                eval(sentence)
-            }
-        }
+                val exportedFunctionName = extractExportFunctionName(sentence)
 
-        return scriptFile
-    }
-
-    private fun searchFileInLocations(scriptPath: String): File {
-        var scriptFile: File
-
-        try {
-            val fileInCurrentPath = this.fileHandler.load(scriptPath)
-
-            if (!fileInCurrentPath.exists()) {
-                throw Exception("The script file $scriptPath does not exist in the current path.")
-            } else {
-                scriptFile = fileInCurrentPath
-            }
-        } catch (e: Exception) {
-            try {
-                val fileInLibsPath = this.fileHandler.load("libs/$scriptPath")
-
-                if (!fileInLibsPath.exists()) {
-                    throw Exception("The script file $scriptPath does not exist in the libs folder.")
+                if (exportedFunctionName != null) {
+                    eval(sentence)
                 } else {
-                    scriptFile = fileInLibsPath
-                }
-            } catch (e: Exception) {
-                try {
-                    val fileInEnvVariablePath = this.fileHandler.load(env("KOUPPER_PATH"))
-
-                    if (!fileInEnvVariablePath.exists()) {
-                        throw Exception("The script file $scriptPath does not exist in KOUPPER_PATH location.")
-                    } else {
-                        scriptFile = fileInEnvVariablePath
-                    }
-                } catch (e: Exception) {
-                    throw Exception("The script file $scriptPath does not exist.")
+                    println("No function annotated with @Export was found.")
                 }
             }
         }
@@ -249,7 +195,7 @@ abstract class Module {
     }
 }
 
-fun Module.locateScriptsInPackage(scripts: Map<String, String>, targetPath: String, packageName: String) {
+fun Module.locateScriptsInPackage(context: String, scripts: Map<String, String>, targetPath: String, packageName: String) {
     if (scripts.isEmpty()) {
         println("\u001B[38;5;229mNo scripts configured...\u001B[0m")
 
@@ -257,13 +203,17 @@ fun Module.locateScriptsInPackage(scripts: Map<String, String>, targetPath: Stri
     }
 
     for ((key, value) in scripts) {
-        if (key.isEmpty() || value.isEmpty()) {
+        if (key.isEmpty()) {
+            throw Exception("An identifier should be specified.")
+        }
+
+        if (value.isEmpty()) {
             throw Exception("A script should be specified.")
         }
 
-        val singleScriptMap = Pair(key, value)
+        val handlerToScript = Pair(key, value)
 
-        locateScriptInPackage(singleScriptMap, targetPath, packageName)
+        processScript(context, handlerToScript, targetPath, packageName)
     }
 
     println("${ANSIColors.ANSI_YELLOW_229}\nThe scripts were located.${ANSIColors.ANSI_RESET}")

@@ -5,7 +5,7 @@ import org.gradle.tooling.GradleConnector
 import java.io.*
 
 
-class LocalAWSDeployer(private val container: Container) : Process {
+class LocalAWSDeployer/*(private val container: Container) : Process {
     lateinit var name: String
     lateinit var moduleType: String
     lateinit var version: String
@@ -69,4 +69,4 @@ class LocalAWSDeployer(private val container: Container) : Process {
             e.printStackTrace()
         }
     }
-}
+}*/

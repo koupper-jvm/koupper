@@ -1,10 +1,9 @@
 package com.koupper.octopus.modifiers
 
 import com.koupper.container.app
-import com.koupper.container.interfaces.Container
 import com.koupper.providers.files.TextFileHandler
 
-class DeploymentConfigurator private constructor(
+class SetupGrizzlyConfigurator private constructor(
     private val port: Int,
     private val rootUrl: String,
     private val packageName: String,
@@ -52,6 +51,6 @@ class DeploymentConfigurator private constructor(
         var projectName = "undefined"
         var version = "undefined"
 
-        fun build() = DeploymentConfigurator(this)
+        fun build() = SetupGrizzlyConfigurator(this)
     }
 }

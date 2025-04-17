@@ -7,6 +7,9 @@ import java.nio.file.Paths
 import kotlin.reflect.KClass
 
 class RequestHandlerControllerBuilder(
+    private val context: String,
+    private val modelProject: String,
+    private val rootLocation: String,
     path: String,
     controllerConsumes: List<String> = emptyList(),
     controllerProduces: List<String> = emptyList(),
@@ -31,6 +34,9 @@ class RequestHandlerControllerBuilder(
     }
 
     private constructor(builder: Builder) : this(
+        builder.context,
+        builder.modelProject,
+        builder.rootLocation,
         builder.path,
         builder.controllerConsumes,
         builder.controllerProduces,
@@ -39,7 +45,7 @@ class RequestHandlerControllerBuilder(
         builder.methods,
         builder.registeredScripts
     ) {
-        super.baseControllerLocation = "model-project/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt"
+        super.baseControllerLocation = builder.rootLocation
     }
 
     override fun build() {
@@ -49,16 +55,17 @@ class RequestHandlerControllerBuilder(
 
         this.textFileHandler.putLineAfter(classDeclaration, getRequestProperties(), overrideOriginal = true)
 
+        val destinationPath = Paths.get(
+            "${context + File.separator + modelProject}/src/main/kotlin/${
+                this.packageName.replace(".", File.separator)
+            }/controllers"
+        )
+
+        Files.createDirectories(destinationPath)
+
         Files.move(
             Paths.get(this.baseControllerLocation),
-            Paths.get(
-                "model-project/src/main/kotlin/${
-                    this.packageName.replace(
-                        ".",
-                        File.separator
-                    )
-                }/controllers/${this.controllerName}.kt"
-            )
+            destinationPath.resolve("${this.controllerName}.kt")
         )
     }
 
@@ -88,7 +95,7 @@ class RequestHandlerControllerBuilder(
     }
 
     override fun addMethodBody(method: Method) {
-        val body = this.textFileHandler.getContentBetweenContent("val apiGatewayProxyRequestEvent", "return requestHandler200S", inclusiveMode = true)
+        val body = this.textFileHandler.getContentBetweenContent("val apiGatewayProxyRequestEvent", "return {{REQUEST_HANDLER_VARIABLE_NAME}}.handleRequest", inclusiveMode = true)
         var requestEvent = body.joinToString(separator = "\n").replace("\"POST\"", "\"${method.action.name.uppercase()}\"")
 
         if (method.action != Action.POST || method.action == Action.PUT) {
@@ -107,8 +114,8 @@ class RequestHandlerControllerBuilder(
     }
 
     private fun replaceRequestHandler(content: String, handlerName: String): String {
-        return content.replace("val requestHandler200S = RequestHandler200S()", "val $handlerName = ${handlerName.replaceFirstChar { it.uppercaseChar() }}()")
-            .replace("return requestHandler200S", "return $handlerName")
+        return content.replace("{{REQUEST_HANDLER_VARIABLE_NAME}}", handlerName)
+            .replace("{{REQUEST_HANDLER_NAME}}", handlerName.replaceFirstChar { it.uppercaseChar() })
     }
 
 
@@ -119,6 +126,9 @@ class RequestHandlerControllerBuilder(
     }
 
     class Builder {
+        var context = ""
+        var modelProject = ""
+        var rootLocation = "model-project/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt"
         var path: String = Property.UNDEFINED.name
         var controllerConsumes: List<String> = emptyList()
         var controllerProduces: List<String> = emptyList()

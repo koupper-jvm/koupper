@@ -14,8 +14,8 @@ sealed class HttpClient {
     var path: String? = null
     var url: String? = null
     lateinit var method: String
-    val params: MutableMap<String, Any> = mutableMapOf()
-    val headers: MutableMap<String, Any> = mutableMapOf()
+    val params: MutableMap<String, String> = mutableMapOf()
+    val headers: MutableMap<String, String> = mutableMapOf()
 
     open fun makeBody(): RequestBody = throw UnsupportedOperationException("Request body is not supported for [$method] Method.")
 }
@@ -73,9 +73,13 @@ class HttpInvoker : HttpClient(), HtppClient {
 
         val post = Post().apply(init)
 
+        require(!post.url.isNullOrBlank()) { "URL must be provided for POST request." }
+        require(Regex("^https?://.+").matches(post.url!!)) {
+            "Invalid URL format: '${post.url}'"
+        }
+
         val response = httpPost {
-            host = post.host
-            path = post.path
+            url(post.url!!)
             param {
                 post.params
             }
@@ -83,9 +87,7 @@ class HttpInvoker : HttpClient(), HtppClient {
                 post.headers
             }
             body {
-                form {
-                    post.makeBody()
-                }
+                post.makeBody()
             }
         }
 
@@ -100,7 +102,9 @@ class HttpInvoker : HttpClient(), HtppClient {
         val response = httpGet {
             url(get.url!!)
             param {
-                get.params
+                get.params.forEach { (key, value) ->
+                    key to value
+                }
             }
         }
 
@@ -113,8 +117,7 @@ class HttpInvoker : HttpClient(), HtppClient {
         val put = Put().apply(init)
 
         val response = httpPut {
-            host = put.host
-            path = put.path
+            url = put.url
             param {
                 put.params
             }
@@ -132,8 +135,7 @@ class HttpInvoker : HttpClient(), HtppClient {
         val patch = Patch().apply(init)
 
         val response = httpPatch {
-            host = patch.host
-            path = patch.path
+            url = patch.url
             param {
                 patch.params
             }
@@ -151,8 +153,7 @@ class HttpInvoker : HttpClient(), HtppClient {
         val delete = Delete().apply(init)
 
         val response = httpDelete {
-            host = delete.host
-            path = delete.path
+            url = delete.url
             param {
                 delete.params
             }

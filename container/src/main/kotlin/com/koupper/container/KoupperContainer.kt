@@ -11,6 +11,7 @@ import kotlin.reflect.KType
 import kotlin.reflect.full.createInstance
 
 val app = KoupperContainer()
+var context: String? = null
 
 class KoupperContainer() : Container {
     private var scope: String = ""

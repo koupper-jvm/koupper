@@ -1,7 +1,7 @@
 package com.koupper.octopus.modules.http
 
 import com.koupper.container.interfaces.Container
-import com.koupper.octopus.modifiers.DeploymentConfigurator
+import com.koupper.octopus.modifiers.SetupGrizzlyConfigurator
 import com.koupper.octopus.modules.http.service.GrizzlyGradleJerseyBuilder
 import com.koupper.os.env
 import java.io.File
@@ -44,7 +44,7 @@ sealed interface RouteDefinition {
     fun deleteMethods(): MutableList<RouteDefinition>
     fun registerRouter(route: RouteDefinition.() -> Unit): RouteDefinition
     fun setup(config: GrizzlyGradleJerseyBuilder.Builder.() -> Unit): RouteDefinition
-    fun deployOn(config: DeploymentConfigurator.Builder.() -> Unit): RouteDefinition
+    fun deployOn(config: SetupGrizzlyConfigurator.Builder.() -> Unit): RouteDefinition
     fun stop()
 }
 
@@ -199,8 +199,8 @@ open class Route(private val container: Container) : RouteDefinition {
         return this
     }
 
-    override fun deployOn(config: DeploymentConfigurator.Builder.() -> Unit): RouteDefinition {
-        DeploymentConfigurator.configure(config)
+    override fun deployOn(config: SetupGrizzlyConfigurator.Builder.() -> Unit): RouteDefinition {
+        SetupGrizzlyConfigurator.configure(config)
 
         return this
     }

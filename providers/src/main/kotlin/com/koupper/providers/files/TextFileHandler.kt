@@ -183,4 +183,15 @@ interface TextFileHandler {
      * Remove the global file.
      */
     fun remove(): Boolean
+
+    /**
+     * Reads a file and replaces all placeholders in the format {{PLACEHOLDER}} with corresponding values.
+     *
+     * @property placeholders the map containing placeholders and their replacement values.
+     * @property filePath the file path to read.
+     * @property overrideOriginal if true, overwrites the original file with the updated content.
+     * @return The file with placeholders replaced. If `overrideOriginal` is true, the file is updated, otherwise only the modified content is returned.
+     */
+    fun replacePlaceholders(placeholders: Map<String, String?>, filePath: String = "undefined", overrideOriginal: Boolean = false): File
+
 }

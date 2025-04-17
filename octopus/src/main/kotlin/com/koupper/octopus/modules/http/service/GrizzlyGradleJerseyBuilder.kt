@@ -13,14 +13,17 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
 
-class GrizzlyGradleJerseyBuilder(private val projectName: String,
-                                 private val moduleVersion: String,
-                                 private val packageName: String,
-                                 private val scripts: Map<String, String>) : Module() {
+class GrizzlyGradleJerseyBuilder(
+    private val context: String,
+    private val projectName: String,
+    private val moduleVersion: String,
+    private val packageName: String,
+    private val scripts: Map<String, String>) : Module() {
 
     private val fileHandler = app.getInstance(FileHandler::class)
 
     private constructor(builder: Builder):  this (
+        builder.context,
         builder.projectName,
         builder.version,
         builder.packageName,
@@ -38,7 +41,6 @@ class GrizzlyGradleJerseyBuilder(private val projectName: String,
 
         GradleConfigurator.configure {
             this.rootProjectName = projectName
-            this.projectPath = modelProject.path
             this.version = moduleVersion
         }
 
@@ -55,12 +57,13 @@ class GrizzlyGradleJerseyBuilder(private val projectName: String,
 
         println("\u001B[38;5;155mOptimized process manager located successfully.\u001B[0m")
 
-        locateScriptsInPackage(scripts, Paths.get(modelProject.name).absolutePathString(),this.packageName)
+        locateScriptsInPackage(context, scripts, Paths.get(modelProject.name).absolutePathString(),this.packageName)
 
         Files.move(Paths.get(modelProject.name), Paths.get(projectName))
     }
 
     class Builder {
+        var context: String = ""
         var projectName : String = "undefined"
         var version : String = "0.0.0"
         var packageName: String = ""

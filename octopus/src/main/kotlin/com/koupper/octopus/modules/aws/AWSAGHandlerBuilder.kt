@@ -2,6 +2,7 @@ package com.koupper.octopus.modules.aws
 
 import com.koupper.configurations.utilities.ANSIColors
 import com.koupper.container.app
+import com.koupper.octopus.exceptions.UndefinedHandlerException
 import com.koupper.octopus.modifiers.*
 import com.koupper.octopus.modules.Module
 import com.koupper.octopus.modules.http.Post
@@ -24,8 +25,24 @@ import kotlin.io.path.pathString
 import kotlin.reflect.KClass
 
 data class API(val path: String, val method: String, val handler: String, val description: String)
+data class APIGPREInput(
+    val version: String?,
+    val resource: String?,
+    val path: String?,
+    val httpMethod: String?,
+    val headers: Map<String, String>?,
+    val multiValueHeaders: Map<String, List<String>>?,
+    val queryStringParameters: Map<String, String>?,
+    val multiValueQueryStringParameters: Map<String, List<String>>?,
+    val pathParameters: Map<String, String>?,
+    val stageVariables: Map<String, String>?,
+    val body: String?,
+    val isBase64Encoded: Boolean?
+)
 
-class LocalAWSDeploymentBuilder(
+
+class AWSAGHandlerBuilder(
+    private val context: String,
     private val projectName: String,
     private val moduleVersion: String,
     private val packageName: String,
@@ -35,12 +52,12 @@ class LocalAWSDeploymentBuilder(
 
     private val fileHandler = app.getInstance(FileHandler::class)
     private val txtFileHandler = app.getInstance(TextFileHandler::class)
-    private val routerMaker = Route(app)
     private lateinit var routeDefinition: RouteDefinition
     private var apiDefinition: List<API>
     private lateinit var modelProject: File
 
     private constructor(builder: Builder) : this(
+        builder.context,
         builder.projectName,
         builder.version,
         builder.packageName,
@@ -57,24 +74,22 @@ class LocalAWSDeploymentBuilder(
     }
 
     override fun build() {
-        print("\nBuilding module...")
-        this.modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
+        print("Building module...")
 
-        File("${modelProject.name}.zip").delete()
+        this.modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL", context), projectName)
 
         GradleConfigurator.configure {
             this.rootProjectName = projectName
-            this.projectPath = modelProject.path
             this.version = moduleVersion
         }
 
         print("\nRequesting an optimized process manager...")
 
-        File("${this.projectName}/libs").mkdir()
+        File("${this.modelProject.path}/libs").mkdir()
 
         downloadFile(
-            URL(env("OPTIMIZED_PROCESS_MANAGER_URL")),
-            "${this.modelProject.name}/libs/octopus-${env("OCTOPUS_VERSION")}.jar"
+            URL(env("OPTIMIZED_PROCESS_MANAGER_URL", context)),
+            "${modelProject.path}/libs/octopus-${env("OCTOPUS_VERSION", context)}.jar"
         )
 
         println("${ANSIColors.ANSI_GREEN_155}[\u2713]${ANSIColors.ANSI_RESET}")
@@ -83,7 +98,7 @@ class LocalAWSDeploymentBuilder(
 
         println("${ANSIColors.ANSI_GREEN_155}[\u2713]${ANSIColors.ANSI_RESET}")
 
-        locateScriptsInPackage(deployableScripts, this.modelProject.name, this.packageName)
+        locateScriptsInPackage(context, deployableScripts, modelProject.path, this.packageName)
 
         this.createRequestHandlers()
 
@@ -91,9 +106,9 @@ class LocalAWSDeploymentBuilder(
 
         this.locateBootstrappingFile()
 
-        File("${this.modelProject.name}/src/main/kotlin/io/mp").apply { walkBottomUp().forEach { it.delete() } }
-
-        Files.move(Paths.get(this.modelProject.name), Paths.get(this.projectName))
+        File("${this.modelProject.name}/src/main/kotlin/io").apply {
+            walkBottomUp().forEach { it.delete() }
+        }
     }
 
     private fun locateBootstrappingFile() {
@@ -109,6 +124,8 @@ class LocalAWSDeploymentBuilder(
     }
 
     private fun buildRequestHandlerController() {
+        val routerMaker = Route(app)
+
         this.routeDefinition = routerMaker.registerRouter {
             apiDefinition.forEach { api ->
                 path { rootPath }
@@ -165,6 +182,12 @@ class LocalAWSDeploymentBuilder(
         val self = this
 
         RequestHandlerControllerBuilder.build {
+            this.modelProject = self.modelProject.name
+
+            this.context = self.context
+
+            this.rootLocation = "${self.modelProject.name}/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt"
+
             this.path = routeDefinition.path()
 
             this.controllerConsumes = routeDefinition.consumes()
@@ -246,81 +269,62 @@ class LocalAWSDeploymentBuilder(
 
             val finalRequestHandler = this.txtFileHandler.using(destinationFile.pathString)
 
+            val scriptInputParams: List<String> = this.registeredScripts[api.handler]?.first ?: emptyList()
+
             val scriptReturnType = this.registeredScripts[api.handler]?.second ?: ""
 
             val scriptPackage = super.registeredScriptPackages[api.handler]
 
-            val scriptName = this.deployableScripts[api.handler]!!
+            var scriptName = ""
 
-            var requestHandlerName = ""
-
-            if (scriptReturnType == "Unit") {
-                Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler204.kt"), destinationFile)
-                requestHandlerName = "RequestHandler204"
-            } else if (isPrimitive(scriptReturnType)) {
-                Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler200.kt"), destinationFile)
-                requestHandlerName = "RequestHandler200"
-
-                val executorSentence = "${String.format("%-8s", " ")}val result: Any = executor.call(functionName, mapOf("
-
-                finalRequestHandler.replaceLine(
-                    this.txtFileHandler.getNumberLineFor(executorSentence),
-                    executorSentence.replace("Any", scriptReturnType).replace("functionName", this.buildScriptName(scriptName)),
-                    overrideOriginal = true
-                )
-
-                if (scriptReturnType == "String") {
-                    val bodySentence = "${String.format("%-12s", " ")}body = result.toString()"
-
-                    finalRequestHandler.replaceLine(
-                        this.txtFileHandler.getNumberLineFor(bodySentence),
-                        bodySentence.replace("result.toString()", "result"),
-                        overrideOriginal = true
-                    )
-                }
-            } else {
-                Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler200S.kt"), destinationFile)
-                requestHandlerName = "RequestHandler200S"
-
-                val executorSentence = "${String.format("%-8s", " ")}val result: Any = executor.call(functionName, mapOf("
-
-                finalRequestHandler.replaceLine(
-                    this.txtFileHandler.getNumberLineFor(executorSentence),
-                    executorSentence.replace("Any", scriptReturnType),
-                    overrideOriginal = true
-                )
+            try {
+                scriptName = this.deployableScripts[api.handler]!!
+            } catch (e: Exception) {
+                throw UndefinedHandlerException("The handler ${api.handler} for your API is not linked to a script in init.kts .")
             }
 
-            val importStatement = "import io.mp.extensions.functionName"
+            if (scriptReturnType == "Unit") {
+                if (scriptInputParams.isNotEmpty()) {
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler10.kt"), destinationFile)
+                } else {
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler00.kt"), destinationFile)
+                }
+            } else if (isPrimitive(scriptReturnType)) {
+                if (scriptInputParams.isNotEmpty()) {
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler1P.kt"), destinationFile)
+                } else {
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler0P.kt"), destinationFile)
+                }
+            } else {
+                if (scriptInputParams.isNotEmpty()) {
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler11.kt"), destinationFile)
+                } else {
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler01.kt"), destinationFile)
+                }
+            }
 
-            finalRequestHandler.replaceLine(
-                this.txtFileHandler.getNumberLineFor(importStatement),
-                importStatement.replace(importStatement, "import ${this.packageName}.extensions.$scriptPackage${this.buildScriptName(scriptName)}"),
-                overrideOriginal = true
-            )
-
-            val partClassDeclaration = "class $requestHandlerName"
-
-            val classDeclarationNumberLine= this.txtFileHandler.getNumberLineFor(partClassDeclaration)
-
-            val completeClassDeclaration = this.txtFileHandler.getContentForLine(classDeclarationNumberLine)
-
-            finalRequestHandler.replaceLine(
-                classDeclarationNumberLine,
-                completeClassDeclaration.replace(partClassDeclaration, "class RequestHandler${api.handler.replaceFirstChar { it.uppercaseChar() }}"),
-                overrideOriginal = true
-            )
+            finalRequestHandler.replacePlaceholders(mapOf(
+                "import io.mp.extensions.{{FUNCTION_NAME}}" to "import ${this.packageName}.extensions.$scriptPackage${this.registeredFunctionNames[api.handler]}",
+                "{{FUNCTION_NAME}}" to this.registeredFunctionNames[api.handler],
+                "{{REQUEST_HANDLER_NAME}}" to "RequestHandler${api.handler.replaceFirstChar { it.uppercaseChar() }}",
+                "{{TYPE}}" to scriptReturnType
+            ), overrideOriginal = true)
         }
 
-        Files.deleteIfExists(Paths.get("model-project/src/main/kotlin/server/handlers/RequestHandler200.kt"))
-        Files.deleteIfExists(Paths.get("model-project/src/main/kotlin/server/handlers/RequestHandler200S.kt"))
-        Files.deleteIfExists(Paths.get("model-project/src/main/kotlin/server/handlers/RequestHandler204.kt"))
+        val completeDeletion = File("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler10.kt").delete() &&
+                File("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler00.kt").delete() &&
+                File("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler1P.kt").delete() &&
+                File("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler0P.kt").delete() &&
+                File("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler11.kt").delete() &&
+                File("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler01.kt").delete()
+
+        if (completeDeletion) println("Handlers created ${ANSIColors.ANSI_GREEN_155}[✓]${ANSIColors.ANSI_RESET}")
     }
 
     private fun loadAPIDefinitionFromConfiguration(): List<API> {
         val ymlHandler = app.getInstance(YmlFileHandler::class)
 
-        val content = ymlHandler.readFrom(env("CONFIG_DEPLOYMENT_FILE"))
+        val content = ymlHandler.readFrom(context + File.separator + env("CONFIG_DEPLOYMENT_FILE", context))
 
         val apis = content["apis"] as? List<Map<String, String>>
 
@@ -357,12 +361,13 @@ class LocalAWSDeploymentBuilder(
     }
 
     class Builder {
+        var context: String = ""
         var projectName: String = "undefined"
         var version: String = "0.0.0"
         var packageName: String = ""
         var deployableScripts = mapOf<String, String>()
         var rootPath = "/"
 
-        fun build() = LocalAWSDeploymentBuilder(this)
+        fun build() = AWSAGHandlerBuilder(this)
     }
 }
