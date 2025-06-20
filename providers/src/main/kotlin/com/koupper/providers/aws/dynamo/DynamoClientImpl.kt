@@ -13,19 +13,8 @@ import java.net.URI
 
 class DynamoClientImpl : DynamoClient {
     private val dynamoDbClient: DynamoDbClient = DynamoDbClient.builder()
-        .region(Region.US_EAST_2)
-        .apply {
-            val dynamoUrl = env("DYNAMO_URL")
-
-            if (dynamoUrl.isNotBlank()) {
-                endpointOverride(URI(dynamoUrl))
-                credentialsProvider {
-                    AwsBasicCredentials.create("fakeAccessKey", "fakeSecretKey") // 🔥 Esto evita el error
-                }
-            } else {
-                credentialsProvider(DefaultCredentialsProvider.create())
-            }
-        }
+        .region(Region.US_EAST_1)
+        .credentialsProvider(DefaultCredentialsProvider.create())
         .build()
 
     override fun createTable(
@@ -252,12 +241,39 @@ class DynamoClientImpl : DynamoClient {
         updateExpression: String,
         expressionAttributeValues: Map<String, Any>
     ) {
-        TODO("Not yet implemented")
+        val keyAttributes = key.mapValues { (_, value) -> processValue(value) }
+
+        val attributeValues = expressionAttributeValues.mapValues { (_, value) -> processValue(value) }
+
+        val updateRequest = UpdateItemRequest.builder()
+            .tableName(tableName)
+            .key(keyAttributes)
+            .updateExpression(updateExpression)
+            .expressionAttributeValues(attributeValues.mapValues { it.value })
+            .build()
+
+        try {
+            dynamoDbClient.updateItem(updateRequest)
+        } catch (e: Exception) {
+            println("Error updating item: ${e.message}")
+        }
     }
 
     override fun deleteItem(tableName: String, key: Map<String, Any>) {
-        TODO("Not yet implemented")
+        val keyAttributes = key.mapValues { (_, value) -> processValue(value) }
+
+        val deleteRequest = DeleteItemRequest.builder()
+            .tableName(tableName)
+            .key(keyAttributes)
+            .build()
+
+        try {
+            dynamoDbClient.deleteItem(deleteRequest)
+        } catch (e: Exception) {
+            println("Error deleting item: ${e.message}")
+        }
     }
+
 
     override fun doesTableExist(tableName: String): Boolean {
         return try {
@@ -273,7 +289,22 @@ class DynamoClientImpl : DynamoClient {
     }
 
     override fun listTables(): List<String> {
-        TODO("Not yet implemented")
+        val tableNames = mutableListOf<String>()
+        var lastEvaluatedTableName: String? = null
+
+        do {
+            val requestBuilder = ListTablesRequest.builder()
+            lastEvaluatedTableName?.let {
+                requestBuilder.exclusiveStartTableName(it)
+            }
+
+            val result = dynamoDbClient.listTables(requestBuilder.build())
+
+            tableNames.addAll(result.tableNames())
+            lastEvaluatedTableName = result.lastEvaluatedTableName()
+        } while (lastEvaluatedTableName != null)
+
+        return tableNames
     }
 
     override fun queryItems(
@@ -345,7 +376,5 @@ class DynamoClientImpl : DynamoClient {
 
         return result.count() // 🔥 Retorna el número de elementos
     }
-
-
 }
 

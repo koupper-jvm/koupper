@@ -12,13 +12,13 @@ val dependsOfContainer: (String) -> Boolean = {
     it.contains("val\\s[a-zA-Z0-9]+:\\s\\(Container\\)\\s->\\s[a-zA-Z0-9]+\\s=".toRegex())
 }
 
-val isParameterizable: (List<String>) -> Boolean = {
-    it.any { item -> item.contains("\\(Map<String,\\s*Any>\\)\\s*->\\s*[a-zA-Z0-9]+".toRegex()) }
+val isParameterizable: (List<String>) -> Boolean = { params ->
+    params.size == 1 && params[0].replace("\\s+".toRegex(), "") == "Map<String,Any>"
 }
 
-
-val isModuleProcessor: (List<String>) -> Boolean = {
-    it.any { item -> item.contains("ModuleProcessor") }
+val isModuleProcessor: (List<String>) -> Boolean = { params ->
+    params.size == 1 &&
+            params[0].replace("\\s+".toRegex(), "") == "ModuleProcessor"
 }
 
 

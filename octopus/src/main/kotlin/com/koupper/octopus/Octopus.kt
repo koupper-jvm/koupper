@@ -64,23 +64,42 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
         private fun parseParameters(parameters: String): List<String> {
             val paramList = mutableListOf<String>()
-            var currentParam = StringBuilder()
-            var openParenthesesCount = 0
-            var openBracketsCount = 0
-            var openAngleBracketsCount = 0
+            val currentParam = StringBuilder()
+
+            var angleBrackets = 0
+            var parentheses = 0
+            var squareBrackets = 0
 
             for (char in parameters) {
                 when (char) {
-                    '(' -> openParenthesesCount++
-                    ')' -> openParenthesesCount--
-                    '[' -> openBracketsCount++
-                    ']' -> openBracketsCount--
-                    '<' -> openAngleBracketsCount++
-                    '>' -> openAngleBracketsCount--
+                    '<' -> {
+                        angleBrackets++
+                        currentParam.append(char)
+                    }
+                    '>' -> {
+                        angleBrackets--
+                        currentParam.append(char)
+                    }
+                    '(' -> {
+                        parentheses++
+                        currentParam.append(char)
+                    }
+                    ')' -> {
+                        parentheses--
+                        currentParam.append(char)
+                    }
+                    '[' -> {
+                        squareBrackets++
+                        currentParam.append(char)
+                    }
+                    ']' -> {
+                        squareBrackets--
+                        currentParam.append(char)
+                    }
                     ',' -> {
-                        if (openParenthesesCount == 0 && openBracketsCount == 0 && openAngleBracketsCount == 0) {
+                        if (angleBrackets == 0 && parentheses == 0 && squareBrackets == 0) {
                             paramList.add(currentParam.toString().trim())
-                            currentParam = StringBuilder()
+                            currentParam.clear()
                         } else {
                             currentParam.append(char)
                         }
@@ -93,9 +112,8 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 paramList.add(currentParam.toString().trim())
             }
 
-            return paramList.map { it.substringAfter(":").trim() }
+            return paramList
         }
-
     }
 
     override fun <T> runFromScriptFile(
@@ -156,8 +174,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
                         System.setErr(originalErr)
                     }
                 }
-
-                if (exportedFunctionSignature != null && exportedFunctionSignature.first.isNotEmpty()) {
+                if (exportedFunctionSignature?.first!!.isNotEmpty()) {
                     when {
                         isParameterizable(exportedFunctionSignature.first) -> {
                             val callbackResult = captureOutputAndResult {

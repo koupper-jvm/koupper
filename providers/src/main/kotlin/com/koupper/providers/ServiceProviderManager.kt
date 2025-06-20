@@ -4,6 +4,7 @@ import com.koupper.providers.aws.dynamo.AwsServiceProvider
 import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBServiceProvider
 import com.koupper.providers.files.FileServiceProvider
+import com.koupper.providers.hashing.HasherServiceProvider
 import com.koupper.providers.jwt.JWTServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
@@ -48,7 +49,8 @@ class ServiceProviderManager {
             FileServiceProvider::class,
             JWTServiceProvider::class,
             CryptoServiceProvider::class,
-            AwsServiceProvider::class
+            AwsServiceProvider::class,
+            HasherServiceProvider::class
         )
     }
 }
