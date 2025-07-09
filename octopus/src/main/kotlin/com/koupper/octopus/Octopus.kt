@@ -5,6 +5,7 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
 import com.koupper.container.context
 import com.koupper.container.interfaces.Container
+import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.Process
 import com.koupper.octopus.process.ModuleProcessor
 import com.koupper.os.env
@@ -34,21 +35,21 @@ class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
 
     companion object {
-        fun extractExportFunctionName(script: String): String? {
+        fun extractExportFunctionName(scriptContent: String): String? {
             val exportPattern = "@Export\\s+val\\s+(\\S+)\\s*:"
 
             val regex = Regex(exportPattern)
 
-            val matchResult = regex.find(script)
+            val matchResult = regex.find(scriptContent)
 
             return matchResult?.groups?.get(1)?.value
         }
 
-        fun extractExportFunctionSignature(script: String): Pair<List<String>, String>? {
+        fun extractExportFunctionSignature(scriptContent: String): Pair<List<String>, String>? {
             val exportPattern = "@Export\\s+val\\s+\\w+\\s*:\\s*\\(([^)]*)\\)\\s*->\\s*([\\w<>,()\\s]+)"
 
             val regex = Regex(exportPattern)
-            val matchResult = regex.find(script)
+            val matchResult = regex.find(scriptContent)
 
             return if (matchResult != null) {
                 val parameters = matchResult.groups[1]?.value?.trim() ?: ""
@@ -145,7 +146,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             val exportFunctionName = extractExportFunctionName(sentence)
 
             if (exportFunctionName != null) {
-                val exportedFunctionSignature: Pair<List<String>, String>? = extractExportFunctionSignature(sentence)
+                val exportedFunctionSignature = extractExportFunctionSignature(sentence)
 
                 fun <R> captureOutputAndResult(block: () -> R): String {
                     val originalOut = System.out
@@ -157,29 +158,29 @@ class Octopus(private var container: Container) : ScriptExecutor {
                     return try {
                         System.setOut(printStream)
                         System.setErr(printStream)
-
                         val resultValue = block()
-
                         if (resultValue !is Unit) {
                             print(resultValue)
                         }
-
                         outputStream.toString("UTF-8")
                     } catch (e: Exception) {
                         e.printStackTrace()
-
                         outputStream.toString("UTF-8")
                     } finally {
                         System.setOut(originalOut)
                         System.setErr(originalErr)
                     }
                 }
+
+
+                val flags = params.filterKeys { it.startsWith("--") || it.startsWith("-") }.keys.toTypedArray()
+
                 if (exportedFunctionSignature?.first!!.isNotEmpty()) {
+
                     when {
                         isParameterizable(exportedFunctionSignature.first) -> {
                             val callbackResult = captureOutputAndResult {
                                 eval(sentence)
-
                                 val targetCallback = eval(exportFunctionName) as (Map<String, Any>) -> T
                                 targetCallback.invoke(params)
                             }
@@ -188,22 +189,59 @@ class Octopus(private var container: Container) : ScriptExecutor {
                         }
 
                         isModuleProcessor(exportedFunctionSignature.first) -> {
+                            val processor = ModuleProcessor(context, *flags)
+
                             val callbackResult = captureOutputAndResult {
                                 eval(sentence)
+                                when (val paramCount = exportedFunctionSignature.first.size) {
+                                    1 -> {
+                                        val targetCallback = eval(exportFunctionName) as (Process) -> T
+                                        targetCallback.invoke(processor)
+                                    }
 
-                                if (params.isEmpty()) {
-                                    val targetCallback = eval(exportFunctionName) as (Process) -> T
-                                    targetCallback.invoke(ModuleProcessor(context))
-                                } else {
-                                    val targetCallback = eval(exportFunctionName) as (Process, Map<String, Any>) -> T
-                                    targetCallback.invoke(ModuleProcessor(context), params)
+                                    2 -> {
+                                        val targetCallback = eval(exportFunctionName) as (Process, Map<String, Any>) -> T
+                                        targetCallback.invoke(processor, params)
+                                    }
+
+                                    else -> throw IllegalArgumentException("Unsupported function signature with $paramCount parameters")
+                                }
+                            }
+
+
+                            if (processor.isProcessorInfo) {
+                                result(processor.getModuleProcessorInfo() as T)
+                                return
+                            }
+
+                            result(callbackResult as T)
+                        }
+
+                        isModuleAnalyzer(exportedFunctionSignature.first) -> {
+                            val processor = ModuleAnalyzer(context, *flags)
+
+                            val callbackResult = captureOutputAndResult {
+                                eval(sentence)
+                                when (val paramCount = exportedFunctionSignature.first.size) {
+                                    1 -> {
+                                        val targetCallback = eval(exportFunctionName) as (Process) -> T
+                                        targetCallback.invoke(processor)
+                                    }
+
+                                    2 -> {
+                                        val targetCallback = eval(exportFunctionName) as (Process, Map<String, Any>) -> T
+                                        targetCallback.invoke(processor, params)
+                                    }
+
+                                    else -> throw IllegalArgumentException("Unsupported function signature with $paramCount parameters")
                                 }
                             }
 
                             result(callbackResult as T)
                         }
                     }
-                } else {
+                }
+                else {
                     val callbackResult = captureOutputAndResult {
                         eval(sentence)
 
@@ -213,12 +251,12 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
                     result(callbackResult as T)
                 }
-
             } else {
                 result("No function annotated with @Export was found." as T)
             }
         }
     }
+
 
     override fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T {
         return callable(params)
@@ -248,13 +286,14 @@ class Octopus(private var container: Container) : ScriptExecutor {
         val params = mutableMapOf<String, Any>()
 
         args.split(",").forEach { arg ->
-            val keyValue = arg.split("=")
-
-            val key = keyValue[0]
-
-            val value = keyValue[1]
-
-            params[key] = value
+            if ("=" in arg) {
+                val keyValue = arg.split("=")
+                val key = keyValue[0]
+                val value = keyValue[1]
+                params[key] = value
+            } else {
+                params[arg] = true
+            }
         }
 
         return params
@@ -365,7 +404,7 @@ fun listenForExternalCommands(processManager: ScriptExecutor) {
                             processManager.runFromScriptFile(context!!, scriptPath, parameters) { result: Any ->
                                 println("✅ Result from script execution: $result")
 
-                                if (result !== "kotlin.Unit") {
+                                if (result !== "kotlin.Unit" && (result as String).isNotEmpty()) {
                                     writer.write(result.toString())
                                 }
 

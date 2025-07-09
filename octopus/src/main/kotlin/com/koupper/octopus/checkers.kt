@@ -21,6 +21,11 @@ val isModuleProcessor: (List<String>) -> Boolean = { params ->
             params[0].replace("\\s+".toRegex(), "") == "ModuleProcessor"
 }
 
+val isModuleAnalyzer: (List<String>) -> Boolean = { params ->
+    params.size == 1 &&
+            params[0].replace("\\s+".toRegex(), "") == "ModuleAnalyzer"
+}
+
 
 val isRoute: (String) -> Boolean = {
     it.contains("\\(Route\\)\\s*->\\s*[a-zA-Z0-9]+".toRegex()) ||

@@ -1,108 +1,236 @@
 package com.koupper.octopus.process
 
-import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
-import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
 import com.koupper.container.app
+import com.koupper.octopus.Octopus
 import com.koupper.octopus.isRelativeScriptFile
+import com.koupper.octopus.modifiers.ControllersAnalyzer
 import com.koupper.octopus.modifiers.SetupGrizzlyConfigurator
 import com.koupper.octopus.modules.Module
 import com.koupper.octopus.modules.aws.AWSAGHandlerBuilder
 import com.koupper.octopus.modules.aws.ExecutableJarBuilder
 import com.koupper.octopus.modules.aws.LambdaFunctionBuilder
 import com.koupper.octopus.modules.http.service.GrizzlyGradleJerseyBuilder
+import com.koupper.octopus.modules.validateScript
 import com.koupper.os.env
 import com.koupper.providers.files.YmlFileHandler
 import java.io.File
+import java.security.MessageDigest
 
 val getRealScriptNameFrom: (String) -> String = { script ->
-    val scriptId = if (script.endsWith(".kts")) script else "${script}.kts"
-
-    val finalScriptName = (if (!isRelativeScriptFile(scriptId)) {
+    val scriptId = if (script.endsWith(".kts")) script else "$script.kts"
+    if (!isRelativeScriptFile(scriptId)) {
         scriptId.substring(script.lastIndexOf("/") + 1)
     } else {
         scriptId
-    })
-
-    finalScriptName
+    }
 }
 
-class ModuleProcessor(private val context: String) : Process {
-    private lateinit var name: String
-    private lateinit var type: String
-    private lateinit var version: String
-    private lateinit var packageName: String
-    private lateinit var scripts: Map<String, String>
+fun extractServerPort(moduleDir: File): String? {
+    val setupFile = findKtFileRecursively(
+        File(moduleDir, "src/main/kotlin"),
+        "Setup"
+    ) ?: return null
 
-    fun name(name: String): ModuleProcessor {
-        this.name = name
-        return this
+    val content = setupFile.readText()
+
+    return Regex("""const val PORT\s*=\s*(\d+)""")
+        .find(content)
+        ?.groupValues?.get(1)
+}
+
+fun findKtFileRecursively(baseDir: File, fileName: String): File? {
+    if (!baseDir.exists()) return null
+    return baseDir.walkTopDown().find {
+        it.isFile && it.name == "$fileName.kt"
+    }
+}
+
+class ModuleProcessor(private val context: String, vararg private val flags: String) : Process {
+    private var name: String = "Not Set"
+    private var type: String = "Not Set"
+    private var version: String = "Not Set"
+    private var packageName: String = "Not Set"
+    private var scripts: Map<String, String> = emptyMap()
+    private var moduleProcessorInfo: String? = null
+
+    var isProcessorInfo: Boolean = false
+        private set
+
+    fun name(name: String) = apply { this.name = name }
+    fun type(type: String) = apply { this.type = type }
+    fun version(version: String) = apply { this.version = version }
+    fun packageName(packageName: String) = apply { this.packageName = packageName }
+    fun scripts(scripts: Map<String, String>) = apply { this.scripts = scripts }
+
+    fun getModuleProcessorInfo(): String? = moduleProcessorInfo
+
+    private fun setModuleProcessorInfo(info: String) {
+        this.moduleProcessorInfo = info
     }
 
-    fun type(type: String): ModuleProcessor {
-        this.type = type
-        return this
-    }
-
-    fun version(version: String): ModuleProcessor {
-        this.version = version
-        return this
-    }
-
-    fun packageName(packageName: String): ModuleProcessor {
-        this.packageName = packageName
-        return this
-    }
-
-    fun scripts(scripts: Map<String, String>): ModuleProcessor {
-        this.scripts = scripts
-        return this
-    }
-
-    override fun processName(): String {
-        return this.name
-    }
-
-    override fun processType(): String {
-        return this.type
-    }
+    override fun processName() = this.name
+    override fun processType() = this.type
 
     override fun run() {
+        val ANSI_GREEN = "\u001B[32m"
+        val ANSI_RED = "\u001B[31m"
+        val ANSI_YELLOW = "\u001B[33m"
+        val ANSI_CYAN = "\u001B[36m"
+        val ANSI_RESET = "\u001B[0m"
+
+        val baseDir = File(this.context)
+        val moduleDir = if (flags.contains("--info")) {
+            val normalPath = File(baseDir, this.name)
+            if (normalPath.exists()) {
+                normalPath
+            } else {
+                File(baseDir.parentFile, this.name)
+            }
+        } else {
+            File(baseDir, this.name)
+        }
+
+        val existModule = moduleDir.exists()
+        val statusIcon = if (existModule) "${ANSI_GREEN}✔️${ANSI_RESET}" else "${ANSI_RED}❌${ANSI_RESET}"
         val isDeployable = this.type.equals("GRYZZLY2_GRADLE_JERSEY", true) ||
                 this.type.equals("DEPLOYABLE_AWS_LAMBDA_JAR", true) ||
                 this.type.equals("EXECUTABLE_JAR", true)
 
-        if (File(this.context + File.separator + this.name).exists()) {
-            if (isDeployable) {
-                Module.locateScripts(this.context, this.scripts, this.name, this.packageName)
+        if (flags.contains("--info")) {
+            isProcessorInfo = true
+            val versionStatus = checkVersionSync(moduleDir)
+            val packageStatus = checkPackageSync(moduleDir)
+            val syncStatus = verifyScriptSync(moduleDir)
+            val port = extractServerPort(moduleDir)?.toInt()!!
 
-                return
+            val moduleAnalyzer = ControllersAnalyzer()
+            moduleAnalyzer.analyzeControllers(moduleDir, port = port)
+
+            val info = buildString {
+                appendLine("${ANSI_CYAN}📦 Module Setup Info:${ANSI_RESET}")
+                appendLine("  ${ANSI_YELLOW}- Manage to${ANSI_RESET}: $name $statusIcon")
+                appendLine("  ${ANSI_YELLOW}- Type${ANSI_RESET}    : $type")
+                appendLine("  ${ANSI_YELLOW}- Target version${ANSI_RESET} : $version $versionStatus")
+                appendLine("  ${ANSI_YELLOW}- Package${ANSI_RESET} : $packageName $packageStatus")
+                appendLine("  ${ANSI_YELLOW}- Scripts linked to their handlers [handlerName | scriptName] on target:${ANSI_RESET} :")
+                scripts.forEach { (handlerName, scriptName) ->
+                    val ktsFile = findKtFileRecursively(
+                        File(moduleDir, "src/main/kotlin/${packageName.replace('.', '/')}"),
+                        scriptName.removeSuffix(".kts")
+                    )
+                    val handlerFile = findKtFileRecursively(
+                        File(moduleDir, "src/main/kotlin"),
+                        "RequestHandler" + handlerName.replaceFirstChar { it.uppercaseChar() }
+                    )
+
+                    val handlerExists = handlerFile != null && handlerFile.exists()
+                    val scriptExists = ktsFile != null && ktsFile.exists()
+
+                    val usageCheck = if (handlerExists && scriptExists) {
+                        val exportFunction = Octopus.extractExportFunctionName(ktsFile!!.readText())
+                        val handlerContent = handlerFile!!.readText()
+                        handlerContent.contains("${exportFunction}(")
+                    } else false
+
+
+                    val finalHandlerColor = if (usageCheck) ANSI_GREEN else ANSI_RED
+                    val finalScriptColor = if (usageCheck) ANSI_GREEN else ANSI_RED
+
+                    appendLine("      ${finalHandlerColor}$handlerName[RequestHandler${handlerName.replaceFirstChar { it.uppercaseChar() }}] ${ANSI_RESET}⇄ ${finalScriptColor}$scriptName${ANSI_RESET}")
+                }
+
+                appendLine("\n" + syncStatus)
             }
 
-            println("\n$ANSI_YELLOW_229 A module named '$name' already exist. $ANSI_RESET \n")
+            setModuleProcessorInfo(info)
+            return
+        }
 
+        if (existModule) {
+            if (isDeployable) {
+                Module.locateScripts(moduleDir.absolutePath, this.scripts, this.name, this.packageName)
+                return
+            }
+            println("\n${ANSI_YELLOW}A module named '$name' already exists.${ANSI_RESET}\n")
             return
         }
 
         this.buildByType()
     }
 
+    private fun checkVersionSync(moduleDir: File): String {
+        val buildFile = File(moduleDir, "build.gradle")
+        if (!buildFile.exists()) return "❌ No build.gradle"
+        val content = buildFile.readText()
+        return if (content.contains("version = \"$version\"")) "✔️" else "❌ Mismatch"
+    }
+
+    private fun checkPackageSync(moduleDir: File): String {
+        val srcPath = File(moduleDir, "src/main/kotlin/${packageName.replace('.', '/')}")
+        return if (srcPath.exists()) "✔️" else "❌ Missing"
+    }
+
+    private fun verifyScriptSync(moduleDir: File): String {
+        val srcPath = File(moduleDir, "src/main/kotlin/${packageName.replace('.', '/')}")
+        val results = mutableListOf<String>()
+        val GREEN = "\u001B[32m"
+        val RED = "\u001B[31m"
+        val RESET = "\u001B[0m"
+        val HEADER_COLOR = "\u001B[36m"
+
+        results.add("${HEADER_COLOR}📋 Script Synchronization with target:${RESET}")
+
+        scripts.forEach { (handlerName, scriptFileName) ->
+            val ktsFile = File(this.context, scriptFileName)
+            val ktFile = findKtFileRecursively(srcPath, scriptFileName.removeSuffix(".kts"))
+
+            val ktsValidation = if (ktsFile.exists()) {
+                validateScript(ktsFile.path).isSuccess
+            } else false
+
+            val ktValidation = if (ktFile != null && ktFile.exists()) {
+                validateScript(ktFile.path).isSuccess
+            } else false
+
+            val ktsIcon = if (ktsValidation) "✔️" else "❌"
+            val ktIcon = if (ktValidation) "✔️" else "❌"
+
+            val ktsColored = if (ktsValidation) "$GREEN$handlerName.kts$RESET" else "$RED$handlerName.kts$RESET"
+            val ktColored = if (ktValidation) "$GREEN$handlerName.kt$RESET" else "$RED$handlerName.kt$RESET"
+
+            val status = if (ktsFile.exists() && ktFile != null && ktFile.exists()) {
+                val ktsHash = calculateHash(ktsFile)
+                val ktHash = calculateHash(ktFile)
+
+                val syncStatus = if (ktsHash == ktHash) "✔️ Synced" else "❌ Out of sync"
+                "  $ktsIcon $ktsColored ⇄ $ktIcon $ktColored : $syncStatus"
+            } else {
+                "  ❌ $ktsColored ⇄ ❌ $ktColored : ❌ Missing file(s)"
+            }
+
+            results.add(status)
+        }
+
+        return results.joinToString("\n")
+    }
+
+    private fun calculateHash(file: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(file.readBytes())
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
     private fun buildByType() {
         val ymlHandler = app.getInstance(YmlFileHandler::class)
-
         val content = ymlHandler.readFrom(context + File.separator + env("CONFIG_DEPLOYMENT_FILE", context = context))
 
         val server = content["server"] as? Map<*, *>
         var serverPort = 8080
         var contextPath = "/"
 
-        if (server != null) {
-            server["port"]?.let { port ->
-                serverPort = port.toString().toIntOrNull() ?: 8080
-            }
-
-            server["contextPath"]?.let { path ->
-                contextPath = path.toString()
-            }
+        server?.let {
+            it["port"]?.let { port -> serverPort = port.toString().toIntOrNull() ?: 8080 }
+            it["contextPath"]?.let { path -> contextPath = path.toString() }
         }
 
         val self = this

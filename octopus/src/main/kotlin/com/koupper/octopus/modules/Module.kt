@@ -8,6 +8,7 @@ import com.koupper.octopus.Octopus.Companion.extractExportFunctionSignature
 import com.koupper.octopus.process.getRealScriptNameFrom
 import com.koupper.providers.files.FileHandler
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
@@ -19,6 +20,31 @@ fun isPrimitive(typeName: String): Boolean {
     val kotlinPrimitives = setOf("Int", "Double", "Float", "Long", "Short", "Byte", "Boolean", "Char", "String")
     return typeName in kotlinPrimitives
 }
+
+fun validateScript(scriptPath: String): Result<File> {
+    return try {
+        val scriptFile = File(scriptPath)
+        val sentence = scriptFile.readText(Charsets.UTF_8)
+
+        if (sentence.isNotEmpty()) {
+            val engine = ScriptEngineManager().getEngineByExtension("kts")
+                ?: throw IllegalStateException("No Kotlin Script Engine found for '.kts' extension.")
+
+            val exportedFunctionName = extractExportFunctionName(sentence)
+
+            if (exportedFunctionName != null) {
+                engine.eval(sentence)
+            } else {
+                println("No function annotated with @Export was found.")
+            }
+        }
+
+        Result.success(scriptFile)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+}
+
 
 abstract class Module {
     protected val registeredScriptPackages: MutableMap<String, String> = mutableMapOf()
@@ -55,7 +81,7 @@ abstract class Module {
         val executableScriptFinalPath =
             if (scriptPath.startsWith(File.separator)) scriptPath.substringAfter(File.separator) else scriptPath
 
-        this.validatedScriptFile = validateScript(context + File.separator + executableScriptFinalPath)
+        this.validatedScriptFile = validateScript(context + File.separator + executableScriptFinalPath).getOrThrow()
     }
 
     fun processScript(context: String, handlerToScript: Pair<String, String>, targetPath: String, packageName: String) {
@@ -173,26 +199,6 @@ abstract class Module {
 
         return finalValName
     }
-
-    private fun validateScript(scriptPath: String): File {
-        val scriptFile = File(scriptPath)
-
-        val sentence = scriptFile.readText(Charsets.UTF_8)
-
-        if (sentence.isNotEmpty()) {
-            with(ScriptEngineManager().getEngineByExtension("kts")) {
-                val exportedFunctionName = extractExportFunctionName(sentence)
-
-                if (exportedFunctionName != null) {
-                    eval(sentence)
-                } else {
-                    println("No function annotated with @Export was found.")
-                }
-            }
-        }
-
-        return scriptFile
-    }
 }
 
 fun Module.locateScriptsInPackage(context: String, scripts: Map<String, String>, targetPath: String, packageName: String) {
@@ -204,7 +210,7 @@ fun Module.locateScriptsInPackage(context: String, scripts: Map<String, String>,
 
     for ((key, value) in scripts) {
         if (key.isEmpty()) {
-            throw Exception("An identifier should be specified.")
+            throw Exception("A handler should be specified.")
         }
 
         if (value.isEmpty()) {
