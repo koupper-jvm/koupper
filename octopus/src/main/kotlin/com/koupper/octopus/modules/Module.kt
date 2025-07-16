@@ -49,7 +49,7 @@ fun validateScript(scriptPath: String): Result<File> {
 abstract class Module {
     protected val registeredScriptPackages: MutableMap<String, String> = mutableMapOf()
     protected val createdScripts: MutableMap<String, String> = mutableMapOf()
-    protected val registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
+    val registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
     protected val registeredFunctionNames: MutableMap<String, String?> = mutableMapOf()
     private lateinit var scriptLocationPath: String
     private lateinit var validatedScriptFile: File
@@ -122,7 +122,7 @@ abstract class Module {
         }
     }
 
-    protected fun buildScriptName(scriptPath: String): String {
+    private fun buildScriptName(scriptPath: String): String {
         val finalNameWhitHyphen = this.getFunctionFinalName(getRealScriptNameFrom(scriptPath), "-")
 
         val finalNameWhitDash = this.getFunctionFinalName(getRealScriptNameFrom(scriptPath), "_")

@@ -25,52 +25,75 @@ import kotlin.io.path.pathString
 import kotlin.reflect.KClass
 
 data class API(val path: String, val method: String, val handler: String, val description: String)
-data class APIGPREInput(
-    val version: String?,
-    val resource: String?,
-    val path: String?,
-    val httpMethod: String?,
-    val headers: Map<String, String>?,
-    val multiValueHeaders: Map<String, List<String>>?,
-    val queryStringParameters: Map<String, String>?,
-    val multiValueQueryStringParameters: Map<String, List<String>>?,
-    val pathParameters: Map<String, String>?,
-    val stageVariables: Map<String, String>?,
-    val body: String?,
-    val isBase64Encoded: Boolean?
-)
 
+fun loadAPIDefinitionFromConfiguration(context: String, projectName: String): List<API> {
+    val ymlHandler = app.getInstance(YmlFileHandler::class)
+
+    val content = ymlHandler.readFrom(context + File.separator + "${projectName}.yml")
+
+    val apis = content["apis"] as? List<Map<String, String>>
+
+    require(!apis.isNullOrEmpty()) { "A configuration yml file for deployment is expected." }
+
+    val apisDefinitions = mutableListOf<API>()
+
+    for (api in apis) {
+        var path = ""
+        var method = ""
+        var handler = ""
+        var description = ""
+
+        val declaredPath = api["path"]
+        require(!declaredPath.isNullOrEmpty()) { "El campo 'path' está vacío o no existe en una de las entradas de 'apis'." }
+        path = declaredPath
+
+        val declaredMethod = api["method"]
+        require(!(declaredMethod.isNullOrEmpty())) { "El campo 'methods' está vacío o no existe en una de las entradas de 'apis'." }
+        method = declaredMethod
+
+        val declaredHandler = api["handler"]
+        require(!(declaredHandler.isNullOrEmpty())) { "El campo 'handlers' está vacío o no existe en una de las entradas de 'apis'." }
+        handler = declaredHandler
+
+        val declaredDescription = api["description"]
+        require(!(declaredDescription.isNullOrEmpty())) { "El campo 'description' está vacío o no existe en una de las entradas de 'apis'." }
+        description = declaredDescription
+
+        apisDefinitions.add(API(path, method, handler, description))
+    }
+
+    return apisDefinitions
+}
 
 class AWSAGHandlerBuilder(
     private val context: String,
     private val projectName: String,
     private val moduleVersion: String,
     private val packageName: String,
-    private val deployableScripts: Map<String, String>,
-    private val rootPath: String
+    private val deployableScripts: Map<String, String>
 ) : Module() {
 
     private val fileHandler = app.getInstance(FileHandler::class)
     private val txtFileHandler = app.getInstance(TextFileHandler::class)
-    private lateinit var routeDefinition: RouteDefinition
-    private var apiDefinition: List<API>
     private lateinit var modelProject: File
+    private var apiDefinition: List<API> = loadAPIDefinitionFromConfiguration(context, projectName)
+
 
     private constructor(builder: Builder) : this(
         builder.context,
         builder.projectName,
         builder.version,
         builder.packageName,
-        builder.deployableScripts,
-        builder.rootPath
+        builder.deployableScripts
     )
 
     companion object {
-        inline fun build(config: Builder.() -> Unit) = Builder().apply(config).build().build()
-    }
-
-    init {
-        this.apiDefinition =  this.loadAPIDefinitionFromConfiguration()
+        inline fun build(config: Builder.() -> Unit): AWSAGHandlerBuilder {
+            val builder = Builder().apply(config)
+            val instance = builder.build()
+            instance.build()
+            return instance
+        }
     }
 
     override fun build() {
@@ -102,16 +125,16 @@ class AWSAGHandlerBuilder(
 
         this.createRequestHandlers()
 
-        this.buildRequestHandlerController()
+        //this.buildRequestHandlerController()
 
-        this.locateBootstrappingFile()
+        //this.locateBootstrappingFile()
 
-        File("${this.modelProject.name}/src/main/kotlin/io").apply {
+        /*File("${this.modelProject.name}/src/main/kotlin/io").apply {
             walkBottomUp().forEach { it.delete() }
-        }
+        }*/
     }
 
-    private fun locateBootstrappingFile() {
+    /*private fun locateBootstrappingFile() {
         Files.move(Paths.get("${this.modelProject.name}/src/main/kotlin/io/mp/Bootstrapping.kt"), Paths.get("${this.modelProject.name}/src/main/kotlin/${packageName.replace(".", "/")}/extensions/Bootstrapping.kt"))
 
         val fileContent = this.txtFileHandler.using("${this.modelProject.name}/src/main/kotlin/${packageName.replace(".", "/")}/extensions/Bootstrapping.kt")
@@ -121,142 +144,7 @@ class AWSAGHandlerBuilder(
             "package ${packageName}.extensions",
             overrideOriginal = true
         )
-    }
-
-    private fun buildRequestHandlerController() {
-        val routerMaker = Route(app)
-
-        this.routeDefinition = routerMaker.registerRouter {
-            apiDefinition.forEach { api ->
-                path { rootPath }
-
-                controllerName {
-                    "AWSLambdaController"
-                }
-
-                val apiPath = api.path.ifEmpty { throw IllegalArgumentException("Path for api can't be empty") }
-
-                if (api.method.equals("post", true)) {
-                    post {
-                        path { apiPath }
-                        identifier { api.handler }
-                        script { api.handler }
-                        produces { listOf("application/json") }
-                        consumes { listOf("application/json") }
-                    }
-                }
-
-                if (api.method.equals("get", true)) {
-                    get {
-                        path { apiPath }
-                        identifier { api.handler }
-                        script { api.handler }
-                        produces { listOf("application/json") }
-                        consumes { listOf("application/json") }
-                    }
-                }
-
-                if (api.method.equals("put", true)) {
-                    put {
-                        path { apiPath }
-                        identifier { api.handler }
-                        script { api.handler }
-                        produces { listOf("application/json") }
-                        consumes { listOf("application/json") }
-                    }
-                }
-
-                if (api.method.equals("delete", true)) {
-                    delete {
-                        path { apiPath }
-                        identifier { api.handler }
-                        script { api.handler }
-                        produces { listOf("application/json") }
-                        consumes { listOf("application/json") }
-                    }
-                }
-
-            }
-        }
-
-        val self = this
-
-        RequestHandlerControllerBuilder.build {
-            this.modelProject = self.modelProject.name
-
-            this.context = self.context
-
-            this.rootLocation = "${self.modelProject.name}/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt"
-
-            this.path = routeDefinition.path()
-
-            this.controllerConsumes = routeDefinition.consumes()
-
-            this.controllerProduces = routeDefinition.produces()
-
-            this.controllerName = routeDefinition.controllerName()
-
-            this.packageName = self.packageName
-
-            this.registeredScripts = self.registeredScripts
-
-            val pm = generateMethods(Action.POST, self.routeDefinition.postMethods()) {
-                (it as Post).body
-            }
-
-            if (pm.isNotEmpty()) {
-                this.methods.addAll(pm)
-            }
-
-            val gm = generateMethods(Action.GET, self.routeDefinition.getMethods()) {
-                null
-            }
-
-            if (gm.isNotEmpty()) {
-                this.methods.addAll(gm)
-            }
-
-            val pum = generateMethods(Action.PUT, self.routeDefinition.putMethods()) {
-                (it as Put).body
-            }
-
-            if (pum.isNotEmpty()) {
-                this.methods.addAll(pum)
-            }
-
-            val dm = generateMethods(Action.DELETE, self.routeDefinition.deleteMethods()) {
-                null
-            }
-
-            if (dm.isNotEmpty()) {
-                this.methods.addAll(dm)
-            }
-        }
-    }
-
-    private fun generateMethods(
-        action: Action,
-        routeList: MutableList<RouteDefinition>,
-        bodyProvider: (RouteDefinition) -> KClass<*>?
-    ): List<Method> {
-        return routeList.map { route ->
-            Method(
-                route.identifier(),
-                action,
-                route.path(),
-                route.consumes(),
-                route.produces(),
-                route.queryParams(),
-                route.matrixParams(),
-                route.headerParams(),
-                route.cookieParams(),
-                route.formParams(),
-                route.response(),
-                route.script(),
-                bodyProvider(route)
-            )
-        }
-    }
+    }*/
 
     private fun createRequestHandlers() {
         apiDefinition.forEach { api ->
@@ -274,14 +162,6 @@ class AWSAGHandlerBuilder(
             val scriptReturnType = this.registeredScripts[api.handler]?.second ?: ""
 
             val scriptPackage = super.registeredScriptPackages[api.handler]
-
-            var scriptName = ""
-
-            try {
-                scriptName = this.deployableScripts[api.handler]!!
-            } catch (e: Exception) {
-                throw UndefinedHandlerException("The handler ${api.handler} for your API is not linked to a script in init.kts .")
-            }
 
             if (scriptReturnType == "Unit") {
                 if (scriptInputParams.isNotEmpty()) {
@@ -321,52 +201,12 @@ class AWSAGHandlerBuilder(
         if (completeDeletion) println("Handlers created ${ANSIColors.ANSI_GREEN_155}[✓]${ANSIColors.ANSI_RESET}")
     }
 
-    private fun loadAPIDefinitionFromConfiguration(): List<API> {
-        val ymlHandler = app.getInstance(YmlFileHandler::class)
-
-        val content = ymlHandler.readFrom(context + File.separator + env("CONFIG_DEPLOYMENT_FILE", context))
-
-        val apis = content["apis"] as? List<Map<String, String>>
-
-        require(!apis.isNullOrEmpty()) { "A configuration yml file for deployment is expected." }
-
-        val apisDefinitions = mutableListOf<API>()
-
-        for (api in apis) {
-            var path = ""
-            var method = ""
-            var handler = ""
-            var description = ""
-
-            val declaredPath = api["path"]
-            require(!declaredPath.isNullOrEmpty()) { "El campo 'path' está vacío o no existe en una de las entradas de 'apis'." }
-            path = declaredPath
-
-            val declaredMethod = api["method"]
-            require(!(declaredMethod.isNullOrEmpty())) { "El campo 'methods' está vacío o no existe en una de las entradas de 'apis'." }
-            method = declaredMethod
-
-            val declaredHandler = api["handler"]
-            require(!(declaredHandler.isNullOrEmpty())) { "El campo 'handlers' está vacío o no existe en una de las entradas de 'apis'." }
-            handler = declaredHandler
-
-            val declaredDescription = api["description"]
-            require(!(declaredDescription.isNullOrEmpty())) { "El campo 'description' está vacío o no existe en una de las entradas de 'apis'." }
-            description = declaredDescription
-
-            apisDefinitions.add(API(path, method, handler, description))
-        }
-
-        return apisDefinitions
-    }
-
     class Builder {
         var context: String = ""
         var projectName: String = "undefined"
         var version: String = "0.0.0"
         var packageName: String = ""
         var deployableScripts = mapOf<String, String>()
-        var rootPath = "/"
 
         fun build() = AWSAGHandlerBuilder(this)
     }

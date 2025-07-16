@@ -54,11 +54,21 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
             }
 
             val onlyKts = files.isNotEmpty() && files.all { it.extension == "kts" }
+            val hasInitKts = files.isNotEmpty() && files.all { it.name == "init.kts" }
+            val hasConfig = files.any { it.extension == "yml" }
             val hasKt = files.any { it.extension == "kt" }
             val hasKts = files.any { it.extension == "kts" }
 
             if (onlyKts) {
                 tags.add("[kts folder]")
+
+                if (hasInitKts) {
+                    tags.add("[init]")
+                }
+
+                if (hasConfig) {
+                    tags.add("[cfg]")
+                }
             } else {
                 if (hasKt) tags.add("[kt]")
                 if (hasKts) tags.add("[kts]")

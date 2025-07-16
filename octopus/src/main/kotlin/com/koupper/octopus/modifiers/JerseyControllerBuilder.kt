@@ -45,7 +45,7 @@ open class JerseyControllerBuilder protected constructor(
     protected val controllerName: String = Property.UNDEFINED.name,
     protected val packageName: String = Property.UNDEFINED.name,
     protected val methods: MutableList<Method> = mutableListOf(),
-    protected val registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
+    protected var registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
 ) {
     protected val textFileHandler = TextFileHandlerImpl()
     protected val finalCustomController = StringBuilder()

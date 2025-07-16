@@ -16,7 +16,7 @@ class RequestHandlerControllerBuilder(
     controllerName: String,
     packageName: String,
     methods: MutableList<Method> = mutableListOf(),
-    registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
+    registeredScripts: MutableMap<String, Pair<List<String>, String>>
 ) : JerseyControllerBuilder(
     path,
     controllerConsumes,

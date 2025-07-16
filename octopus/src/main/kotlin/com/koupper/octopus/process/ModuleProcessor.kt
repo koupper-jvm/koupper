@@ -1,9 +1,9 @@
 package com.koupper.octopus.process
 
-import com.koupper.container.app
 import com.koupper.octopus.Octopus
 import com.koupper.octopus.isRelativeScriptFile
 import com.koupper.octopus.modifiers.ControllersAnalyzer
+import com.koupper.octopus.modifiers.ControllersBuilder
 import com.koupper.octopus.modifiers.SetupGrizzlyConfigurator
 import com.koupper.octopus.modules.Module
 import com.koupper.octopus.modules.aws.AWSAGHandlerBuilder
@@ -11,8 +11,6 @@ import com.koupper.octopus.modules.aws.ExecutableJarBuilder
 import com.koupper.octopus.modules.aws.LambdaFunctionBuilder
 import com.koupper.octopus.modules.http.service.GrizzlyGradleJerseyBuilder
 import com.koupper.octopus.modules.validateScript
-import com.koupper.os.env
-import com.koupper.providers.files.YmlFileHandler
 import java.io.File
 import java.security.MessageDigest
 
@@ -221,18 +219,6 @@ class ModuleProcessor(private val context: String, vararg private val flags: Str
     }
 
     private fun buildByType() {
-        val ymlHandler = app.getInstance(YmlFileHandler::class)
-        val content = ymlHandler.readFrom(context + File.separator + env("CONFIG_DEPLOYMENT_FILE", context = context))
-
-        val server = content["server"] as? Map<*, *>
-        var serverPort = 8080
-        var contextPath = "/"
-
-        server?.let {
-            it["port"]?.let { port -> serverPort = port.toString().toIntOrNull() ?: 8080 }
-            it["contextPath"]?.let { path -> contextPath = path.toString() }
-        }
-
         val self = this
 
         when {
@@ -260,21 +246,27 @@ class ModuleProcessor(private val context: String, vararg private val flags: Str
                     deployableScripts = self.scripts
                 }
             }
-            this.type.equals("AWS_AG_HANDLERS", true) -> {
-                AWSAGHandlerBuilder.build {
+            this.type.equals("HANDLERS_CONTROLLERS_SCRIPTS", true) -> {
+                val awsModule = AWSAGHandlerBuilder.build {
                     context = self.context
                     projectName = self.name
                     version = self.version
                     packageName = self.packageName
                     deployableScripts = self.scripts
-                    rootPath = contextPath
                 }
 
                 SetupGrizzlyConfigurator.configure {
-                    port = serverPort
+                    context = self.context
                     packageName = self.packageName
                     projectName = self.name
                     version = self.version
+                }
+
+                ControllersBuilder.build {
+                    context = self.context
+                    packageName = self.packageName
+                    projectName = self.name
+                    registeredScripts = awsModule.registeredScripts
                 }
 
                 /*val deployer = LocalAWSDeployer(container = self.container)
