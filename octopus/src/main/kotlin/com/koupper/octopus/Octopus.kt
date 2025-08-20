@@ -5,20 +5,24 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
 import com.koupper.container.context
 import com.koupper.container.interfaces.Container
-import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.Process
-import com.koupper.octopus.process.ModuleProcessor
 import com.koupper.os.env
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
-import com.koupper.providers.files.*
+import com.koupper.providers.files.FileHandler
+import com.koupper.providers.files.JSONFileHandler
+import com.koupper.providers.files.JSONFileHandlerImpl
+import com.koupper.providers.files.toType
 import com.koupper.providers.http.HtppClient
+import com.koupper.shared.octopus.extractExportFunctionName
+import com.koupper.shared.octopus.extractExportFunctionSignature
 import kotlinx.coroutines.*
-import java.io.*
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.PrintStream
 import java.net.ServerSocket
 import java.net.URL
 import java.nio.file.Paths
-import java.util.*
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
@@ -33,89 +37,6 @@ val isRelativeScriptFile: (String) -> Boolean = {
 
 class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
-
-    companion object {
-        fun extractExportFunctionName(scriptContent: String): String? {
-            val exportPattern = "@Export\\s+val\\s+(\\S+)\\s*:"
-
-            val regex = Regex(exportPattern)
-
-            val matchResult = regex.find(scriptContent)
-
-            return matchResult?.groups?.get(1)?.value
-        }
-
-        fun extractExportFunctionSignature(scriptContent: String): Pair<List<String>, String>? {
-            val exportPattern = "@Export\\s+val\\s+\\w+\\s*:\\s*\\(([^)]*)\\)\\s*->\\s*([\\w<>,()\\s]+)"
-
-            val regex = Regex(exportPattern)
-            val matchResult = regex.find(scriptContent)
-
-            return if (matchResult != null) {
-                val parameters = matchResult.groups[1]?.value?.trim() ?: ""
-                val returnType = matchResult.groups[2]?.value?.trim() ?: ""
-
-                val parameterList = parseParameters(parameters)
-
-                Pair(parameterList, returnType)
-            } else {
-                null
-            }
-        }
-
-        private fun parseParameters(parameters: String): List<String> {
-            val paramList = mutableListOf<String>()
-            val currentParam = StringBuilder()
-
-            var angleBrackets = 0
-            var parentheses = 0
-            var squareBrackets = 0
-
-            for (char in parameters) {
-                when (char) {
-                    '<' -> {
-                        angleBrackets++
-                        currentParam.append(char)
-                    }
-                    '>' -> {
-                        angleBrackets--
-                        currentParam.append(char)
-                    }
-                    '(' -> {
-                        parentheses++
-                        currentParam.append(char)
-                    }
-                    ')' -> {
-                        parentheses--
-                        currentParam.append(char)
-                    }
-                    '[' -> {
-                        squareBrackets++
-                        currentParam.append(char)
-                    }
-                    ']' -> {
-                        squareBrackets--
-                        currentParam.append(char)
-                    }
-                    ',' -> {
-                        if (angleBrackets == 0 && parentheses == 0 && squareBrackets == 0) {
-                            paramList.add(currentParam.toString().trim())
-                            currentParam.clear()
-                        } else {
-                            currentParam.append(char)
-                        }
-                    }
-                    else -> currentParam.append(char)
-                }
-            }
-
-            if (currentParam.isNotBlank()) {
-                paramList.add(currentParam.toString().trim())
-            }
-
-            return paramList
-        }
-    }
 
     override fun <T> runFromScriptFile(
         context: String,
@@ -172,91 +93,30 @@ class Octopus(private var container: Container) : ScriptExecutor {
                     }
                 }
 
-
                 val flags = params.filterKeys { it.startsWith("--") || it.startsWith("-") }.keys.toTypedArray()
 
-                if (exportedFunctionSignature?.first!!.isNotEmpty()) {
+                val signature = exportedFunctionSignature?.first
+                    ?.map { it.replace("\\s+".toRegex(), "") }
+                    ?: emptyList()
 
-                    when {
-                        isParameterizable(exportedFunctionSignature.first) -> {
-                            val callbackResult = captureOutputAndResult {
-                                eval(sentence)
-                                val targetCallback = eval(exportFunctionName) as (Map<String, Any>) -> T
-                                targetCallback.invoke(params)
-                            }
+                val fullParams = params + mapOf(
+                    "context" to context,
+                    "flags" to flags
+                )
 
-                            result(callbackResult as T)
-                        }
+                val callbackResult = captureOutputAndResult {
+                    val resolver = signatureResolvers[signature]
+                        ?: throw IllegalArgumentException("Unsupported function signature with $signature")
 
-                        isModuleProcessor(exportedFunctionSignature.first) -> {
-                            val processor = ModuleProcessor(context, *flags)
-
-                            val callbackResult = captureOutputAndResult {
-                                eval(sentence)
-                                when (val paramCount = exportedFunctionSignature.first.size) {
-                                    1 -> {
-                                        val targetCallback = eval(exportFunctionName) as (Process) -> T
-                                        targetCallback.invoke(processor)
-                                    }
-
-                                    2 -> {
-                                        val targetCallback = eval(exportFunctionName) as (Process, Map<String, Any>) -> T
-                                        targetCallback.invoke(processor, params)
-                                    }
-
-                                    else -> throw IllegalArgumentException("Unsupported function signature with $paramCount parameters")
-                                }
-                            }
-
-
-                            if (processor.isProcessorInfo) {
-                                result(processor.getModuleProcessorInfo() as T)
-                                return
-                            }
-
-                            result(callbackResult as T)
-                        }
-
-                        isModuleAnalyzer(exportedFunctionSignature.first) -> {
-                            val processor = ModuleAnalyzer(context, *flags)
-
-                            val callbackResult = captureOutputAndResult {
-                                eval(sentence)
-                                when (val paramCount = exportedFunctionSignature.first.size) {
-                                    1 -> {
-                                        val targetCallback = eval(exportFunctionName) as (Process) -> T
-                                        targetCallback.invoke(processor)
-                                    }
-
-                                    2 -> {
-                                        val targetCallback = eval(exportFunctionName) as (Process, Map<String, Any>) -> T
-                                        targetCallback.invoke(processor, params)
-                                    }
-
-                                    else -> throw IllegalArgumentException("Unsupported function signature with $paramCount parameters")
-                                }
-                            }
-
-                            result(callbackResult as T)
-                        }
-                    }
+                    resolver(sentence, this, fullParams)
                 }
-                else {
-                    val callbackResult = captureOutputAndResult {
-                        eval(sentence)
 
-                        val targetCallback = eval(exportFunctionName) as () -> T
-                        targetCallback.invoke()
-                    }
-
-                    result(callbackResult as T)
-                }
+                result(callbackResult as T)
             } else {
                 result("No function annotated with @Export was found." as T)
             }
         }
     }
-
 
     override fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T {
         return callable(params)

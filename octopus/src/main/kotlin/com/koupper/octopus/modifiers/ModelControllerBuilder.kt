@@ -5,7 +5,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.reflect.KClass
 
-class RequestHandlerControllerBuilder(
+class ModelControllerBuilder(
     private val context: String,
     private val modelProject: String,
     private val controllerLocation: String,
@@ -47,10 +47,6 @@ class RequestHandlerControllerBuilder(
     override fun build() {
         super.build()
 
-        val classDeclaration = this.textFileHandler.getNumberLineFor("class ${this.controllerName} {")
-
-        this.textFileHandler.putLineAfter(classDeclaration, getRequestProperties(), overrideOriginal = true)
-
         val destinationPath = Paths.get(
             "${context + if (modelProject.isNotEmpty()) File.separator + modelProject else ""}/src/main/kotlin/${
                 this.packageName.replace(".", File.separator)
@@ -63,17 +59,6 @@ class RequestHandlerControllerBuilder(
             Paths.get(this.baseControllerLocation),
             destinationPath.resolve("${this.controllerName}.kt")
         )
-    }
-
-    private fun getRequestProperties(): String {
-        val requestProperties = StringBuilder()
-
-        val contextAt = "${spaces}@Context"
-        val uriInfoSentence = "${spaces}private lateinit var uriInfo: UriInfo"
-        val headersSentence = "${spaces}private lateinit var inputHeaders: HttpHeaders"
-
-        return requestProperties.append(contextAt).appendLine().append(uriInfoSentence).appendLine().append(contextAt)
-            .appendLine().append(headersSentence).appendLine().toString()
     }
 
     override fun addMethodParameters(method: Method) {
@@ -120,7 +105,7 @@ class RequestHandlerControllerBuilder(
     class Builder {
         var context = ""
         var modelProject = ""
-        var controllerLocation = "model-project/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt"
+        var controllerLocation = "model-project/src/main/kotlin/io/mp/controllers/ModelController.kt"
         var path: String = Property.UNDEFINED.name
         var controllerConsumes: List<String> = emptyList()
         var controllerProduces: List<String> = emptyList()
@@ -128,6 +113,6 @@ class RequestHandlerControllerBuilder(
         var packageName: String = Property.UNDEFINED.name
         var methods: MutableList<Method> = mutableListOf()
 
-        fun build() = RequestHandlerControllerBuilder(this)
+        fun build() = ModelControllerBuilder(this)
     }
 }

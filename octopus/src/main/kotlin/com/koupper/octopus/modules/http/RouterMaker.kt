@@ -2,7 +2,6 @@ package com.koupper.octopus.modules.http
 
 import com.koupper.container.interfaces.Container
 import com.koupper.octopus.modifiers.SetupGrizzlyConfigurator
-import com.koupper.octopus.modules.http.service.GrizzlyGradleJerseyBuilder
 import com.koupper.os.env
 import java.io.File
 import kotlin.reflect.KClass
@@ -27,6 +26,7 @@ sealed interface RouteDefinition {
     fun response(response: () -> KClass<*>)
     fun response(): KClass<*>?
     fun script(script: () -> String)
+    fun handler(handler: () -> String)
     fun script(): String
     fun controllerName(controllerName: () -> String)
     fun controllerName(): String
@@ -43,7 +43,6 @@ sealed interface RouteDefinition {
     fun delete(route: Delete.() -> Unit)
     fun deleteMethods(): MutableList<RouteDefinition>
     fun registerRouter(route: RouteDefinition.() -> Unit): RouteDefinition
-    fun setup(config: GrizzlyGradleJerseyBuilder.Builder.() -> Unit): RouteDefinition
     fun deployOn(config: SetupGrizzlyConfigurator.Builder.() -> Unit): RouteDefinition
     fun stop()
 }
@@ -65,6 +64,7 @@ open class Route(private val container: Container) : RouteDefinition {
     private var formParams: Map<String, KClass<*>> = emptyMap()
     private var response: KClass<*>? = null
     private var script: String = ""
+    private var handler: String = ""
     private var postMethods: MutableList<RouteDefinition> = mutableListOf()
     private var getMethods: MutableList<RouteDefinition> = mutableListOf()
     private var putMethods: MutableList<RouteDefinition> = mutableListOf()
@@ -137,6 +137,10 @@ open class Route(private val container: Container) : RouteDefinition {
 
     override fun script() = this.script
 
+    override fun handler(handler: () -> String) {
+        this.handler = handler()
+    }
+
     override fun controllerName(controllerName: () -> String) {
         this.controllerName = controllerName()
     }
@@ -189,12 +193,6 @@ open class Route(private val container: Container) : RouteDefinition {
 
     override fun registerRouter(route: RouteDefinition.() -> Unit): RouteDefinition {
         route()
-
-        return this
-    }
-
-    override fun setup(config: GrizzlyGradleJerseyBuilder.Builder.() -> Unit): RouteDefinition {
-        GrizzlyGradleJerseyBuilder.build(config)
 
         return this
     }

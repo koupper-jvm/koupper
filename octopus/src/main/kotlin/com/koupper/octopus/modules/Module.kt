@@ -1,14 +1,10 @@
 package com.koupper.octopus.modules;
 
 import com.koupper.configurations.utilities.ANSIColors
-import com.koupper.container.app
-import com.koupper.octopus.Octopus
-import com.koupper.octopus.Octopus.Companion.extractExportFunctionName
-import com.koupper.octopus.Octopus.Companion.extractExportFunctionSignature
 import com.koupper.octopus.process.getRealScriptNameFrom
-import com.koupper.providers.files.FileHandler
+import com.koupper.shared.octopus.extractExportFunctionName
+import com.koupper.shared.octopus.extractExportFunctionSignature
 import java.io.File
-import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*

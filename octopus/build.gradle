@@ -34,7 +34,12 @@ task optimized(type: Jar) {
     from sourceSets.main.output
     from {
         configurations.runtimeClasspath.filter {
-            it.name.contains("container") || it.name.contains("providers") || it.name.contains("configurations") || it.name.contains("shared") || it.name.contains("os") || it.name.contains("annotations")
+            it.name.contains("container") || it.name.contains("providers") ||
+                    it.name.contains("configurations") ||
+                    it.name.contains("shared") ||
+                    it.name.contains("os") ||
+                    it.name.contains("annotations") ||
+                    it.name.contains("orchestrator-core")
         }.collect {
             println("Octopus dependency Included: ${it.name}")
             it.isDirectory() ? it : zipTree(it)

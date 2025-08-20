@@ -81,6 +81,7 @@ project(':octopus') {
         implementation project(':providers')
         implementation project(':configurations')
         implementation project(':os')
+        implementation project(':orchestrator-core')
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
         implementation "org.jetbrains.kotlin:kotlin-script-util:1.8.22"
         implementation "org.jetbrains.kotlin:kotlin-scripting-jvm"
@@ -123,6 +124,24 @@ project(':providers') {
 project(':shared') {
     dependencies {
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
+    }
+}
+
+project(':orchestrator-core') {
+    dependencies {
+        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion"
+        implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.12.0'
+        implementation project(':shared')
+        // Redis
+        implementation("redis.clients:jedis:4.4.3")
+
+        // AWS SQS
+        implementation("software.amazon.awssdk:sqs:2.25.19")
+
+        // SQLite o Postgres (elige uno según el caso)
+        implementation("org.xerial:sqlite-jdbc:3.44.1.0")
+        // o: implementation("org.postgresql:postgresql:42.7.3")
+        implementation project(':os')
     }
 }
 

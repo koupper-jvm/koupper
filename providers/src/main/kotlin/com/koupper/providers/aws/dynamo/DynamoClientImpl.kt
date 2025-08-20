@@ -5,6 +5,7 @@ import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
@@ -13,9 +14,21 @@ import java.net.URI
 
 class DynamoClientImpl : DynamoClient {
     private val dynamoDbClient: DynamoDbClient = DynamoDbClient.builder()
-        .region(Region.US_EAST_1)
-        .credentialsProvider(DefaultCredentialsProvider.create())
+        .region(Region.US_EAST_2)
+        .apply {
+            val dynamoUrl = env("DYNAMO_URL")
+
+            if (dynamoUrl.isNotBlank()) {
+                endpointOverride(URI(dynamoUrl))
+                credentialsProvider {
+                    AwsBasicCredentials.create("fakeAccessKey", "fakeSecretKey")
+                }
+            } else {
+                credentialsProvider(DefaultCredentialsProvider.create())
+            }
+        }
         .build()
+
 
     override fun createTable(
         tableName: String,

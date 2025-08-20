@@ -6,6 +6,7 @@ import com.koupper.octopus.modifiers.ControllersAnalyzer
 import com.koupper.octopus.modules.validateScript
 import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.files.JSONFileHandlerImpl
+import com.koupper.shared.octopus.extractExportFunctionSignature
 import java.io.File
 
 class ModuleAnalyzer(private val context: String, private vararg val flags: String) : Process {
@@ -130,7 +131,7 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
                 val validation = validateScript(file.path)
                 if (validation.isSuccess) {
                     val scriptContent = file.readText()
-                    val functionSignature = Octopus.extractExportFunctionSignature(scriptContent)
+                    val functionSignature = extractExportFunctionSignature(scriptContent)
                     if (functionSignature != null) {
                         val (params, returnType) = functionSignature
                         tags.add("[script]")

@@ -108,7 +108,7 @@ class ControllersBuilder private constructor(
 
             this.context = self.context
 
-            this.rootLocation = "${self.projectName}/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt"
+            this.controllerLocation = "${self.projectName}/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt"
 
             this.path = routeDefinition.path()
 
@@ -120,9 +120,7 @@ class ControllersBuilder private constructor(
 
             this.packageName = self.packageName
 
-            this.registeredScripts = self.registeredScripts
-
-            val pm = generateMethods(Action.POST, self.routeDefinition.postMethods()) {
+            val pm = JerseyControllerBuilder.generateMethods(Action.POST, self.routeDefinition.postMethods()) {
                 (it as Post).body
             }
 
@@ -130,7 +128,7 @@ class ControllersBuilder private constructor(
                 this.methods.addAll(pm)
             }
 
-            val gm = generateMethods(Action.GET, self.routeDefinition.getMethods()) {
+            val gm = JerseyControllerBuilder.generateMethods(Action.GET, self.routeDefinition.getMethods()) {
                 null
             }
 
@@ -138,7 +136,7 @@ class ControllersBuilder private constructor(
                 this.methods.addAll(gm)
             }
 
-            val pum = generateMethods(Action.PUT, self.routeDefinition.putMethods()) {
+            val pum = JerseyControllerBuilder.generateMethods(Action.PUT, self.routeDefinition.putMethods()) {
                 (it as Put).body
             }
 
@@ -146,37 +144,13 @@ class ControllersBuilder private constructor(
                 this.methods.addAll(pum)
             }
 
-            val dm = generateMethods(Action.DELETE, self.routeDefinition.deleteMethods()) {
+            val dm = JerseyControllerBuilder.generateMethods(Action.DELETE, self.routeDefinition.deleteMethods()) {
                 null
             }
 
             if (dm.isNotEmpty()) {
                 this.methods.addAll(dm)
             }
-        }
-    }
-
-    private fun generateMethods(
-        action: Action,
-        routeList: MutableList<RouteDefinition>,
-        bodyProvider: (RouteDefinition) -> KClass<*>?
-    ): List<Method> {
-        return routeList.map { route ->
-            Method(
-                route.identifier(),
-                action,
-                route.path(),
-                route.consumes(),
-                route.produces(),
-                route.queryParams(),
-                route.matrixParams(),
-                route.headerParams(),
-                route.cookieParams(),
-                route.formParams(),
-                route.response(),
-                route.script(),
-                bodyProvider(route)
-            )
         }
     }
 

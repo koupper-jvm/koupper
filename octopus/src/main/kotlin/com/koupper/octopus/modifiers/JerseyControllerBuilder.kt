@@ -1,5 +1,6 @@
 package com.koupper.octopus.modifiers
 
+import com.koupper.octopus.modules.http.RouteDefinition
 import com.koupper.octopus.toCamelCase
 import com.koupper.providers.files.TextFileHandlerImpl
 import java.io.BufferedWriter
@@ -44,8 +45,7 @@ open class JerseyControllerBuilder protected constructor(
     protected val controllerProduces: List<String> = emptyList(),
     protected val controllerName: String = Property.UNDEFINED.name,
     protected val packageName: String = Property.UNDEFINED.name,
-    protected val methods: MutableList<Method> = mutableListOf(),
-    protected var registeredScripts: MutableMap<String, Pair<List<String>, String>> = mutableMapOf()
+    protected val methods: MutableList<Method> = mutableListOf()
 ) {
     protected val textFileHandler = TextFileHandlerImpl()
     protected val finalCustomController = StringBuilder()
@@ -64,6 +64,30 @@ open class JerseyControllerBuilder protected constructor(
     companion object {
         inline fun build(location: String, block: Builder.() -> Unit) =
             Builder(location).apply(block).build()
+
+        fun generateMethods(
+            action: Action,
+            routeList: MutableList<RouteDefinition>,
+            bodyProvider: (RouteDefinition) -> KClass<*>?
+        ): List<Method> {
+            return routeList.map { route ->
+                Method(
+                    route.identifier(),
+                    action,
+                    route.path(),
+                    route.consumes(),
+                    route.produces(),
+                    route.queryParams(),
+                    route.matrixParams(),
+                    route.headerParams(),
+                    route.cookieParams(),
+                    route.formParams(),
+                    route.response(),
+                    route.script(),
+                    bodyProvider(route)
+                )
+            }
+        }
     }
 
     open fun build() {

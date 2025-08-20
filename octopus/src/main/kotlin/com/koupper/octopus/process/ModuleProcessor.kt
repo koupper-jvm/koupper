@@ -9,8 +9,8 @@ import com.koupper.octopus.modules.Module
 import com.koupper.octopus.modules.aws.AWSAGHandlerBuilder
 import com.koupper.octopus.modules.aws.ExecutableJarBuilder
 import com.koupper.octopus.modules.aws.LambdaFunctionBuilder
-import com.koupper.octopus.modules.http.service.GrizzlyGradleJerseyBuilder
 import com.koupper.octopus.modules.validateScript
+import com.koupper.shared.octopus.extractExportFunctionName
 import java.io.File
 import java.security.MessageDigest
 
@@ -43,7 +43,7 @@ fun findKtFileRecursively(baseDir: File, fileName: String): File? {
     }
 }
 
-class ModuleProcessor(private val context: String, vararg private val flags: String) : Process {
+class ModuleProcessor(private val context: String, private vararg val flags: String) : Process {
     private var name: String = "Not Set"
     private var type: String = "Not Set"
     private var version: String = "Not Set"
@@ -125,7 +125,7 @@ class ModuleProcessor(private val context: String, vararg private val flags: Str
                     val scriptExists = ktsFile != null && ktsFile.exists()
 
                     val usageCheck = if (handlerExists && scriptExists) {
-                        val exportFunction = Octopus.extractExportFunctionName(ktsFile!!.readText())
+                        val exportFunction = extractExportFunctionName(ktsFile!!.readText())
                         val handlerContent = handlerFile!!.readText()
                         handlerContent.contains("${exportFunction}(")
                     } else false
@@ -222,14 +222,6 @@ class ModuleProcessor(private val context: String, vararg private val flags: Str
         val self = this
 
         when {
-            this.type.equals("GRYZZLY_GRADLE_JERSEY", true) -> {
-                GrizzlyGradleJerseyBuilder.build {
-                    projectName = self.name
-                    version = self.version
-                    packageName = self.packageName
-                    deployableScripts = self.scripts
-                }
-            }
             this.type.equals("DEPLOYABLE_AWS_LAMBDA_JAR", true) -> {
                 LambdaFunctionBuilder.build {
                     projectName = self.name

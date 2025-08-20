@@ -140,13 +140,6 @@ class OctopusTest : AnnotationSpec() {
                     consumes { listOf("application/json") }
                 }
 
-            }.deployOn {
-                port = 8080
-                rootUrl = "example"
-            }.setup {
-                projectName = "hello"
-                version = "2.0.1"
-                packageName = "io.example"
             }
         }
     }
