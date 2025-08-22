@@ -101,6 +101,45 @@ object JobRunner {
         }
     }
 
+    fun listJobs(queue: String = "default", driver: String = "file") {
+        println("🔧 List jobs from [$queue] using [$driver] driver")
+
+        when (driver) {
+            "file" -> listFromFile(queue)
+            /*"redis" -> runFromRedis(queue)
+            "sqs" -> runFromSQS(queue)
+            "database" -> runFromDatabase(queue)*/
+            else -> println("❌ Unknown driver: $driver")
+        }
+    }
+
+    private fun listFromFile(queue: String) {
+        val dir = File("jobs/$queue")
+        val jobs = dir.listFiles()?.filter { it.extension == "json" } ?: emptyList()
+
+        if (jobs.isEmpty()) {
+            println("⚠️ No jobs found in [$queue]")
+            return
+        }
+
+        jobs.forEach {
+            try {
+                val task = JobSerializer.deserialize(it.readText())
+                println("📦 Job ID: ${task.id}")
+                println(" - Function: ${task.functionName}")
+                println(" - Params: ${task.params}")
+                println(" - Source: ${task.scriptPath}")
+                println(" - Context: ${task.context}")
+                println(" - Version: ${task.contextVersion}")
+                println(" - Origin: ${task.origin}")
+                println(" - File: ${it.name}")
+                println()
+            } catch (e: Exception) {
+                println("❌ Failed to parse job file ${it.name}: ${e.message}")
+            }
+        }
+    }
+
     private fun runFromFile(queue: String) {
         val dir = File("jobs/$queue")
         val jobs = dir.listFiles()?.filter { it.extension == "json" } ?: return
