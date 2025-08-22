@@ -4,6 +4,7 @@ import com.koupper.container.app
 import com.koupper.octopus.Octopus
 import com.koupper.octopus.modifiers.ControllersAnalyzer
 import com.koupper.octopus.modules.validateScript
+import com.koupper.orchestrator.config.JobConfig
 import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.shared.octopus.extractExportFunctionSignature
@@ -121,6 +122,7 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
 
             when {
                 file.name == "init.kts" -> tags.add("[init]")
+                file.name == "jobs.json" -> tags.add("[cfg][driver:${JobConfig.loadOrFail().driver}]|[queue:${JobConfig.loadOrFail().queue}]")
                 file.extension in listOf("yml", "yaml", "json") -> tags.add("[cfg]")
                 file.extension == "env" -> tags.add("[envs]")
                 file.extension == "kt" -> tags.add("[kt]")
@@ -154,3 +156,4 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
         return files
     }
 }
+

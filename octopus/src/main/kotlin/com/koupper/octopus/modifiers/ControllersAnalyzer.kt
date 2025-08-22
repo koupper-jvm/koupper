@@ -51,20 +51,29 @@ class ControllersAnalyzer {
 
     private fun extractControllerInfo(controllerContent: String): List<Map<String, String>> {
         val results = mutableListOf<Map<String, String>>()
-        val methodBlockRegex = Regex("""fun\s+(\w+)\s*\(""")
-        val handlerInitRegex = Regex("""val\s+(\w+)\s*=\s*(RequestHandler\w+)\(\)""")
-        val handlers = handlerInitRegex.findAll(controllerContent).map {
-            it.groupValues[1] to it.groupValues[2]
-        }.toMap()
+
+        val importHandlerNames: Set<String> =
+            Regex("""^import\s+([\w.]+)\.(\w+)\s*$""", RegexOption.MULTILINE)
+                .findAll(controllerContent)
+                .map { it.groupValues[1] to it.groupValues[2] }
+                .filter { (pkg, _) -> pkg.contains(".handlers") }
+                .map { it.second }
+                .toSet()
+
+        val methodBlockRegex = Regex("""\bfun\s+([A-Za-z_]\w*)\s*\(""")
+        val handlerInitRegex = Regex(
+            """\bval\s+([A-Za-z_]\w*)(?:\s*:\s*([A-Za-z_][\w.<>,?]*))?\s*=\s*([A-Za-z_][\w.]*)\s*(?:<[^>]*>)?\s*\([^)]*\)"""
+        )
+        val handlerCallRegex = Regex("""\b(\w+)\s*\.\s*(?:handleRequest|handle)\s*\(""")
 
         for (match in methodBlockRegex.findAll(controllerContent)) {
             val functionName = match.groupValues[1]
             val start = match.range.first
 
             val annotationsBlock = controllerContent.substring(0, start).lines()
-                .reversed()
+                .asReversed()
                 .takeWhile { it.trim().startsWith("@") || it.isBlank() }
-                .reversed()
+                .asReversed()
                 .joinToString("\n")
 
             val httpMethod = Regex("""@(GET|POST|PUT|DELETE)""")
@@ -79,13 +88,27 @@ class ControllersAnalyzer {
             val functionStart = controllerContent.indexOf("{", match.range.last)
             val bodyContent = extractFunctionBody(controllerContent, functionStart)
 
-            val handlerCallRegex = Regex("""(\w+)\.handleRequest\(""")
-            val usedHandlerVar = handlerCallRegex.find(bodyContent)?.groupValues?.get(1)
-            val handler = if (usedHandlerVar != null && handlers.containsKey(usedHandlerVar)) {
-                handlers[usedHandlerVar] ?: "Unknown"
-            } else {
-                "Unknown"
-            }
+            val usedVarNamesInOrder = handlerCallRegex.findAll(bodyContent).map { it.groupValues[1] }.toList()
+
+            val declsInFn: Map<String, String> =
+                handlerInitRegex.findAll(bodyContent).associate { m ->
+                    val varName = m.groupValues[1]
+                    val annotatedType = m.groupValues[2]
+                    val ctorType = m.groupValues[3]
+                    val t = if (annotatedType.isNotBlank()) annotatedType else ctorType
+                    val simple = t.substringAfterLast('.').substringBefore('<')
+                    varName to simple
+                }
+
+            val handlersInFn: Map<String, String> =
+                usedVarNamesInOrder.distinct()
+                    .mapNotNull { name ->
+                        val simple = declsInFn[name] ?: return@mapNotNull null
+                        if (simple.endsWith("Handler") || simple in importHandlerNames) name to simple else null
+                    }.toMap()
+
+            val chosenHandlerName = usedVarNamesInOrder.firstOrNull { it in handlersInFn }
+            val handler = chosenHandlerName?.let { handlersInFn[it] } ?: "Unknown"
 
             results.add(
                 mapOf(
