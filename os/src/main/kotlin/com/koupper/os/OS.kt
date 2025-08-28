@@ -5,37 +5,53 @@ import java.io.File
 
 val envs = mutableListOf<String>()
 
-fun env(variableName: String, context: String? = null, variables: Map<String, String>? = null): String {
-    var envValue = System.getenv(variableName) ?: "undefined"
+fun env(
+    variableName: String,
+    context: String? = null,
+    variables: Map<String, String>? = null,
+    required: Boolean = true,
+    allowEmpty: Boolean = false,
+    default: String = ""
+): String {
+    val sysEnv = System.getenv()
+    var value: String? = if (sysEnv.containsKey(variableName)) sysEnv[variableName] else null
 
-    if (System.getenv("GLOBAL_ENV_FILE") != null) {
-        envValue = File(System.getenv("GLOBAL_ENV_FILE")).getProperty(variableName)
+    if (value == null && System.getenv("GLOBAL_ENV_FILE") != null) {
+        val fromGlobal = File(System.getenv("GLOBAL_ENV_FILE")).getProperty(variableName)
+        value = if (fromGlobal != "undefined") fromGlobal else null
     }
 
-    if (envValue === "undefined") {
-        envValue = try {
-            val envValueOnFile = File("${if(context != null) context + File.separator else ""}.env").getProperty(variableName)
+    if (value == null) {
+        val fromDotEnv = try {
+            File("${if (context != null) context + File.separator else ""}.env").getProperty(variableName)
+        } catch (_: Exception) { "undefined" }
 
-            if (envValueOnFile === "undefined") {
-                envs.add(envValue)
-                throw Exception("The $variableName should be present in: an environment variable||an env file (.env) to use this provider")
-            } else {
-                envValueOnFile
-            }
-        } catch (e: Exception) {
-            envs.add(envValue)
-            throw Exception("The $variableName should be present in: an environment variable||an env file (.env) for using this provider")
+        value = if (fromDotEnv != "undefined") fromDotEnv else null
+    }
+
+    if (value == null) {
+        if (required) {
+            throw Exception("The $variableName should be present in environment or .env")
+        } else {
+            value = default // por defecto "", útil para DYNAMO_URL
+        }
+    }
+
+    if (!allowEmpty && value.isEmpty()) {
+        if (required) {
+            throw Exception("The $variableName must not be empty")
+        } else {
+            value = default
         }
     }
 
     if (!variables.isNullOrEmpty()) {
-        envValue = envValue.replace(Regex("\\$(\\w+)")) { matchResult ->
-            val key = matchResult.groupValues[1]
-            variables?.get(key) ?: matchResult.value
+        value = value.replace(Regex("\\$(\\w+)")) { mr ->
+            variables[mr.groupValues[1]] ?: mr.value
         }
     }
 
-    return envValue
+    return value
 }
 
 fun setGlobalConfig(path: String) {

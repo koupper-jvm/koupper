@@ -3,7 +3,7 @@ package com.koupper.shared.validators.core
 data class VError(val field: String, val messages: List<String>)
 data class VResult<T>(val ok: Boolean, val data: T?, val errors: List<VError> = emptyList())
 
-interface Rule<T> { fun check(value: T?): String? }
+interface Rule<T> { fun check(v: T?): String? }
 
 data class FieldRule<T, F>(
     val name: String,

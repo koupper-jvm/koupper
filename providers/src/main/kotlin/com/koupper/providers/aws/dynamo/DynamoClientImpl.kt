@@ -6,29 +6,46 @@ import com.koupper.providers.files.toType
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
+import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.net.URI
 
 class DynamoClientImpl : DynamoClient {
-    private val dynamoDbClient: DynamoDbClient = DynamoDbClient.builder()
-        .region(Region.US_EAST_2)
-        .apply {
-            val dynamoUrl = env("DYNAMO_URL")
+    private fun envCredsProvider(): AwsCredentialsProvider {
+        val ak = env("AWS_ACCESS_KEY_ID")
+        val sk = env("AWS_SECRET_ACCESS_KEY")
+        val st = env("AWS_SESSION_TOKEN", required = false, allowEmpty = true, default = "")
 
-            if (dynamoUrl.isNotBlank()) {
+        return when {
+            ak.isNotBlank() && sk.isNotBlank() && st.isNotBlank() ->
+                StaticCredentialsProvider.create(AwsSessionCredentials.create(ak, sk, st))
+            ak.isNotBlank() && sk.isNotBlank() ->
+                StaticCredentialsProvider.create(AwsBasicCredentials.create(ak, sk))
+            else ->
+                EnvironmentVariableCredentialsProvider.create()
+        }
+    }
+
+    private val dynamoDbClient: DynamoDbClient = DynamoDbClient.builder()
+        .region(Region.of(env("DYNAMO_REGION")))
+        .apply {
+            val dynamoUrl = env("DYNAMO_URL", required = false, allowEmpty = true, default = "")
+
+            if (dynamoUrl.isNotEmpty()) {
                 endpointOverride(URI(dynamoUrl))
                 credentialsProvider {
                     AwsBasicCredentials.create("fakeAccessKey", "fakeSecretKey")
                 }
             } else {
-                credentialsProvider(DefaultCredentialsProvider.create())
+                credentialsProvider(envCredsProvider())
             }
         }
         .build()
-
 
     override fun createTable(
         tableName: String,

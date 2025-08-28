@@ -3,6 +3,9 @@ package com.koupper.octopus
 import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.ModuleProcessor
 import com.koupper.octopus.process.RoutesRegistration
+import com.koupper.orchestrator.JobBuilder
+import com.koupper.orchestrator.JobDisplayer
+import com.koupper.orchestrator.JobLister
 import com.koupper.orchestrator.JobRunner
 import com.koupper.shared.octopus.extractExportFunctionName
 import javax.script.ScriptEngine
@@ -47,6 +50,24 @@ val signatureResolvers: Map<List<String>, (String, ScriptEngine, Map<String, Any
         val runner = JobRunner
         engine.eval(sentence)
         val fn = engine.eval(extractExportFunctionName(sentence)!!) as (JobRunner) -> Any
+        fn(runner)
+    },
+    listOf("JobLister") to { sentence, engine, params ->
+        val runner = JobLister
+        engine.eval(sentence)
+        val fn = engine.eval(extractExportFunctionName(sentence)!!) as (JobLister) -> Any
+        fn(runner)
+    },
+    listOf("JobBuilder") to { sentence, engine, params ->
+        val runner = JobBuilder
+        engine.eval(sentence)
+        val fn = engine.eval(extractExportFunctionName(sentence)!!) as (JobBuilder) -> Any
+        fn(runner)
+    },
+    listOf("JobDisplayer") to { sentence, engine, params ->
+        val runner = JobDisplayer
+        engine.eval(sentence)
+        val fn = engine.eval(extractExportFunctionName(sentence)!!) as (JobDisplayer) -> Any
         fn(runner)
     },
     emptyList<String>() to { sentence, engine, _ ->
