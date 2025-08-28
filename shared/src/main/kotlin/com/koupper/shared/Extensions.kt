@@ -26,5 +26,3 @@ fun File.getProperty(propertyName: String) : String {
 fun ArrayList<Int>.toByteArray() : ByteArray {
     return this.foldIndexed(ByteArray(this.size)) { i, a, v -> a.apply { set(i, v.toByte()) } }
 }
-
-class Extensions {}

@@ -1,27 +1,159 @@
 package com.koupper.octopus.process
 
-class ModuleAnalyzer : Process {
-    override fun register(
-        name: String,
-        metadata: MutableMap<String, Any>,
-        moduleType: String,
-        version: String,
-        packageName: String,
-        scripts: Map<String, String>
-    ): Process {
-        TODO("Not yet implemented")
-    }
+import com.koupper.container.app
+import com.koupper.octopus.Octopus
+import com.koupper.octopus.modifiers.ControllersAnalyzer
+import com.koupper.octopus.modules.validateScript
+import com.koupper.orchestrator.config.JobConfig
+import com.koupper.providers.files.JSONFileHandler
+import com.koupper.providers.files.JSONFileHandlerImpl
+import com.koupper.shared.octopus.extractExportFunctionSignature
+import java.io.File
 
-    override fun processName(): String {
-        TODO("Not yet implemented")
-    }
+class ModuleAnalyzer(private val context: String, private vararg val flags: String) : Process {
+    private var name: String = "init.kts"
+    private var type: String = "Not Set"
+    private var target: String = "Not Set"
 
-    override fun processType(): String {
-        TODO("Not yet implemented")
-    }
+    override fun processName() = this.name
+    override fun processType() = this.type
+
+    fun target(target: String) = apply { this.target = target }
 
     override fun run() {
-        TODO("Not yet implemented")
+        val baseDir = File(target)
+
+        if (flags.contains("-l")) {
+            val folders = analyzeFolders(baseDir)
+            val files = analyzeFiles(baseDir)
+
+            val data = mapOf(
+                "folders" to folders,
+                "files" to files
+            )
+
+            val outputFile = File(System.getProperty("user.home"), ".koupper/helpers/module-analysis.json")
+            outputFile.parentFile.mkdirs()
+            val textJsonParser = app.getInstance(JSONFileHandler::class) as JSONFileHandlerImpl<Map<String, Any?>>
+            outputFile.writeText(textJsonParser.toJsonString(data))
+        }
     }
 
+    private fun analyzeFolders(baseDir: File): List<Map<String, Any?>> {
+        val projects = mutableListOf<Map<String, Any?>>()
+
+        val handlerRegex = Regex("""class\s+\w+\s*:\s*(Setup|RequestHandler<.*>)""")
+        val controllerRegex = Regex("""@Path\(""")
+
+        val dirs = baseDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
+
+        for (dir in dirs) {
+            val tags = mutableSetOf<String>()
+            val files = dir.walkTopDown().filter { it.isFile && (it.extension == "kt" || it.extension == "kts") }.toList()
+
+            if (File(dir, "build.gradle").exists() || File(dir, "build.gradle.kts").exists()) {
+                tags.add("[proj]")
+            }
+
+            val onlyKts = files.isNotEmpty() && files.all { it.extension == "kts" }
+            val hasInitKts = files.isNotEmpty() && files.all { it.name == "init.kts" }
+            val hasConfig = files.any { it.extension == "yml" }
+            val hasKt = files.any { it.extension == "kt" }
+            val hasKts = files.any { it.extension == "kts" }
+
+            if (onlyKts) {
+                tags.add("[kts folder]")
+
+                if (hasInitKts) {
+                    tags.add("[init]")
+                }
+
+                if (hasConfig) {
+                    tags.add("[cfg]")
+                }
+            } else {
+                if (hasKt) tags.add("[kt]")
+                if (hasKts) tags.add("[kts]")
+            }
+
+            val hasHandler = files.any { file ->
+                val content = file.readText()
+                handlerRegex.containsMatchIn(content)
+            }
+            if (hasHandler) tags.add("[hndlrs]")
+
+            val hasController = files.any { file ->
+                val content = file.readText()
+                controllerRegex.containsMatchIn(content)
+            }
+            if (hasController) tags.add("[ctrls]")
+
+            if (tags.isNotEmpty()) {
+                projects.add(
+                    mapOf(
+                        "folder" to dir.name,
+                        "tags" to tags.toList()
+                    )
+                )
+            }
+        }
+
+        return projects
+    }
+
+    private fun analyzeFiles(baseDir: File): List<Map<String, Any?>> {
+        val files = mutableListOf<Map<String, Any?>>()
+
+        val scripts = baseDir.listFiles { file -> file.extension == "kt" || file.extension == "kts" } ?: emptyArray()
+
+        val hasGradleFile = baseDir.listFiles()?.any {
+            it.name == "build.gradle" || it.name == "build.gradle.kts"
+        } == true
+
+        if (hasGradleFile) {
+            val port = extractServerPort(baseDir)?.toIntOrNull() ?: 8080
+            val analyzer = ControllersAnalyzer()
+            analyzer.analyzeControllers(baseDir, port, "project-controllers.json")
+        }
+
+        for (file in baseDir.listFiles() ?: emptyArray()) {
+            val tags = mutableSetOf<String>()
+            var signature: String? = null
+
+            when {
+                file.name == "init.kts" -> tags.add("[init]")
+                file.name == "jobs.json" -> tags.add("[cfg][driver:${JobConfig.loadOrFail().driver}]|[queue:${JobConfig.loadOrFail().queue}]")
+                file.extension in listOf("yml", "yaml", "json") -> tags.add("[cfg]")
+                file.extension == "env" -> tags.add("[envs]")
+                file.extension == "kt" -> tags.add("[kt]")
+                file.extension == "kts" -> tags.add("[kts]")
+            }
+
+            if (file in scripts) {
+                val validation = validateScript(file.path)
+                if (validation.isSuccess) {
+                    val scriptContent = file.readText()
+                    val functionSignature = extractExportFunctionSignature(scriptContent)
+                    if (functionSignature != null) {
+                        val (params, returnType) = functionSignature
+                        tags.add("[script]")
+                        signature = "(${params.joinToString(", ")}) -> $returnType"
+                    }
+                }
+            }
+
+            if (tags.isNotEmpty()) {
+                files.add(
+                    mapOf(
+                        "file" to file.name,
+                        "tags" to tags.toList(),
+                        "signature" to signature
+                    )
+                )
+            }
+        }
+
+        return files
+    }
 }
+

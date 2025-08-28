@@ -1,7 +1,4 @@
-import com.koupper.container.interfaces.Container
-
-val applicationFundedNotification: (Container) -> Container = { container ->
+val myScript: () -> Int = {
     println("Hello World!")
-
-    container
+    200
 }

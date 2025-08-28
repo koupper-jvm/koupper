@@ -27,7 +27,7 @@ class InjectorTest : AnnotationSpec() {
         })
 
         container.bind(AbstractDependency1::class, {
-            ConcreteDependency1(it.createInstanceOf(AbstractNestedDependency2::class))
+            ConcreteDependency1(it.getInstance(AbstractNestedDependency2::class))
         })
 
         val injector = KoupperInjector()

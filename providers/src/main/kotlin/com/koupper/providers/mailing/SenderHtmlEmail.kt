@@ -3,7 +3,6 @@ package com.koupper.providers.mailing
 import com.koupper.os.env
 import com.koupper.providers.Setup
 import java.io.File
-import java.security.Security
 import java.util.*
 import javax.activation.DataHandler
 import javax.activation.FileDataSource
@@ -14,48 +13,54 @@ import javax.mail.internet.MimeMessage
 import javax.mail.internet.MimeMultipart
 
 class SenderHtmlEmail : Sender, Setup() {
-    private var from: String? = ""
-    private var targetEmail: String = ""
-    private var subject: String? = ""
-    private var message: String = ""
+    private var fromAddress: String? = null
+    private var fromPersonal: String? = null
+    private var targetEmail: String? = null
+    private var subject: String? = null
     private lateinit var session: Session
     private var properties: Properties = Properties()
     private val attachments: MutableList<File> = mutableListOf()
     private var content: String = ""
-    private var contentType: String = "text/html" // Default content type is HTML
+    private var contentType: String = "text/html"
 
-    init {
-        this.configMailProperties()
+    init { this.configMailProperties() }
+
+    override fun from(address: String?, personal: String?): Sender {
+        this.fromAddress = address ?: env("MAIL_USERNAME")
+        this.fromPersonal = personal ?: env("EMAIL_FROM_NAME", "")
+        return this
     }
 
-    override fun withContent(content: String) {
+    override fun sendTo(email: String?): Sender {
+        this.targetEmail = email ?: env("DEFAULT_TARGET_EMAIL")
+        return this
+    }
+
+    override fun subject(subject: String?): Sender {
+        this.subject = subject ?: env("DEFAULT_SUBJECT", "noreply")
+        return this
+    }
+
+    override fun withContent(content: String, type: String): Sender {
         this.content = content
-        this.contentType = contentType
+        this.contentType = type
+        return this
     }
 
-    override fun addAttachment(filePath: String) {
+    override fun addAttachment(filePath: String): Sender {
         val file = File(filePath)
-
-        if (file.exists()) {
-            this.attachments.add(file)
-        }
+        if (file.exists()) this.attachments.add(file)
+        return this
     }
 
-    override fun sendTo(targetEmail: String): Boolean {
-        this.targetEmail = targetEmail
-
+    override fun send(): Boolean {
         this.createSession()
-
         val message = this.buildMessage()
-
         Transport.send(message)
-
         return true
     }
 
-    override fun subject(subject: String) {
-        this.subject = subject
-    }
+    override fun properties(): Properties = this.properties
 
     private fun configMailProperties() {
         this.properties["mail.smtp.host"] = env("MAIL_HOST")
@@ -71,39 +76,46 @@ class SenderHtmlEmail : Sender, Setup() {
                 return PasswordAuthentication(env("MAIL_USERNAME"), env("MAIL_PASSWORD"))
             }
         }
-
         this.session = Session.getInstance(this.properties, authenticator)
     }
 
     private fun buildMessage(): MimeMessage {
         val message = MimeMessage(this.session)
-        message.setFrom(InternetAddress(env("MAIL_USERNAME")))
-        message.setRecipient(Message.RecipientType.TO, InternetAddress(this.targetEmail))
-        message.subject = this.subject
+
+        val fromEmail = fromAddress ?: env("MAIL_USERNAME")
+        val fromName = fromPersonal ?: env("EMAIL_FROM_NAME", "")
+        val from = if (fromName.isNotBlank()) {
+            InternetAddress(fromEmail, fromName)
+        } else {
+            InternetAddress(fromEmail)
+        }
+        message.setFrom(from)
+
+        val toEmail = targetEmail ?: env("DEFAULT_TARGET_EMAIL")
+        message.setRecipient(Message.RecipientType.TO, InternetAddress(toEmail))
+
+        message.subject = subject ?: env("DEFAULT_SUBJECT", "Nuevo mensaje")
         message.sentDate = Date()
 
-        val multipart = MimeMultipart()
+        if (attachments.isEmpty()) {
+            message.setContent(content, "$contentType; charset=UTF-8")
+        } else {
+            val multipart = MimeMultipart()
 
-        // Add content as the first part
-        val contentPart = MimeBodyPart()
-        contentPart.setContent(content, contentType)
-        multipart.addBodyPart(contentPart)
+            val contentPart = MimeBodyPart()
+            contentPart.setContent(content, "$contentType; charset=UTF-8")
+            multipart.addBodyPart(contentPart)
 
-        // Add attachments
-        for (attachment in attachments) {
-            val attachmentPart = MimeBodyPart()
-            val dataSource = FileDataSource(attachment)
-            attachmentPart.dataHandler = DataHandler(dataSource)
-            attachmentPart.fileName = attachment.name
-            multipart.addBodyPart(attachmentPart)
+            for (attachment in attachments) {
+                val attachmentPart = MimeBodyPart()
+                val dataSource = FileDataSource(attachment)
+                attachmentPart.dataHandler = DataHandler(dataSource)
+                attachmentPart.fileName = attachment.name
+                multipart.addBodyPart(attachmentPart)
+            }
+            message.setContent(multipart)
         }
 
-        message.setContent(multipart)
-
         return message
-    }
-
-    override fun properties(): Properties {
-        return this.properties
     }
 }

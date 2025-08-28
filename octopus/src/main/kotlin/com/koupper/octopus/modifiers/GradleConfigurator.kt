@@ -6,15 +6,13 @@ import com.koupper.providers.files.TextFileHandler
 
 class GradleConfigurator private constructor(
     private val rootProjectName: String,
-    private val projectPath: String,
     private val version: String,
     private val packageName: String,
 ) {
-    private var textFileHandler: TextFileHandler = app.createInstanceOf(TextFileHandler::class)
+    private var textFileHandler: TextFileHandler = app.getInstance(TextFileHandler::class)
 
     private constructor(builder: Builder) : this(
         builder.rootProjectName,
-        builder.projectPath,
         builder.version,
         builder.packageName,
     )
@@ -30,7 +28,7 @@ class GradleConfigurator private constructor(
     }
 
     private fun setName() {
-        this.textFileHandler.using("${this.projectPath}/settings.gradle")
+        this.textFileHandler.using("$rootProjectName/settings.gradle")
         this.textFileHandler.replaceLine(
             this.textFileHandler.getNumberLineFor("rootProject.name = 'model-project'"),
             "rootProject.name = '${this.rootProjectName}'",
@@ -39,7 +37,7 @@ class GradleConfigurator private constructor(
     }
 
     private fun setVersion() {
-        this.textFileHandler.using("${this.projectPath}/build.gradle")
+        this.textFileHandler.using("$rootProjectName/build.gradle")
         this.textFileHandler.replaceLine(
             this.textFileHandler.getNumberLineFor("version = '0.0.0'"),
             "version = '${this.version}'",
@@ -49,7 +47,6 @@ class GradleConfigurator private constructor(
 
     class Builder() {
         var rootProjectName: String = "undefined"
-        var projectPath: String = ""
         var version: String = "0.0.0"
         var packageName: String = ""
 

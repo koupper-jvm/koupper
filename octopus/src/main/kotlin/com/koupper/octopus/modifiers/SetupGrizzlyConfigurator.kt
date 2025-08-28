@@ -1,24 +1,24 @@
 package com.koupper.octopus.modifiers
 
 import com.koupper.container.app
-import com.koupper.container.interfaces.Container
+import com.koupper.octopus.createDefaultConfiguration
+import com.koupper.octopus.modules.aws.API
+import com.koupper.octopus.modules.aws.loadAPIDefinitionFromConfiguration
 import com.koupper.providers.files.TextFileHandler
+import com.koupper.providers.files.YmlFileHandler
 
-class DeploymentConfigurator private constructor(
-    private val port: Int,
-    private val rootUrl: String,
+class SetupGrizzlyConfigurator private constructor(
+    private val context: String,
     private val packageName: String,
     private val projectName: String,
-    private val version: String
 ) {
-    private val textFileHandler = app.createInstanceOf(TextFileHandler::class)
+    private val textFileHandler = app.getInstance(TextFileHandler::class)
+    private var serverPort = 8080
 
     constructor(builder: Builder) : this(
-        builder.port,
-        builder.rootUrl,
+        builder.context,
         builder.packageName,
-        builder.projectName,
-        builder.version
+        builder.projectName
     )
 
     companion object {
@@ -26,13 +26,24 @@ class DeploymentConfigurator private constructor(
     }
 
     fun build() {
+        val ymlHandler = app.getInstance(YmlFileHandler::class)
+        val content = ymlHandler.readFrom(context + "/${projectName}.yml")
+
+        val server = content["server"] as? Map<*, *>
+
+        server?.let {
+            it["port"]?.let { port ->
+                serverPort = port.toString().toInt()
+            }
+        }
+
         this.textFileHandler.using("$projectName/src/main/kotlin/server/Setup.kt")
 
         val rootLineNumber = this.textFileHandler.getNumberLineFor("const val PORT = 8080")
 
         this.textFileHandler.replaceLine(
             rootLineNumber,
-            "const val PORT = $port",
+            "const val PORT = $serverPort",
             overrideOriginal = true
         )
 
@@ -46,12 +57,19 @@ class DeploymentConfigurator private constructor(
     }
 
     class Builder {
-        var port = 8080
-        var rootUrl = "/"
+        var context: String = ""
         var packageName = "undefined"
         var projectName = "undefined"
         var version = "undefined"
 
-        fun build() = DeploymentConfigurator(this)
+        fun build() = SetupGrizzlyConfigurator(this)
+    }
+}
+
+fun main() {
+    createDefaultConfiguration()
+    SetupGrizzlyConfigurator.configure {
+        context = "C:\\Users\\dosek\\develop\\deleteme\\asno"
+        projectName = "example"
     }
 }

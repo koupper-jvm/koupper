@@ -26,7 +26,7 @@ class DBServiceProviderTest : AnnotationSpec() {
     fun `should bind psql connector`() {
         withEnvironment(envs) {
             assertTrue {
-                app.createInstanceOf(DBConnector::class, "DBPSQLConnector") is DBPSQLConnector
+                app.getInstance(DBConnector::class, "DBPSQLConnector") is DBPSQLConnector
             }
         }
     }
@@ -35,7 +35,7 @@ class DBServiceProviderTest : AnnotationSpec() {
     fun `should bind sqlite connector`() {
         withEnvironment(envs) {
             assertTrue {
-                app.createInstanceOf(DBConnector::class, "DBSQLiteConnector") is DBSQLiteConnector
+                app.getInstance(DBConnector::class, "DBSQLiteConnector") is DBSQLiteConnector
             }
         }
     }

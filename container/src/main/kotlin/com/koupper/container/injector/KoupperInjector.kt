@@ -19,7 +19,7 @@ class KoupperInjector : Injector {
                 }
 
                 if (type.isAbstract) {
-                    parametersOfConstructor.add(container.createInstanceOf(type))
+                    parametersOfConstructor.add(container.getInstance(type))
                 }
             }
         }

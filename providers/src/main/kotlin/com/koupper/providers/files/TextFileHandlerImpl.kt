@@ -301,6 +301,25 @@ class TextFileHandlerImpl : TextFileHandler {
         return globalTargetFile.delete()
     }
 
+    override fun replacePlaceholders(placeholders: Map<String, String?>, filePath: String, overrideOriginal: Boolean): File {
+        val file = if (this.globalFilePath !== "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
+
+        var updatedContent = file.readText()
+
+        placeholders.forEach { (key, value) ->
+            updatedContent = updatedContent.replace(key, value ?: "")
+        }
+
+        return if (!overrideOriginal) {
+            val tmpFile = File(System.getProperty("java.io.tmpdir"), file.name)
+            tmpFile.writeText(updatedContent.toString())
+            tmpFile
+        } else {
+            file.printWriter().use { out -> out.print(updatedContent) }
+            file
+        }
+    }
+
     private fun getRangeOfOccurrence(
         file: File,
         contentToMatch: String,

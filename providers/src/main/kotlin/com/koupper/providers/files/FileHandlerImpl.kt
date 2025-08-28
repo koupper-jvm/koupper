@@ -1,5 +1,6 @@
 package com.koupper.providers.files
 
+import com.koupper.container.context
 import com.koupper.providers.launchProcess
 import java.io.BufferedOutputStream
 import java.io.File
@@ -22,14 +23,14 @@ val checkByPathType: (String) -> PathType = { path ->
         path.contains("(http|https)://".toRegex()) -> PathType.URL
         path.contains("resource://".toRegex()) -> PathType.RESOURCE
         path.contains("env:".toRegex()) -> PathType.ENV
-        path.startsWith(File.separator) -> PathType.LOCATION  // Usa File.separator
+        path.startsWith(File.separator) -> PathType.LOCATION
         else -> PathType.MALFORMED
     }
 }
 
 val buildResourcePathName: (String) -> String = {
     // Este método debe soportar rutas anidadas
-    it.substring(it.lastIndexOf("/") + 1)  // Usa File.separator
+    it.substring(it.lastIndexOf("/") + 1)
 }
 
 class FileHandlerImpl : FileHandler {
@@ -37,18 +38,19 @@ class FileHandlerImpl : FileHandler {
         return when {
             checkByPathType(filePath) === PathType.URL -> downloadFile(
                 URL(filePath),
-                filePath.substring(filePath.lastIndexOf("/") + 1)  // Usa File.separator
+                context + (if (filePath.startsWith(File.separator)) "" else File.separator) + filePath.substring(filePath.lastIndexOf("/") + 1)
             )
             checkByPathType(filePath) === PathType.RESOURCE -> File(
-                FileHandlerImpl::class.java.classLoader.getResource(
-                    buildResourcePathName(filePath)
-                ).path
+                FileHandlerImpl::class.java.classLoader.getResource(buildResourcePathName(filePath))
+                    ?.path ?: throw IllegalArgumentException("Resource not found: $filePath")
             )
             checkByPathType(filePath) === PathType.ENV -> File(
-                ".${filePath.substring(filePath.lastIndexOf(File.separator) + 1)}"  // Usa File.separator
+                ".${filePath.substring(filePath.lastIndexOf(File.separator) + 1)}"
             )
-            checkByPathType(filePath) === PathType.LOCATION -> File(filePath)  // Carga en la ubicación actual
-            else -> File(filePath)
+            checkByPathType(filePath) === PathType.LOCATION ->
+                File(context + (if (filePath.startsWith(File.separator)) "" else File.separator) + filePath)
+            else -> File(context + (if (filePath.startsWith(File.separator)) "" else File.separator) + filePath)
+
         }
     }
 
@@ -57,11 +59,11 @@ class FileHandlerImpl : FileHandler {
 
         val outputZipFile = if (targetPath == "N/A") {
             val fileName = "${inputDirectory.name}.zip"
-            val finalFile = File(fileName)
+            val finalFile = File(context + File.separator + fileName)
             if (finalFile.exists()) return finalFile
             finalFile
         } else {
-            File(targetPath, "${inputDirectory.name}.zip")
+            File(context + File.separator + targetPath, "${inputDirectory.name}.zip")
         }
 
         val ignoreSet = filesToIgnore.toSet()
@@ -92,18 +94,18 @@ class FileHandlerImpl : FileHandler {
     }
 
     override fun unzipFile(filePath: String, targetPath: String, filesToIgnore: List<String>): File {
-        val normalizedFilePath = filePath.replace("\\", "/")
         val ignoreSet = filesToIgnore.map { it.replace("\\", "/") }.toSet()
 
-        val zipFile = this.load(normalizedFilePath)
+        val zipFile = this.load(filePath)
 
         val unzippedFolderName = if (targetPath == "N/A") {
-            normalizedFilePath.substring(normalizedFilePath.lastIndexOf("/") + 1, normalizedFilePath.lastIndexOf('.'))
+            context + File.separator + zipFile.name
         } else {
-            targetPath
+            context + File.separator + targetPath
         }
 
         val targetDirectory = File(unzippedFolderName)
+
         if (!targetDirectory.exists()) {
             targetDirectory.mkdirs()
         }
@@ -131,6 +133,8 @@ class FileHandlerImpl : FileHandler {
                 }
             }
         }
+
+        if (!zipFile.delete()) print("A problem occurred deleting $filePath.")
 
         return targetDirectory
     }

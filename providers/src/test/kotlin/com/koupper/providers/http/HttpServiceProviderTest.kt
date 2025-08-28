@@ -10,10 +10,10 @@ class HttpServiceProviderTest : AnnotationSpec() {
         HttpServiceProvider().up()
 
         assertTrue {
-            app.createInstanceOf(HtppClient::class) is HttpClient
+            app.getInstance(HtppClient::class) is HttpClient
         }
 
-        val result = app.createInstanceOf(HtppClient::class).get {
+        val result = app.getInstance(HtppClient::class).get {
             this.url = "https://www.instagram.com/"
         }
 

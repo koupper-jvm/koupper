@@ -52,11 +52,12 @@ class OctopusTest : AnnotationSpec() {
         val octopus = Octopus(this.container)
 
         octopus.run(
-            "import com.koupper.container.interfaces.Container\n val container: (Container) -> Container = {\n" +
-                    "\tit\n" +
+            "val myScript: () -> Int = {\n" +
+                    "    println(\"Hello World!\")\n" +
+                    "    200 \n" +
                     "}"
-        ) { result: Container ->
-            assertEquals(this.container, result)
+        ) { result: Int ->
+            assertEquals(200, result)
         }
     }
 
@@ -77,8 +78,8 @@ class OctopusTest : AnnotationSpec() {
 
     @Test
     fun `should read script from file`() {
-        this.octopus.runFromScriptFile("resource://example.kts") { result: Container ->
-            assertEquals(app, result)
+        this.octopus.runFromScriptFile("resource://example.kts") { result: Int ->
+            assertEquals(200, result)
         }
     }
 
@@ -112,13 +113,13 @@ class OctopusTest : AnnotationSpec() {
     @Test
     fun `should build a route`() {
         every {
-            container.createInstanceOf(TextFileHandler::class)
+            container.getInstance(TextFileHandler::class)
         } answers {
             TextFileHandlerImpl()
         }
 
         every {
-            container.createInstanceOf(FileHandler::class)
+            container.getInstance(FileHandler::class)
         } answers {
             FileHandlerImpl()
         }
@@ -139,13 +140,6 @@ class OctopusTest : AnnotationSpec() {
                     consumes { listOf("application/json") }
                 }
 
-            }.deployOn {
-                port = 8080
-                rootUrl = "example"
-            }.setup {
-                projectName = "hello"
-                version = "2.0.1"
-                packageName = "io.example"
             }
         }
     }

@@ -3,7 +3,12 @@ package com.koupper.providers.aws.dynamo
 import com.koupper.os.env
 import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
+import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
+import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
@@ -11,12 +16,35 @@ import software.amazon.awssdk.services.dynamodb.model.*
 import java.net.URI
 
 class DynamoClientImpl : DynamoClient {
-    private val credentials: AwsBasicCredentials = AwsBasicCredentials.create("fakeMyKeyId", "fakeSecretAccessKey")
+    private fun envCredsProvider(): AwsCredentialsProvider {
+        val ak = env("AWS_ACCESS_KEY_ID")
+        val sk = env("AWS_SECRET_ACCESS_KEY")
+        val st = env("AWS_SESSION_TOKEN", required = false, allowEmpty = true, default = "")
+
+        return when {
+            ak.isNotBlank() && sk.isNotBlank() && st.isNotBlank() ->
+                StaticCredentialsProvider.create(AwsSessionCredentials.create(ak, sk, st))
+            ak.isNotBlank() && sk.isNotBlank() ->
+                StaticCredentialsProvider.create(AwsBasicCredentials.create(ak, sk))
+            else ->
+                EnvironmentVariableCredentialsProvider.create()
+        }
+    }
 
     private val dynamoDbClient: DynamoDbClient = DynamoDbClient.builder()
-        .region(Region.US_EAST_2)
-        .credentialsProvider(StaticCredentialsProvider.create(credentials))
-        .endpointOverride(URI(env("DYNAMO_URL")))
+        .region(Region.of(env("DYNAMO_REGION")))
+        .apply {
+            val dynamoUrl = env("DYNAMO_URL", required = false, allowEmpty = true, default = "")
+
+            if (dynamoUrl.isNotEmpty()) {
+                endpointOverride(URI(dynamoUrl))
+                credentialsProvider {
+                    AwsBasicCredentials.create("fakeAccessKey", "fakeSecretKey")
+                }
+            } else {
+                credentialsProvider(envCredsProvider())
+            }
+        }
         .build()
 
     override fun createTable(
@@ -140,21 +168,26 @@ class DynamoClientImpl : DynamoClient {
 
     override fun getItem(
         tableName: String,
-        partitionKeyName: String?,
-        partitionKeyValue: String?,
+        partitionKeyName: String,
+        partitionKeyValue: String,
         sortKeyName: String?,
         sortKeyValue: String?,
     ): Map<String, Any>? {
-        if (partitionKeyName == null || partitionKeyValue == null || sortKeyName == null || sortKeyValue == null) {
-            throw IllegalArgumentException("partitionKey, sortKey, and its values are required for this query.")
+        if (partitionKeyName.isBlank() || partitionKeyValue.isBlank()) {
+            throw IllegalArgumentException("Partition key and its value are required for this query.")
+        }
+
+        val key = mutableMapOf<String, AttributeValue>(
+            partitionKeyName to AttributeValue.builder().s(partitionKeyValue).build()
+        )
+
+        if (!sortKeyName.isNullOrBlank() && !sortKeyValue.isNullOrBlank()) {
+            key[sortKeyName] = AttributeValue.builder().s(sortKeyValue).build()
         }
 
         val getItemRequest = GetItemRequest.builder()
             .tableName(tableName)
-            .key(mapOf(
-                partitionKeyName to AttributeValue.builder().s(partitionKeyValue).build(),
-                sortKeyName to AttributeValue.builder().s(sortKeyValue).build()
-            ))
+            .key(key)
             .build()
 
         val getItemResult = dynamoDbClient.getItem(getItemRequest)
@@ -238,12 +271,39 @@ class DynamoClientImpl : DynamoClient {
         updateExpression: String,
         expressionAttributeValues: Map<String, Any>
     ) {
-        TODO("Not yet implemented")
+        val keyAttributes = key.mapValues { (_, value) -> processValue(value) }
+
+        val attributeValues = expressionAttributeValues.mapValues { (_, value) -> processValue(value) }
+
+        val updateRequest = UpdateItemRequest.builder()
+            .tableName(tableName)
+            .key(keyAttributes)
+            .updateExpression(updateExpression)
+            .expressionAttributeValues(attributeValues.mapValues { it.value })
+            .build()
+
+        try {
+            dynamoDbClient.updateItem(updateRequest)
+        } catch (e: Exception) {
+            println("Error updating item: ${e.message}")
+        }
     }
 
     override fun deleteItem(tableName: String, key: Map<String, Any>) {
-        TODO("Not yet implemented")
+        val keyAttributes = key.mapValues { (_, value) -> processValue(value) }
+
+        val deleteRequest = DeleteItemRequest.builder()
+            .tableName(tableName)
+            .key(keyAttributes)
+            .build()
+
+        try {
+            dynamoDbClient.deleteItem(deleteRequest)
+        } catch (e: Exception) {
+            println("Error deleting item: ${e.message}")
+        }
     }
+
 
     override fun doesTableExist(tableName: String): Boolean {
         return try {
@@ -259,7 +319,22 @@ class DynamoClientImpl : DynamoClient {
     }
 
     override fun listTables(): List<String> {
-        TODO("Not yet implemented")
+        val tableNames = mutableListOf<String>()
+        var lastEvaluatedTableName: String? = null
+
+        do {
+            val requestBuilder = ListTablesRequest.builder()
+            lastEvaluatedTableName?.let {
+                requestBuilder.exclusiveStartTableName(it)
+            }
+
+            val result = dynamoDbClient.listTables(requestBuilder.build())
+
+            tableNames.addAll(result.tableNames())
+            lastEvaluatedTableName = result.lastEvaluatedTableName()
+        } while (lastEvaluatedTableName != null)
+
+        return tableNames
     }
 
     override fun queryItems(
@@ -304,5 +379,32 @@ class DynamoClientImpl : DynamoClient {
         return items  // Retornar la lista completa de ítems
     }
 
+    override fun getItemCount(
+        tableName: String?,
+        gsiName: String?, // Ahora opcional
+        filterExpression: String?,
+        expressionValues: Map<String, AttributeValue>?
+    ): Int {
+        val scanRequestBuilder = ScanRequest.builder()
+            .tableName(tableName)
+            .select(Select.COUNT) // 🔥 Solo contamos, no traemos los ítems
+
+        // Si se especifica un GSI, lo usamos
+        if (!gsiName.isNullOrEmpty()) {
+            scanRequestBuilder.indexName(gsiName)
+        }
+
+        // Si hay filtros, los aplicamos
+        if (!filterExpression.isNullOrEmpty()) {
+            scanRequestBuilder.filterExpression(filterExpression)
+        }
+        if (!expressionValues.isNullOrEmpty()) {
+            scanRequestBuilder.expressionAttributeValues(expressionValues)
+        }
+
+        val result = dynamoDbClient.scan(scanRequestBuilder.build())
+
+        return result.count() // 🔥 Retorna el número de elementos
+    }
 }
 

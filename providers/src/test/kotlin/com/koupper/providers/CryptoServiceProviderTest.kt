@@ -20,7 +20,7 @@ class CryptoServiceProviderTest : AnnotationSpec() {
             CryptoServiceProvider().up()
 
             assertTrue {
-                app.createInstanceOf(Crypt0::class) is AESGCM128
+                app.getInstance(Crypt0::class) is AESGCM128
             }
         }
     }

@@ -14,4 +14,12 @@ class HttpResponse(private val response: Response?) {
     fun asString(): String? {
         return response?.asString()
     }
+
+    fun isSuccessful(): Boolean {
+        return response?.isSuccessful ?: false
+    }
+
+    fun isRedirect(): Boolean {
+        return response?.isRedirect ?: false
+    }
 }

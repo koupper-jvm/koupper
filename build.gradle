@@ -17,7 +17,7 @@ allprojects {
     }
 }
 
-version = '4.0.0'
+version = '5.3.0'
 
 def kotlinVersion = '2.0.20'
 def kotestVersion = '4.5.0'
@@ -81,11 +81,14 @@ project(':octopus') {
         implementation project(':providers')
         implementation project(':configurations')
         implementation project(':os')
+        implementation project(':orchestrator-core')
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
         implementation "org.jetbrains.kotlin:kotlin-script-util:1.8.22"
+        implementation "org.jetbrains.kotlin:kotlin-scripting-jvm"
         implementation "org.jetbrains.kotlin:kotlin-script-runtime"
         implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:$kotlinVersion"
         implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:$kotlinVersion"
+        implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2'
         implementation 'net.java.dev.jna:jna:5.5.0'
         implementation "org.gradle:gradle-tooling-api:8.2.1"
         runtimeOnly "org.slf4j:slf4j-simple:$slf4jVersion"
@@ -121,6 +124,24 @@ project(':providers') {
 project(':shared') {
     dependencies {
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
+    }
+}
+
+project(':orchestrator-core') {
+    dependencies {
+        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion"
+        implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.12.0'
+        implementation project(':shared')
+        // Redis
+        implementation("redis.clients:jedis:4.4.3")
+
+        // AWS SQS
+        implementation("software.amazon.awssdk:sqs:2.25.19")
+
+        // SQLite o Postgres (elige uno según el caso)
+        implementation("org.xerial:sqlite-jdbc:3.44.1.0")
+        // o: implementation("org.postgresql:postgresql:42.7.3")
+        implementation project(':os')
     }
 }
 
