@@ -26,17 +26,6 @@ class SetupGrizzlyConfigurator private constructor(
     }
 
     fun build() {
-        val ymlHandler = app.getInstance(YmlFileHandler::class)
-        val content = ymlHandler.readFrom(context + "/${projectName}.yml")
-
-        val server = content["server"] as? Map<*, *>
-
-        server?.let {
-            it["port"]?.let { port ->
-                serverPort = port.toString().toInt()
-            }
-        }
-
         this.textFileHandler.using("$projectName/src/main/kotlin/server/Setup.kt")
 
         val rootLineNumber = this.textFileHandler.getNumberLineFor("const val PORT = 8080")
@@ -44,14 +33,6 @@ class SetupGrizzlyConfigurator private constructor(
         this.textFileHandler.replaceLine(
             rootLineNumber,
             "const val PORT = $serverPort",
-            overrideOriginal = true
-        )
-
-        val packageLineNumber = this.textFileHandler.getNumberLineFor("packages(\"io.mp.controllers\")")
-
-        this.textFileHandler.replaceLine(
-            packageLineNumber,
-            "${String.format("%-8s", " ")}packages(\"${this.packageName}.controllers\")",
             overrideOriginal = true
         )
     }
@@ -63,13 +44,5 @@ class SetupGrizzlyConfigurator private constructor(
         var version = "undefined"
 
         fun build() = SetupGrizzlyConfigurator(this)
-    }
-}
-
-fun main() {
-    createDefaultConfiguration()
-    SetupGrizzlyConfigurator.configure {
-        context = "C:\\Users\\dosek\\develop\\deleteme\\asno"
-        projectName = "example"
     }
 }

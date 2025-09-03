@@ -1,15 +1,12 @@
-package com.koupper.octopus.modifiers
+package com.koupper.octopus.modules.http
 
 import com.koupper.container.app
+import com.koupper.octopus.modifiers.Action
+import com.koupper.octopus.modifiers.JerseyControllerBuilder
+import com.koupper.octopus.modifiers.RequestHandlerControllerBuilder
 import com.koupper.octopus.modules.Module
 import com.koupper.octopus.modules.aws.API
 import com.koupper.octopus.modules.aws.loadAPIDefinitionFromConfiguration
-import com.koupper.octopus.modules.http.Post
-import com.koupper.octopus.modules.http.Put
-import com.koupper.octopus.modules.http.Route
-import com.koupper.octopus.modules.http.RouteDefinition
-import com.koupper.providers.files.YmlFileHandler
-import kotlin.reflect.KClass
 
 class ControllersBuilder private constructor(
     private val context: String,
@@ -33,15 +30,6 @@ class ControllersBuilder private constructor(
     }
 
     override fun build() {
-        val ymlHandler = app.getInstance(YmlFileHandler::class)
-        val content = ymlHandler.readFrom(context + "/${projectName}.yml")
-
-        val server = content["server"] as? Map<*, *>
-
-        server?.let {
-            it["contextPath"]?.let { path -> contextPath = path.toString() }
-        }
-
         this.buildRequestHandlerController()
     }
 
@@ -108,7 +96,8 @@ class ControllersBuilder private constructor(
 
             this.context = self.context
 
-            this.controllerLocation = "${self.projectName}/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt"
+            this.controllerLocation =
+                "${self.projectName}/src/main/kotlin/io/mp/controllers/RequestHandlerController.kt"
 
             this.path = routeDefinition.path()
 

@@ -402,6 +402,7 @@ object JobRunner {
                     else -> error("❌ Demasiados argumentos para ejecutar la función.")
                 }
                 print("✅ Job result: $result")
+                println()
             } finally {
                 Thread.currentThread().contextClassLoader = oldCl
             }

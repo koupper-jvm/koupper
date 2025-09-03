@@ -1,9 +1,8 @@
 package com.koupper.octopus.process
 
-import com.koupper.octopus.Octopus
 import com.koupper.octopus.isRelativeScriptFile
 import com.koupper.octopus.modifiers.ControllersAnalyzer
-import com.koupper.octopus.modifiers.ControllersBuilder
+import com.koupper.octopus.modules.http.ControllersBuilder
 import com.koupper.octopus.modifiers.SetupGrizzlyConfigurator
 import com.koupper.octopus.modules.Module
 import com.koupper.octopus.modules.aws.AWSAGHandlerBuilder
@@ -21,19 +20,6 @@ val getRealScriptNameFrom: (String) -> String = { script ->
     } else {
         scriptId
     }
-}
-
-fun extractServerPort(moduleDir: File): String? {
-    val setupFile = findKtFileRecursively(
-        File(moduleDir, "src/main/kotlin"),
-        "Setup"
-    ) ?: return null
-
-    val content = setupFile.readText()
-
-    return Regex("""const val PORT\s*=\s*(\d+)""")
-        .find(content)
-        ?.groupValues?.get(1)
 }
 
 fun findKtFileRecursively(baseDir: File, fileName: String): File? {

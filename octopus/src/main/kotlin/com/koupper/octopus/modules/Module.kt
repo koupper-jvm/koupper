@@ -10,7 +10,7 @@ import java.nio.file.Paths
 import java.util.*
 import javax.script.ScriptEngineManager
 
-const val EXTENSIONS_FOLDER_NAME = "extensions"
+const val EXTENSIONS_FOLDER_NAME = "scripts"
 
 fun isPrimitive(typeName: String): Boolean {
     val kotlinPrimitives = setOf("Int", "Double", "Float", "Long", "Short", "Byte", "Boolean", "Char", "String")

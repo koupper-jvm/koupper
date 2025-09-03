@@ -33,7 +33,7 @@ fun env(
         if (required) {
             throw Exception("The $variableName should be present in environment or .env")
         } else {
-            value = default // por defecto "", útil para DYNAMO_URL
+            value = default
         }
     }
 

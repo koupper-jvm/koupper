@@ -125,6 +125,8 @@ class AWSAGHandlerBuilder(
 
         this.createRequestHandlers()
 
+        File("${this.modelProject.name}/src/main/kotlin/io").deleteRecursively()
+
         //this.buildRequestHandlerController()
 
         //this.locateBootstrappingFile()
@@ -149,7 +151,12 @@ class AWSAGHandlerBuilder(
     private fun createRequestHandlers() {
         apiDefinition.forEach { api ->
             val destinationFile =
-                Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler${api.handler.replaceFirstChar { it.uppercaseChar() }}.kt")
+                Paths.get("${this.modelProject.name}/src/main/kotlin/${
+                    packageName.replace(
+                        ".",
+                        "/"
+                    )
+                }/handlers/RequestHandler${api.handler.replaceFirstChar { it.uppercaseChar() }}.kt")
 
             if (destinationFile.exists()) {
                 return@forEach
@@ -165,21 +172,21 @@ class AWSAGHandlerBuilder(
 
             if (scriptReturnType == "Unit") {
                 if (scriptInputParams.isNotEmpty()) {
-                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler10.kt"), destinationFile)
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/io/mp/handlers/RequestHandler10.kt"), destinationFile)
                 } else {
-                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler00.kt"), destinationFile)
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/io/mp/handlers/RequestHandler00.kt"), destinationFile)
                 }
             } else if (isPrimitive(scriptReturnType)) {
                 if (scriptInputParams.isNotEmpty()) {
-                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler1P.kt"), destinationFile)
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/io/mp/handlers/RequestHandler1P.kt"), destinationFile)
                 } else {
-                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler0P.kt"), destinationFile)
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/io/mp/handlers/RequestHandler0P.kt"), destinationFile)
                 }
             } else {
                 if (scriptInputParams.isNotEmpty()) {
-                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler11.kt"), destinationFile)
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/io/mp/handlers/RequestHandler11.kt"), destinationFile)
                 } else {
-                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/server/handlers/RequestHandler01.kt"), destinationFile)
+                    Files.copy(Paths.get("${this.modelProject.name}/src/main/kotlin/io/mp/handlers/RequestHandler01.kt"), destinationFile)
                 }
             }
 
