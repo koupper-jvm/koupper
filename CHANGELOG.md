@@ -9,9 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated validation logic in `ModuleAnalyzer` to better identify HTTP configuration files.
 - Renamed `EXTENSIONS_FOLDER_NAME` property used for locating scripts.
+- Updated Octopus.run(...): the method now receives the script path as a parameter.
 
 ### Improved
 - Removed unnecessary code and cleaned up internal implementations.
+- Implemented resolvers to handle scripts via annotation.
+
+### Added
+- JobListener support: a JobEvent script can be used as a callback when a job runs.
+- Added jobsListenerResolvers map for handling JobListener scripts.
+- Added new properties to KouTask.
+- Added new env methods to the OS layer.
+- Added new methods to ScriptUtilities.
 
 --
 

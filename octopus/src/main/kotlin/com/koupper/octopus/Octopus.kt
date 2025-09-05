@@ -5,6 +5,7 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
 import com.koupper.container.context
 import com.koupper.container.interfaces.Container
+import com.koupper.octopus.annotations.*
 import com.koupper.octopus.process.Process
 import com.koupper.os.env
 import com.koupper.providers.ServiceProvider
@@ -14,8 +15,7 @@ import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
 import com.koupper.providers.http.HtppClient
-import com.koupper.shared.octopus.extractExportFunctionName
-import com.koupper.shared.octopus.extractExportFunctionSignature
+import com.koupper.shared.octopus.*
 import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -23,6 +23,7 @@ import java.io.PrintStream
 import java.net.ServerSocket
 import java.net.URL
 import java.nio.file.Paths
+import javax.script.ScriptEngine
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
@@ -35,6 +36,11 @@ val isRelativeScriptFile: (String) -> Boolean = {
     it.matches("^[a-zA-Z0-9_-]+\\.kts$".toRegex())
 }
 
+val annotationResolvers: Map<String, AnnotationResolver> = mapOf(
+    "Export" to ExportResolver,
+    "JobsListener" to JobsListenerResolver,
+)
+
 class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
 
@@ -46,7 +52,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
     ) {
         val content = app.getInstance(FileHandler::class).load(scriptPath).readText(Charsets.UTF_8)
 
-        this.run(context, content, this.convertStringParamsToListParams(params)) { process: T ->
+        this.run(context = context, scriptPath, sentence = content, params = this.convertStringParamsToListParams(params)) { process: T ->
             result(process)
         }
     }
@@ -54,66 +60,43 @@ class Octopus(private var container: Container) : ScriptExecutor {
     override fun <T> runFromUrl(context: String, scriptUrl: String, params: String, result: (value: T) -> Unit) {
         val content = URL(scriptUrl).readText()
 
-        this.run(context, content, this.convertStringParamsToListParams(params)) { process: T ->
+        this.run(context, sentence = content, params = this.convertStringParamsToListParams(params)) { process: T ->
             result(process)
         }
     }
 
-    override fun <T> run(context: String, sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
+    override fun <T> run(context: String, scriptPath: String?, sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
         System.setProperty("kotlin.script.classpath", currentClassPath)
         System.setProperty("idea.use.native.fs.for.win", "false")
 
-        with(ScriptEngineManager().getEngineByExtension("kts")) {
-            val exportFunctionName = extractExportFunctionName(sentence)
+        val engine = ScriptEngineManager().getEngineByExtension("kts")
+            ?: error("No script engine found for .kts extension")
 
-            if (exportFunctionName != null) {
-                val exportedFunctionSignature = extractExportFunctionSignature(sentence)
+        val mutableParams = params.toMutableMap()
 
-                fun <R> captureOutputAndResult(block: () -> R): String {
-                    val originalOut = System.out
-                    val originalErr = System.err
+        val flags = params.filterKeys { it.startsWith("--") || it.startsWith("-") }.keys.toTypedArray()
+        mutableParams["context"] = context
+        mutableParams["flags"] = flags
 
-                    val outputStream = ByteArrayOutputStream()
-                    val printStream = PrintStream(outputStream, true, "UTF-8")
+        val annotations = extractAllAnnotations(sentence)
 
-                    return try {
-                        System.setOut(printStream)
-                        System.setErr(printStream)
-                        val resultValue = block()
-                        if (resultValue !is Unit) {
-                            print(resultValue)
-                        }
-                        outputStream.toString("UTF-8")
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        outputStream.toString("UTF-8")
-                    } finally {
-                        System.setOut(originalOut)
-                        System.setErr(originalErr)
-                    }
-                }
+        annotations["Logger"]?.forEach { (key, value) ->
+            mutableParams[key] = value
+        }
 
-                val flags = params.filterKeys { it.startsWith("--") || it.startsWith("-") }.keys.toTypedArray()
-
-                val signature = exportedFunctionSignature?.first
-                    ?.map { it.replace("\\s+".toRegex(), "") }
-                    ?: emptyList()
-
-                val fullParams = params + mapOf(
-                    "context" to context,
-                    "flags" to flags
+        for ((name, annotationParams) in annotations) {
+            val resolver = annotationResolvers[name]
+            if (resolver != null) {
+                resolver.resolve(
+                    scriptPath,
+                    mutableParams,
+                    annotationParams,
+                    sentence,
+                    engine,
+                    context,
+                    result
                 )
-
-                val callbackResult = captureOutputAndResult {
-                    val resolver = signatureResolvers[signature]
-                        ?: throw IllegalArgumentException("Unsupported function signature with $signature")
-
-                    resolver(sentence, this, fullParams)
-                }
-
-                result(callbackResult as T)
-            } else {
-                result("No function annotated with @Export was found." as T)
+                return
             }
         }
     }
@@ -185,14 +168,14 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 val scriptName = File(finalInitPath).name
 
                 if (params.isEmpty()) {
-                    this.run(context, scriptContent, emptyMap()) { container: Container ->
+                    this.run(context = context, sentence = scriptContent, params = emptyMap()) { container: Container ->
                         result(container as T, scriptName)
                     }
 
                     return@forEach
                 }
 
-                this.run(context, scriptContent, params) { container: Container ->
+                this.run(context = context, sentence = scriptContent, params = params) { container: Container ->
                     result(container as T, scriptName)
                 }
             }

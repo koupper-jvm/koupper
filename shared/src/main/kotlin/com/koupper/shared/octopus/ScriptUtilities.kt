@@ -1,6 +1,32 @@
 package com.koupper.shared.octopus
 
+import java.io.File
 import kotlin.reflect.KFunction
+
+fun extractAllAnnotations(script: String): Map<String, Map<String, String>> {
+    val annotationRegex = Regex("""@(\w+)(\(([^)]*)\))?""")
+    val annotations = mutableMapOf<String, Map<String, String>>()
+
+    for (match in annotationRegex.findAll(script)) {
+        val name = match.groupValues[1]
+        val paramsString = match.groupValues.getOrNull(3)?.trim().orEmpty()
+
+        val params = if (paramsString.isNotEmpty()) {
+            paramsString.split(",")
+                .mapNotNull {
+                    val parts = it.split("=").map { it.trim() }
+                    if (parts.size == 2) parts[0] to parts[1].removeSurrounding("\"") else null
+                }.toMap()
+        } else {
+            emptyMap()
+        }
+
+        annotations[name] = params
+    }
+
+    return annotations
+}
+
 
 fun extractExportFunctionName(scriptContent: String): String? {
     val exportPattern = "@Export\\s+val\\s+(\\S+)\\s*:"
@@ -93,3 +119,17 @@ fun KFunction<*>.buildSignature(): String {
 fun signaturesMatch(reflected: String, extracted: String): Boolean {
     return normalizeSignature(reflected) == normalizeSignature(extracted)
 }
+
+fun sha256Of(file: File): String {
+    val md = java.security.MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { fis ->
+        val buf = ByteArray(8192)
+        var r: Int
+        while (fis.read(buf).also { r = it } != -1) md.update(buf, 0, r)
+    }
+    return md.digest().joinToString("") { "%02x".format(it) }
+}
+
+fun readTextOrNull(path: String?): String? =
+    path?.let { p -> runCatching { File(p).takeIf { it.isFile }?.readText() }.getOrNull() }
+

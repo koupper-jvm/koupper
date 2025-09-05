@@ -3,18 +3,21 @@ package com.koupper.orchestrator
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.os.env
+import com.koupper.os.envOptional
 import com.koupper.shared.octopus.extractExportFunctionSignature
+import com.koupper.shared.octopus.readTextOrNull
+import com.koupper.shared.octopus.sha256Of
 import redis.clients.jedis.Jedis
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sqs.SqsClient
-import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest
 import java.io.File
+import java.io.IOException
 import java.net.URLClassLoader
 import java.nio.file.Paths
 import java.sql.DriverManager
@@ -33,7 +36,11 @@ data class KouTask(
     val context: String = "default",
     val sourceType: String = "compiled",
     val queue: String = "default",
-    val contextVersion: String
+    val driver: String = "default",
+    val contextVersion: String,
+    val sourceSnapshot: String? = null,
+    val artifactUri: String? = null,
+    val artifactSha256: String? = null
 )
 
 object JobSerializer {
@@ -46,9 +53,20 @@ object JobDispatcher {
     fun dispatch(task: KouTask, queue: String = "default", driver: String = "file") {
         when (driver) {
             "file" -> {
-                val dir = File("${Paths.get("").toAbsolutePath()}/jobs/$queue").apply { mkdirs() }
-                File(dir, "${task.id}.json").writeText(JobSerializer.serialize(task))
+                val baseDir = Paths.get("").toAbsolutePath().toString()
+                val jobsDir = File("$baseDir/jobs/$queue")
+
+                if (!jobsDir.exists()) {
+                    val created = jobsDir.mkdirs()
+                    if (!created) {
+                        throw IOException("Jobs folder can't be created: $jobsDir")
+                    }
+                }
+
+                val jobFile = File(jobsDir, "${task.id}.json")
+                jobFile.writeText(JobSerializer.serialize(task))
             }
+
             "database" -> {
                 // insertar en una tabla jobs con el nombre del queue
             }
@@ -56,15 +74,19 @@ object JobDispatcher {
                 // encolar en lista Redis con nombre `queue`
             }
             "sqs" -> {
-                val queueUrl = env("KQ_SQS_QUEUE_URL")
-                val accessKey = env("KQ_SQS_ACCESS_KEY") ?: error("Missing KQ_SQS_ACCESS_KEY")
-                val secretKey = env("KQ_SQS_SECRET_KEY") ?: error("Missing KQ_SQS_SECRET_KEY")
+                val region    = Region.of(env("KQ_SQS_REGION"))
+                val accessKey = env("KQ_SQS_ACCESS_KEY")
+                val secretKey = env("KQ_SQS_SECRET_KEY")
+                val queueUrl  = env("KQ_SQS_QUEUE_URL")
+                val dlqUrl    = envOptional("KQ_SQS_DLQ_URL")
 
                 val sqsClient = SqsClient.builder()
-                    .region(Region.of(env("KQ_SQS_REGION")))
-                    .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKey, secretKey)
-                    ))
+                    .region(region)
+                    .credentialsProvider(
+                        StaticCredentialsProvider.create(
+                            AwsBasicCredentials.create(accessKey, secretKey)
+                        )
+                    )
                     .build()
 
                 try {
@@ -74,13 +96,18 @@ object JobDispatcher {
                         .build()
 
                     val result = sqsClient.sendMessage(sendRequest)
-                    println("✅ Job sent to SQS [${queueUrl}] with message ID: ${result.messageId()}")
+                    println("✅ Job sent to SQS [$queueUrl] with message ID: ${result.messageId()}")
+
+                    if (dlqUrl.isNotBlank()) {
+                        println("ℹ️  DLQ configured: $dlqUrl")
+                    }
                 } catch (e: Exception) {
                     error("❌ Failed to dispatch job to SQS: ${e.message}")
                 } finally {
                     sqsClient.close()
                 }
             }
+
             else -> {
                 error("Unknown driver: $driver")
             }
@@ -94,204 +121,27 @@ object JobRunner {
     fun runPendingJobs(
         queue: String = "default",
         driver: String = "file",
-        jobId: String? = null
+        jobId: String? = null,
+        onResult: (KouTask) -> Unit = {}
     ) {
-        println()
-        println("🔧 Running jobs from [$queue] using [$driver] driver${if (jobId != null) " (jobId=$jobId)" else ""}")
-        println()
-
-        when (driver) {
-            "file" -> runFromFile(queue, jobId)
-            "redis" -> runFromRedis(queue, jobId)
-            "sqs" -> {
-                println("⚠️ Ignoring provided queueName [$queue]; using [KQ_SQS_QUEUE_URL] from environment instead.\n")
-                println("⚠️ JobId filtering is not supported in safe-list mode.\n")
-                runFromSQS()
-            }
-            "database" -> runFromDatabase(queue, jobId)
-            else -> println("❌ Unknown driver: $driver")
+        val d = JobDrivers.resolve(driver)
+        d.forEachPending(queue, jobId) { task ->
+            println("\n🔧 Running jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}")
+            executeTask(task)
+            onResult(task)
         }
     }
 
-    private fun runFromFile(queue: String, jobId: String?) {
-        val dir = File("jobs/$queue")
-
-        println("📂 Looking for jobs in: ${dir.absolutePath}${if (!jobId.isNullOrBlank()) " (jobId=$jobId)" else ""}\n")
-
-        if (!dir.exists() || !dir.isDirectory) {
-            println("⚠️  Queue folder not found: ${dir.path}")
-            return
-        }
-
-        val jobs: List<File> = when {
-            !jobId.isNullOrBlank() -> {
-                val target = if (jobId.endsWith(".json", ignoreCase = true)) jobId else "$jobId.json"
-                dir.listFiles { f -> f.isFile && f.name.equals(target, ignoreCase = true) }
-                    ?.toList()
-                    .orEmpty()
-                    .also {
-                        if (it.isEmpty()) println("⚠️  Job '$target' not found in ${dir.path}")
-                    }
-            }
-
-            else -> {
-                dir.listFiles { f -> f.isFile && f.extension.equals("json", ignoreCase = true) }
-                    ?.sortedBy { it.name }
-                    ?.toList()
-                    .orEmpty()
-            }
-        }
-
-        if (jobs.isEmpty()) {
-            println("⚠️  No jobs to run.")
-            return
-        }
-
-        println("🧾 Jobs found: ${jobs.size} \n")
-
-        jobs.forEach { file ->
-            try {
-                val task = JobSerializer.deserialize(file.readText())
-                println("🚀 Running job: ${task.id} from [$queue] (file=${file.name})")
-                executeTask(task)
-                val deleted = file.delete()
-                if (!deleted) println("⚠️  Could not delete processed job file: ${file.name}")
-            } catch (e: Exception) {
-                println("❌ Failed to execute job from file '${file.name}': ${e.message}")
-                FileJobFS.moveToFailed(queue, file)
-            }
-        }
-    }
-
-    private fun runFromRedis(queue: String, jobId: String? = null) {
-        val jedis = Jedis("localhost", 6379)
-        var processed = 0
-        while (true) {
-            val jobJson = jedis.lpop(queue) ?: break
-            try {
-                val task = JobSerializer.deserialize(jobJson)
-                if (!jobId.isNullOrBlank() && task.id != jobId) {
-                    // Reencola al final para no perderlo ni alterar demasiado el flujo.
-                    jedis.rpush(queue, jobJson)
-                    continue
-                }
-                println("🚀 Running Redis job: ${task.id}")
-                executeTask(task)
-                processed++
-            } catch (e: Exception) {
-                println("❌ Failed Redis job: ${e.message}")
-                // Opción: mover a una DLQ: jedis.rpush("$queue:dead", jobJson)
-            }
-        }
-        if (processed == 0) println("⚠️ No Redis jobs processed${if (!jobId.isNullOrBlank()) " for jobId=$jobId" else ""}.")
-    }
-
-    private fun runFromSQS() {
-        val sqsClient = SqsClient.builder()
-            .region(Region.of(env("KQ_SQS_REGION")))
-            .credentialsProvider(
-                StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(env("KQ_SQS_ACCESS_KEY"), env("KQ_SQS_SECRET_KEY"))
-                )
-            )
-            .build()
-
-        sqsClient.use { sqs ->
-            val queueUrl = env("KQ_SQS_QUEUE_URL")
-
-            var processed = 0
-
-            val messages = sqs.receiveMessage(
-                ReceiveMessageRequest.builder()
-                    .queueUrl(queueUrl)
-                    .maxNumberOfMessages(10)
-                    .waitTimeSeconds(20)
-                    .messageAttributeNames("All")
-                    .build()
-            ).messages()
-
-            if (messages.isEmpty()) {
-                println("⚠️  No SQS messages found.")
-                return
-            }
-
-            for (msg in messages) {
-                try {
-                    val task = JobSerializer.deserialize(msg.body())
-
-                    executeTask(task)
-
-                    sqs.deleteMessage(
-                        DeleteMessageRequest.builder()
-                            .queueUrl(queueUrl)
-                            .receiptHandle(msg.receiptHandle())
-                            .build()
-                    )
-                    processed++
-                } catch (e: Exception) {
-                    println("❌ Failed SQS job: ${e.message}")
-                }
-            }
-
-            if (processed == 0) {
-                println("⚠️  No SQS jobs processed.")
-            }
-        }
-    }
-
-    private fun runFromDatabase(queue: String, jobId: String? = null) {
-        val conn = DriverManager.getConnection("jdbc:sqlite:jobs.db") // o Postgres, MySQL, etc.
-
-        val sql = if (!jobId.isNullOrBlank()) {
-            "SELECT id, payload FROM jobs WHERE queue = ? AND status = 'pending' AND id = ?"
-        } else {
-            "SELECT id, payload FROM jobs WHERE queue = ? AND status = 'pending'"
-        }
-
-        conn.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, queue)
-            if (!jobId.isNullOrBlank()) stmt.setString(2, jobId)
-
-            val rs = stmt.executeQuery()
-            var processed = 0
-            while (rs.next()) {
-                try {
-                    val jobJson = rs.getString("payload")
-                    val task = JobSerializer.deserialize(jobJson)
-
-                    println("🚀 Running DB job: ${task.id}")
-                    executeTask(task)
-
-                    conn.prepareStatement("UPDATE jobs SET status = 'done' WHERE id = ?").use { upd ->
-                        upd.setString(1, task.id)
-                        upd.executeUpdate()
-                    }
-                    processed++
-                } catch (e: Exception) {
-                    println("❌ Failed DB job: ${e.message}")
-                    conn.prepareStatement("UPDATE jobs SET status = 'failed' WHERE id = ?").use { upd ->
-                        upd.setString(1, rs.getString("id"))
-                        upd.executeUpdate()
-                    }
-                }
-            }
-            if (processed == 0) println("⚠️ No DB jobs processed${if (!jobId.isNullOrBlank()) " for jobId=$jobId" else ""}.")
-            rs.close()
-        }
-        conn.close()
-    }
-
-    private fun executeTask(task: KouTask) {
+    fun executeTask(task: KouTask) {
         when (task.sourceType) {
             "compiled", "jar" -> runCompiled(task)
-            "script" -> println("📜 Script-based jobs not supported in JobRunner (yet).")
-            else -> println("❓ Unknown source type: ${task.sourceType}")
+            else -> println("❓ Unknown source type: ${task.sourceType} \n")
         }
     }
 
     private fun runCompiled(task: KouTask) {
         try {
-            println("🔍 Buscando clase para ejecutar: ${task.functionName}")
+            println("\n🔍 Buscando clase para ejecutar: ${task.functionName}")
 
             fun fallbackLocalLoader(base: ClassLoader): ClassLoader {
                 val urls = mutableListOf<java.net.URL>()
@@ -338,7 +188,8 @@ object JobRunner {
                 }
             }
 
-            (loader as? URLClassLoader)?.urLs?.let { urls ->
+            (loader as? URLClassLoader)?.let { cl ->
+                val urls = cl.urLs ?: cl.getURLs()
                 println("🧭 Loader URLs:"); urls.forEach { println(" - $it") }
             } ?: println("🧭 Loader: ${loader.javaClass.name}")
 
@@ -380,7 +231,7 @@ object JobRunner {
                 val rawType = typeName.removeSuffix("?")
                 val paramClass = kotlinToJava[rawType] ?: Class.forName(rawType, true, loader)
 
-                val raw = entry.value.toString()
+                val raw = entry.value
                 val jsonForJackson =
                     if (raw.length >= 2 && raw[0] == '"' && (raw[1] == '{' || raw[1] == '['))
                         JobSerializer.mapper.readValue(raw, String::class.java)
@@ -415,154 +266,17 @@ object JobRunner {
 
 object JobLister {
     fun list(queue: String = "default", driver: String = "file", jobId: String? = null) {
-        println()
-        println("🔧 List jobs from [$queue] using [$driver] driver${if (!jobId.isNullOrBlank()) " (jobId=$jobId)" else ""}")
-
-        when (driver) {
-            "file" -> listFromFile(queue, jobId)
-            "redis" -> listFromRedis(queue, jobId)
-            "sqs" -> {
-                println("\n⚠️ Ignoring provided queueName [$queue]; using [KQ_SQS_QUEUE_URL] from environment instead.\n")
-                println("⚠️ JobId filtering is not supported in safe-list mode.\n")
-                listFromSQS()
-            }
-            "database" -> listFromDatabase(queue, jobId)
-            else -> println("❌ Unknown driver: $driver")
+        val d = JobDrivers.resolve(driver)
+        println("\n🔧 List jobs from [$queue] using [$driver]${if (!jobId.isNullOrBlank()) " (jobId=$jobId)" else ""}\n")
+        d.forEachPending(queue, jobId) { task ->
+            println("📦 Job ID: ${task.id}")
+            println(" - Function: ${task.functionName}")
+            println(" - Params: ${task.params}")
+            println(" - Source: ${task.scriptPath}")
+            println(" - Context: ${task.context}")
+            println(" - Version: ${task.contextVersion}")
+            println(" - Origin: ${task.origin}\n")
         }
-    }
-
-    private fun listFromFile(queue: String, jobId: String? = null) {
-        val dir = File("jobs/$queue")
-        val jobs = dir.listFiles()?.filter { it.extension == "json" } ?: emptyList()
-
-        if (jobs.isEmpty()) {
-            println("⚠️ No jobs found in [$queue]")
-            return
-        }
-
-        jobs.forEach {
-            try {
-                val task = JobSerializer.deserialize(it.readText())
-                val fileId = it.nameWithoutExtension
-
-                if (jobId.isNullOrBlank() || task.id == jobId || fileId == jobId) {
-                    println()
-                    println("📦 File ID: $fileId")
-                    println(" - Job ID: ${task.id}")
-                    println(" - Function: ${task.functionName}")
-                    println(" - Params: ${task.params}")
-                    println(" - Source: ${task.scriptPath}")
-                    println(" - Context: ${task.context}")
-                    println(" - Version: ${task.contextVersion}")
-                    println(" - Origin: ${task.origin}")
-                    println(" - File: ${it.name}")
-                }
-            } catch (e: Exception) {
-                println("❌ Failed to parse job file ${it.name}: ${e.message}")
-            }
-        }
-    }
-
-    private fun listFromRedis(queue: String, jobId: String? = null) {
-        val jedis = Jedis("localhost", 6379)
-        val jobs = jedis.lrange(queue, 0, -1)
-
-        if (jobs.isEmpty()) {
-            println("⚠️ No Redis jobs found in [$queue]")
-            return
-        }
-
-        jobs.forEach { jobJson ->
-            try {
-                val task = JobSerializer.deserialize(jobJson)
-                if (jobId.isNullOrBlank() || task.id == jobId) {
-                    println("📦 Job ID: ${task.id}")
-                    println(" - Function: ${task.functionName}")
-                    println(" - Params: ${task.params}")
-                    println(" - Source: ${task.scriptPath}")
-                    println(" - Context: ${task.context}")
-                    println(" - Version: ${task.contextVersion}")
-                    println(" - Origin: ${task.origin}")
-                    println()
-                }
-            } catch (e: Exception) {
-                println("❌ Failed to parse Redis job: ${e.message}")
-            }
-        }
-    }
-
-    private fun listFromSQS() {
-        val sqs = SqsClient.builder()
-            .region(Region.of(env("KQ_SQS_REGION")))
-            .credentialsProvider(
-                StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(
-                        env("KQ_SQS_ACCESS_KEY"),
-                        env("KQ_SQS_SECRET_KEY")
-                    )
-                )
-            ).build()
-
-        sqs.use {
-            val queueUrl = env("KQ_SQS_QUEUE_URL")
-
-            val attrs = it.getQueueAttributes { b ->
-                b.queueUrl(queueUrl).attributeNames(
-                    QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES,
-                    QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE
-                )
-            }.attributes()
-
-            val pending  = attrs[QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES]?.toIntOrNull() ?: 0
-            val inFlight = attrs[QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE]?.toIntOrNull() ?: 0
-
-            if (pending == 0 && inFlight == 0) {
-                println("⚠️ No SQS jobs found.")
-                return
-            }
-
-            println("📊 STATUS [sqs][KQ_SQS_QUEUE_URL]: pending=$pending, inFlight=$inFlight")
-        }
-    }
-
-
-    private fun listFromDatabase(queue: String, jobId: String? = null) {
-        val conn = DriverManager.getConnection("jdbc:sqlite:jobs.db") // ajusta a tu motor
-
-        val sql = if (!jobId.isNullOrBlank()) {
-            "SELECT id, payload, status FROM jobs WHERE queue = ? AND id = ?"
-        } else {
-            "SELECT id, payload, status FROM jobs WHERE queue = ?"
-        }
-
-        conn.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, queue)
-            if (!jobId.isNullOrBlank()) stmt.setString(2, jobId)
-
-            val rs = stmt.executeQuery()
-            var found = false
-            while (rs.next()) {
-                found = true
-                try {
-                    val jobJson = rs.getString("payload")
-                    val task = JobSerializer.deserialize(jobJson)
-                    println("📦 Job ID: ${task.id}")
-                    println(" - Function: ${task.functionName}")
-                    println(" - Params: ${task.params}")
-                    println(" - Source: ${task.scriptPath}")
-                    println(" - Context: ${task.context}")
-                    println(" - Version: ${task.contextVersion}")
-                    println(" - Origin: ${task.origin}")
-                    println(" - Status: ${rs.getString("status")}")
-                    println()
-                } catch (e: Exception) {
-                    println("❌ Failed DB job parse: ${e.message}")
-                }
-            }
-            if (!found) println("⚠️ No DB jobs found in [$queue]${if (!jobId.isNullOrBlank()) " for jobId=$jobId" else ""}")
-            rs.close()
-        }
-        conn.close()
     }
 }
 
@@ -669,6 +383,7 @@ object JobMetricsCollector {
 
 private object FileJobFS {
     fun queueDir(queue: String) = File("jobs/$queue")
+
     fun failedDir(queue: String) = File(queueDir(queue), ".failed").apply { mkdirs() }
 
     fun pendingFiles(queue: String): List<File> =
@@ -737,6 +452,169 @@ object JobDisplayer {
     }
 }
 
+interface JobDriver {
+    fun forEachPending(
+        queue: String,
+        jobId: String? = null,
+        consume: (task: KouTask) -> Unit
+    )
+}
+
+object FileJobDriver : JobDriver {
+    override fun forEachPending(queue: String, jobId: String?, consume: (KouTask) -> Unit) {
+        val dir = File("jobs/$queue")
+        val files = when {
+            !jobId.isNullOrBlank() -> {
+                val target = if (jobId.endsWith(".json", true)) jobId else "$jobId.json"
+                dir.listFiles { f -> f.isFile && f.name.equals(target, true) }?.toList().orEmpty()
+            }
+            else -> dir.listFiles { f -> f.isFile && f.extension.equals("json", true) }?.sortedBy { it.name }.orEmpty()
+        }
+
+        if (files.isEmpty()) {
+            println("⚠️ No jobs to run.")
+            return
+        }
+
+        files.forEach { file ->
+            try {
+                val task = JobSerializer.deserialize(file.readText())
+                if (!file.delete()) println("⚠️ Could not delete processed job file: ${file.name}")
+                consume(task)
+            } catch (e: Exception) {
+                println("❌ Failed to execute job from file '${file.name}': ${e.message}")
+                FileJobFS.moveToFailed(queue, file)
+            }
+        }
+    }
+}
+
+object RedisJobDriver : JobDriver {
+    override fun forEachPending(queue: String, jobId: String?, consume: (KouTask) -> Unit) {
+        Jedis("localhost", 6379).use { jedis ->
+            while (true) {
+                val jobJson = jedis.lpop(queue) ?: break
+                try {
+                    val task = JobSerializer.deserialize(jobJson)
+                    if (!jobId.isNullOrBlank() && task.id != jobId) {
+                        jedis.rpush(queue, jobJson) // requeue
+                        continue
+                    }
+                    consume(task)
+                } catch (e: Exception) {
+                    println("❌ Failed Redis job: ${e.message}")
+                    // opcional DLQ: jedis.rpush("$queue:dead", jobJson)
+                }
+            }
+        }
+    }
+}
+
+object SqsJobDriver : JobDriver {
+    override fun forEachPending(queue: String, jobId: String?, consume: (KouTask) -> Unit) {
+        val sqs = SqsClient.builder()
+            .region(Region.of(env("KQ_SQS_REGION")))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(env("KQ_SQS_ACCESS_KEY"), env("KQ_SQS_SECRET_KEY"))
+                )
+            ).build()
+
+        sqs.use {
+            val queueUrl = env("KQ_SQS_QUEUE_URL")
+            val msgs = it.receiveMessage(
+                ReceiveMessageRequest.builder()
+                    .queueUrl(queueUrl)
+                    .maxNumberOfMessages(10)
+                    .waitTimeSeconds(20)
+                    .messageAttributeNames("All")
+                    .build()
+            ).messages()
+
+            if (msgs.isEmpty()) {
+                println("⚠️  No SQS messages found.")
+                return
+            }
+
+            msgs.forEach { msg ->
+                try {
+                    val task = JobSerializer.deserialize(msg.body())
+                    // Nota: safe-list → no filtramos por jobId aquí (como ya hacías)
+                    consume(task)
+                    it.deleteMessage(DeleteMessageRequest.builder().queueUrl(queueUrl).receiptHandle(msg.receiptHandle()).build())
+                } catch (e: Exception) {
+                    println("❌ Failed SQS job: ${e.message}")
+                }
+            }
+        }
+    }
+}
+
+object DbJobDriver : JobDriver {
+    override fun forEachPending(queue: String, jobId: String?, consume: (KouTask) -> Unit) {
+        val conn = DriverManager.getConnection("jdbc:sqlite:jobs.db")
+        val sql = if (!jobId.isNullOrBlank())
+            "SELECT id, payload FROM jobs WHERE queue = ? AND status = 'pending' AND id = ?"
+        else
+            "SELECT id, payload FROM jobs WHERE queue = ? AND status = 'pending'"
+
+        conn.use { c ->
+            c.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, queue)
+                if (!jobId.isNullOrBlank()) stmt.setString(2, jobId)
+                val rs = stmt.executeQuery()
+                while (rs.next()) {
+                    val jobJson = rs.getString("payload")
+                    try {
+                        val task = JobSerializer.deserialize(jobJson)
+                        consume(task)
+                        c.prepareStatement("UPDATE jobs SET status = 'done' WHERE id = ?").use { upd ->
+                            upd.setString(1, task.id)
+                            upd.executeUpdate()
+                        }
+                    } catch (e: Exception) {
+                        println("❌ Failed DB job: ${e.message}")
+                        c.prepareStatement("UPDATE jobs SET status = 'failed' WHERE id = ?").use { upd ->
+                            upd.setString(1, rs.getString("id"))
+                            upd.executeUpdate()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+object JobDrivers {
+    fun resolve(driver: String): JobDriver = when (driver) {
+        "file" -> FileJobDriver
+        "redis" -> RedisJobDriver
+        "sqs" -> SqsJobDriver
+        "database" -> DbJobDriver
+        else -> error("Unknown driver: $driver")
+    }
+}
+
+object JobReplayer {
+    fun replayWithParams(
+        queue: String = "default",
+        driver: String = "file",
+        jobId: String? = null,
+        newParams: Map<String, Any?>,
+        onResult: (KouTask) -> Unit = {}
+    ) {
+        val d = JobDrivers.resolve(driver)
+        println("\n🔁 Replaying jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}\n")
+        d.forEachPending(queue, jobId) { task ->
+            val updated = task.copy(
+                params = newParams.mapValues { JobSerializer.mapper.writeValueAsString(it.value) }
+            )
+            JobRunner.executeTask(updated)
+            onResult(updated)
+        }
+    }
+}
+
 fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
     val ref = this.get() ?: error("Function reference is null")
 
@@ -746,9 +624,8 @@ fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
 
     val packageName = ref.javaClass.`package`?.name ?: "unknown"
     val functionName = this.name
-    val fullClassName = this.get()!!.javaClass.name
-    val fileName = fullClassName.substringBefore("$$")
-        .substringAfterLast('.')
+    val fullClassName = ref.javaClass.name
+    val fileName = fullClassName.substringBefore("$$").substringAfterLast('.')
     val signature = extractExportFunctionSignature(this.returnType.toString())
 
     val params = args.mapIndexed { index, arg ->
@@ -763,6 +640,10 @@ fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
 
     val contextVersion = file?.lastModified()?.toString() ?: "unknown"
 
+    val sourceSnapshot = if (sourceType == "script") readTextOrNull(scriptPath) else null
+    val artifactSha256 = if (sourceType != "script" && file?.isFile == true) sha256Of(file) else null
+    val artifactUri: String? = null
+
     return KouTask(
         id = UUID.randomUUID().toString(),
         fileName = fileName,
@@ -772,7 +653,47 @@ fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
         scriptPath = scriptPath,
         packageName = packageName,
         sourceType = sourceType,
-        contextVersion = contextVersion
+        contextVersion = contextVersion,
+        sourceSnapshot = sourceSnapshot,
+        artifactUri = artifactUri,
+        artifactSha256 = artifactSha256
+    )
+}
+
+inline fun <reified T, reified R> ((T) -> R).asJob(
+    vararg args: Any?,
+    functionName: String,
+    scriptPath: String,
+    packageName: String? = null,
+    sourceType: String,
+    artifactUri: String? = null
+): KouTask {
+    val params = args.mapIndexed { index, arg ->
+        "arg$index" to JobSerializer.mapper.writeValueAsString(arg)
+    }.toMap()
+
+    val signature = Pair(
+        listOf(T::class.qualifiedName ?: "kotlin.Any"),
+        R::class.qualifiedName ?: "kotlin.Any"
+    )
+
+    val sourceSnapshot: String? =
+        if (sourceType == "script") readTextOrNull(scriptPath) else null
+
+    val contextVersion = "unknown"
+
+    return KouTask(
+        id = UUID.randomUUID().toString(),
+        fileName = File(scriptPath).name,
+        functionName = functionName,
+        params = params,
+        signature = signature,
+        scriptPath = scriptPath,
+        packageName = packageName,
+        sourceType = sourceType,
+        contextVersion = contextVersion,
+        sourceSnapshot = sourceSnapshot,
+        artifactUri = artifactUri,
     )
 }
 
@@ -780,9 +701,12 @@ fun KouTask.dispatchToQueue(
     queue: String? = null,
     driver: String? = null
 ) {
-    val config = JobConfig.loadOrFail()
-    val resolvedQueue = queue ?: config.queue
-    val resolvedDriver = driver ?: config.driver
+    val config = if (queue == null || driver == null) JobConfig.loadOrFail() else null
+
+    val resolvedQueue = queue ?: config?.queue ?: error("Queue is required but not found")
+    val resolvedDriver = driver ?: config?.driver ?: error("Driver is required but not found")
 
     JobDispatcher.dispatch(this, resolvedQueue, resolvedDriver)
 }
+
+
