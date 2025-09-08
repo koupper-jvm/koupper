@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Improved
 - Removed unnecessary code and cleaned up internal implementations.
 - Implemented resolvers to handle scripts via annotation.
+- Changed run method to use SignatureDispatcher instead of annotationResolvers.
 
 ### Added
 - JobListener support: a JobEvent script can be used as a callback when a job runs.
@@ -21,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added new properties to KouTask.
 - Added new env methods to the OS layer.
 - Added new methods to ScriptUtilities.
+- Implemented logging with @Logger annotation.
+- Added script utilities for exported annotation functions.
 
 --
 

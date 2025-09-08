@@ -17,13 +17,10 @@ import com.koupper.providers.files.toType
 import com.koupper.providers.http.HtppClient
 import com.koupper.shared.octopus.*
 import kotlinx.coroutines.*
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.PrintStream
 import java.net.ServerSocket
 import java.net.URL
 import java.nio.file.Paths
-import javax.script.ScriptEngine
 import javax.script.ScriptEngineManager
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
@@ -35,11 +32,6 @@ fun String.toCamelCase(): String {
 val isRelativeScriptFile: (String) -> Boolean = {
     it.matches("^[a-zA-Z0-9_-]+\\.kts$".toRegex())
 }
-
-val annotationResolvers: Map<String, AnnotationResolver> = mapOf(
-    "Export" to ExportResolver,
-    "JobsListener" to JobsListenerResolver,
-)
 
 class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
@@ -65,7 +57,13 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
     }
 
-    override fun <T> run(context: String, scriptPath: String?, sentence: String, params: Map<String, Any>, result: (value: T) -> Unit) {
+    override fun <T> run(
+        context: String,
+        scriptPath: String?,
+        sentence: String,
+        params: Map<String, Any>,
+        result: (value: T) -> Unit
+    ) {
         System.setProperty("kotlin.script.classpath", currentClassPath)
         System.setProperty("idea.use.native.fs.for.win", "false")
 
@@ -78,27 +76,38 @@ class Octopus(private var container: Container) : ScriptExecutor {
         mutableParams["context"] = context
         mutableParams["flags"] = flags
 
-        val annotations = extractAllAnnotations(sentence)
+        val exported = extractExportedAnnotations(sentence)
 
-        annotations["Logger"]?.forEach { (key, value) ->
-            mutableParams[key] = value
+        if (exported == null) {
+            result("No function annotated with @Export was found." as T)
+            return
         }
 
-        for ((name, annotationParams) in annotations) {
-            val resolver = annotationResolvers[name]
-            if (resolver != null) {
-                resolver.resolve(
-                    scriptPath,
-                    mutableParams,
-                    annotationParams,
-                    sentence,
-                    engine,
-                    context,
-                    result
-                )
-                return
-            }
+        val (exportName, annotations) = exported
+
+        mutableParams["exportName"] = exportName
+        mutableParams["annotations"] = annotations
+
+        for ((name, annParams) in annotations) {
+            annotationResolvers[name]?.prepare(
+                scriptPath = scriptPath,
+                baseParams = mutableParams,
+                annotationParams = annParams,
+                sentence = sentence,
+                context = context
+            )
         }
+
+        engine.eval(sentence)
+
+        SignatureDispatcher.dispatch(
+            context = context,
+            scriptPath = scriptPath,
+            sentence = sentence,
+            engine = engine,
+            params = mutableParams,
+            result = result
+        )
     }
 
     override fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T {

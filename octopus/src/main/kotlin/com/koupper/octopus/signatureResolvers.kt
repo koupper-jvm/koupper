@@ -1,5 +1,7 @@
 package com.koupper.octopus
 
+import com.koupper.octopus.logging.GlobalLogger
+import com.koupper.octopus.logging.Logger
 import com.koupper.octopus.process.JobEvent
 import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.ModuleProcessor
@@ -79,6 +81,9 @@ val exportResolvers: Map<List<String>, (String, String, ScriptEngine, Map<String
 
 val jobsListenerResolvers: Map<List<String>, (String, String, String, ScriptEngine, Map<String, Any>) -> Any> = mapOf(
     listOf("JobEvent") to handler@{ context, scriptPath, sentence, engine, params ->
+        val log = params["dispatcherLogger"] as? Logger
+            ?: error("Logger no encontrado en parámetros")
+
         fun getJobDriverFromConfig(context: String): String? {
             val jobsJson = File("$context/jobs.json")
             if (!jobsJson.exists()) return null
@@ -109,8 +114,6 @@ val jobsListenerResolvers: Map<List<String>, (String, String, String, ScriptEngi
 
         val finalScriptPath = Paths.get(context, scriptPath).normalize().toAbsolutePath().toString()
 
-        engine.eval(sentence)
-
         val function = engine.eval(fnName) as (JobEvent) -> Any
 
         function.asJob(JobEvent(), functionName = fnName, scriptPath = finalScriptPath, sourceType = "script").dispatchToQueue(queue = queue)
@@ -124,14 +127,14 @@ val jobsListenerResolvers: Map<List<String>, (String, String, String, ScriptEngi
             key = key,
             sleepTime = sleepTime,
             runOnce = { onJob ->
-                JobRunner.runPendingJobs(
-                    queue = cfgQueue,
-                    driver = cfgDriver
-                ) { job ->
+                GlobalLogger.setLogger(log)
+                JobRunner.runPendingJobs(queue = cfgQueue, driver = cfgDriver) { job ->
                     onJob(job)
                 }
             },
             onJob = { job ->
+                GlobalLogger.setLogger(log)
+
                 val event = JobEvent(
                     jobId          = job.id,
                     queue          = job.queue,
@@ -163,7 +166,10 @@ val jobsListenerResolvers: Map<List<String>, (String, String, String, ScriptEngi
                     driver = cfgDriver,
                     newParams = newParams
                 ) { updatedJob ->
+                    GlobalLogger.setLogger(log)
+
                     val functionCode = updatedJob.sourceSnapshot
+
                     if (functionCode != null) {
                         try {
                             engine.eval(functionCode)

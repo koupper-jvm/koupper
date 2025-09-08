@@ -1,15 +1,11 @@
 package com.koupper.octopus.annotations
 
-import javax.script.ScriptEngine
-
 interface AnnotationResolver {
-    fun <T> resolve(
+    fun prepare(
         scriptPath: String?,
-        params: MutableMap<String, Any>,
+        baseParams: MutableMap<String, Any>,
         annotationParams: Map<String, Any>,
         sentence: String,
-        engine: ScriptEngine,
-        context: String,
-        resultCallback: (T) -> Unit
+        context: String
     )
 }

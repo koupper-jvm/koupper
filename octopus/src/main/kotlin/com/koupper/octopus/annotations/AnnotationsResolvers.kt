@@ -1,68 +1,44 @@
 package com.koupper.octopus.annotations
 
-import com.koupper.octopus.exportResolvers
-import com.koupper.octopus.jobsListenerResolvers
-import com.koupper.octopus.utils.captureOutputWithConfig
-import com.koupper.shared.octopus.extractExportFunctionSignature
-import javax.script.ScriptEngine
+import com.koupper.octopus.logging.LogSpec
 
-object ExportResolver : AnnotationResolver {
-    override fun <T> resolve(
+object LoggerAnnotationResolver : AnnotationResolver {
+    override fun prepare(
         scriptPath: String?,
-        params: MutableMap<String, Any>,
+        baseParams: MutableMap<String, Any>,
         annotationParams: Map<String, Any>,
         sentence: String,
-        engine: ScriptEngine,
-        context: String,
-        resultCallback: (T) -> Unit
+        context: String
     ) {
-        val functionParams = extractExportFunctionSignature(sentence)?.first
-            ?.map { it.replace("\\s+".toRegex(), "") }
-            ?: emptyList()
+        val level = (annotationParams["level"] ?: "INFO").toString()
+        val dest  = (annotationParams["destination"] ?: "file").toString()
 
-        val resolver = exportResolvers[functionParams]
-            ?: throw IllegalArgumentException("Unsupported function signature: $functionParams")
-
-        val loggerLevel = (params["level"] ?: "INFO") as String
-        val destination = (params["destination"] ?: "console") as String
-
-        val output = captureOutputWithConfig(loggerLevel, destination) {
-            resolver(context, sentence, engine, params)
-        }
-
-        resultCallback(output as T)
-    }
-}
-
-object JobsListenerResolver : AnnotationResolver {
-    override fun <T> resolve(
-        scriptPath: String?,
-        params: MutableMap<String, Any>,
-        annotationParams: Map<String, Any>,
-        sentence: String,
-        engine: ScriptEngine,
-        context: String,
-        resultCallback: (T) -> Unit
-    ) {
-        val functionParams = extractExportFunctionSignature(sentence)?.first
-            ?.map { it.replace("\\s+".toRegex(), "") }
-            ?: emptyList()
-
-        val fullParams = params + mapOf(
-            "jobsListenerParams" to annotationParams
+        baseParams["logSpec"] = LogSpec(
+            level = level,
+            destination = dest,
+            mdc = mapOf("script" to (scriptPath ?: "n/a")),
+            async = true
         )
-
-        val resolver = jobsListenerResolvers[functionParams]
-            ?: throw IllegalArgumentException("Unsupported function signature: $functionParams")
-
-        val loggerLevel = (annotationParams["level"] ?: "INFO") as String
-        val destination = (annotationParams["destination"] ?: "console") as String
-
-        val output = captureOutputWithConfig(loggerLevel, destination) {
-            resolver(context, scriptPath!!, sentence, engine, fullParams)
-        }
-
-        resultCallback(output as T)
     }
 }
+
+object JobsListenerAnnotationResolver : AnnotationResolver {
+    override fun prepare(
+        scriptPath: String?,
+        baseParams: MutableMap<String, Any>,
+        annotationParams: Map<String, Any>,
+        sentence: String,
+        context: String
+    ) {
+        baseParams["jobsListenerParams"] = annotationParams
+    }
+}
+
+val annotationResolvers: Map<String, AnnotationResolver> = mapOf(
+    "Export"       to object : AnnotationResolver { // Export no prepara nada
+        override fun prepare(sp: String?, bp: MutableMap<String, Any>, ap: Map<String, Any>, s: String, c: String) {}
+    },
+    "Logger"       to LoggerAnnotationResolver,
+    "JobsListener" to JobsListenerAnnotationResolver
+)
 
