@@ -1,7 +1,8 @@
 package com.koupper.octopus
 
-import com.koupper.octopus.logging.GlobalLogger
-import com.koupper.octopus.logging.Logger
+import com.koupper.logging.KLogger
+import com.koupper.logging.evalExport
+import com.koupper.logging.withScriptLogger
 import com.koupper.octopus.process.JobEvent
 import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.ModuleProcessor
@@ -12,78 +13,99 @@ import java.io.File
 import java.nio.file.Paths
 import javax.script.ScriptEngine
 
-val exportResolvers: Map<List<String>, (String, String, ScriptEngine, Map<String, Any>) -> Any> = mapOf(
-    listOf("Map<String,Any>") to { context, sentence, engine, params ->
+val exportResolvers: Map<List<String>, (String, String, ScriptEngine, Map<String, Any>, KLogger) -> Any> = mapOf(
+
+    // () -> Any
+    emptyList<String>() to { _, sentence, engine, params, logger ->
         engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as (Map<String, Any>) -> Any
-        fn(params)
+        withScriptLogger(logger, params["mdc"] as? Map<String, String> ?: emptyMap()) {
+            val fn = evalExport<() -> Any>(engine, sentence)
+            fn()
+        }
     },
-    listOf("ModuleProcessor") to { context, sentence, engine, params ->
+
+    // (Map<String, Any>) -> Any
+    listOf("Map<String,Any>") to { _, sentence, engine, params, logger ->
+        engine.eval(sentence)
+        withScriptLogger(logger, params["mdc"] as? Map<String, String> ?: emptyMap()) {
+            val fn = evalExport<(Map<String, Any>) -> Any>(engine, sentence)
+            fn(params)
+        }
+    },
+
+    // (ModuleProcessor) -> Any
+    listOf("ModuleProcessor") to { _, sentence, engine, params, logger ->
         val processor = ModuleProcessor(params["context"] as String, *(params["flags"] as Array<String>))
         engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as (com.koupper.octopus.process.Process) -> Any
-        fn(processor)
+        withScriptLogger(logger, params["mdc"] as? Map<String, String> ?: emptyMap()) {
+            val fn = evalExport<(com.koupper.octopus.process.Process) -> Any>(engine, sentence)
+            fn(processor)
+        }
     },
-    listOf("ModuleProcessor", "Map<String,Any>") to { context, sentence, engine, params ->
-        val processor = ModuleProcessor(params["context"] as String, *(params["flags"] as Array<String>))
-        engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as (com.koupper.octopus.process.Process, Map<String, Any>) -> Any
-        fn(processor, params)
-    },
-    listOf("ModuleAnalyzer") to { context, sentence, engine, params ->
+
+    // (ModuleAnalyzer) -> Any
+    listOf("ModuleAnalyzer") to { _, sentence, engine, params, logger ->
         val analyzer = ModuleAnalyzer(params["context"] as String, *(params["flags"] as Array<String>))
         engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as (com.koupper.octopus.process.Process) -> Any
-        fn(analyzer)
+        withScriptLogger(logger, params["mdc"] as? Map<String, String> ?: emptyMap()) {
+            val fn = evalExport<(ModuleAnalyzer) -> Any>(engine, sentence)
+            fn(analyzer)
+        }
     },
-    listOf("ModuleAnalyzer", "Map<String,Any>") to { context, sentence, engine, params ->
-        val analyzer = ModuleAnalyzer(params["context"] as String, *(params["flags"] as Array<String>))
+
+    // (RoutesRegistration) -> Any
+    listOf("RoutesRegistration") to { _, sentence, engine, params, logger ->
+        val rr = RoutesRegistration(params["context"] as String)
         engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as (com.koupper.octopus.process.Process, Map<String, Any>) -> Any
-        fn(analyzer, params)
+        withScriptLogger(logger, params["mdc"] as? Map<String, String> ?: emptyMap()) {
+            val fn = evalExport<(RoutesRegistration) -> Any>(engine, sentence)
+            fn(rr)
+        }
     },
-    listOf("RoutesRegistration") to { context, sentence, engine, params ->
-        val routesRegistration = RoutesRegistration(params["context"] as String)
-        engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as (RoutesRegistration) -> Any
-        fn(routesRegistration)
-    },
-    listOf("JobRunner") to { context, sentence, engine, params ->
+
+    // (JobRunner) -> Any
+    listOf("JobRunner") to { _, sentence, engine, params, logger ->
         val runner = JobRunner
         engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as (JobRunner) -> Any
-        fn(runner)
+        withScriptLogger(logger, params["mdc"] as? Map<String, String> ?: emptyMap()) {
+            val fn = evalExport<(JobRunner) -> Any>(engine, sentence)
+            fn(runner)
+        }
     },
-    listOf("JobLister") to { context, sentence, engine, params ->
+
+    // (JobLister) -> Any
+    listOf("JobLister") to { _, sentence, engine, params, logger ->
         val runner = JobLister
         engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as (JobLister) -> Any
-        fn(runner)
+        withScriptLogger(logger, params["mdc"] as? Map<String, String> ?: emptyMap()) {
+            val fn = evalExport<(JobLister) -> Any>(engine, sentence)
+            fn(runner)
+        }
     },
-    listOf("JobBuilder") to { context, sentence, engine, params ->
+
+    // (JobBuilder) -> Any
+    listOf("JobBuilder") to { _, sentence, engine, params, logger ->
         val runner = JobBuilder
         engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as (JobBuilder) -> Any
-        fn(runner)
+        withScriptLogger(logger, params["mdc"] as? Map<String, String> ?: emptyMap()) {
+            val fn = evalExport<(JobBuilder) -> Any>(engine, sentence)
+            fn(runner)
+        }
     },
-    listOf("JobDisplayer") to { context, sentence, engine, params ->
+
+    // (JobDisplayer) -> Any
+    listOf("JobDisplayer") to { _, sentence, engine, params, logger ->
         val runner = JobDisplayer
         engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as (JobDisplayer) -> Any
-        fn(runner)
-    },
-    emptyList<String>() to { context, sentence, engine, _ ->
-        engine.eval(sentence)
-        val fn = engine.eval(extractExportFunctionName(sentence)) as () -> Any
-        fn()
+        withScriptLogger(logger, params["mdc"] as? Map<String, String> ?: emptyMap()) {
+            val fn = evalExport<(JobDisplayer) -> Any>(engine, sentence)
+            fn(runner)
+        }
     }
 )
 
-val jobsListenerResolvers: Map<List<String>, (String, String, String, ScriptEngine, Map<String, Any>) -> Any> = mapOf(
-    listOf("JobEvent") to handler@{ context, scriptPath, sentence, engine, params ->
-        val log = params["dispatcherLogger"] as? Logger
-            ?: error("Logger no encontrado en parámetros")
-
+val jobsListenerResolvers: Map<List<String>, (String, String, String, ScriptEngine, Map<String, Any>, KLogger) -> Any> = mapOf(
+    listOf("JobEvent") to handler@{ context, scriptPath, sentence, engine, params, logger ->
         fun getJobDriverFromConfig(context: String): String? {
             val jobsJson = File("$context/jobs.json")
             if (!jobsJson.exists()) return null
@@ -127,13 +149,11 @@ val jobsListenerResolvers: Map<List<String>, (String, String, String, ScriptEngi
             key = key,
             sleepTime = sleepTime,
             runOnce = { onJob ->
-                GlobalLogger.setLogger(log)
                 JobRunner.runPendingJobs(queue = cfgQueue, driver = cfgDriver) { job ->
                     onJob(job)
                 }
             },
             onJob = { job ->
-                GlobalLogger.setLogger(log)
 
                 val event = JobEvent(
                     jobId          = job.id,
@@ -166,7 +186,6 @@ val jobsListenerResolvers: Map<List<String>, (String, String, String, ScriptEngi
                     driver = cfgDriver,
                     newParams = newParams
                 ) { updatedJob ->
-                    GlobalLogger.setLogger(log)
 
                     val functionCode = updatedJob.sourceSnapshot
 
@@ -190,7 +209,7 @@ val jobsListenerResolvers: Map<List<String>, (String, String, String, ScriptEngi
         "JobListener initialized"
     },
 
-    emptyList<String>() to { context, scriptPath, sentence, engine, _ ->
+    emptyList<String>() to { context, scriptPath, sentence, engine, _, logger ->
         engine.eval(sentence)
         val fn = engine.eval(sentence) as () -> Any
         fn()

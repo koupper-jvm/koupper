@@ -5,7 +5,9 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
 import com.koupper.container.context
 import com.koupper.container.interfaces.Container
-import com.koupper.octopus.annotations.*
+import com.koupper.logging.*
+import com.koupper.octopus.annotations.Logger
+import com.koupper.octopus.annotations.annotationResolvers
 import com.koupper.octopus.process.Process
 import com.koupper.os.env
 import com.koupper.providers.ServiceProvider
@@ -15,13 +17,14 @@ import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
 import com.koupper.providers.http.HtppClient
-import com.koupper.shared.octopus.*
+import com.koupper.shared.octopus.extractExportedAnnotations
 import kotlinx.coroutines.*
 import java.io.File
 import java.net.ServerSocket
 import java.net.URL
 import java.nio.file.Paths
 import javax.script.ScriptEngineManager
+import javax.script.ScriptException
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
 
@@ -98,16 +101,24 @@ class Octopus(private var container: Container) : ScriptExecutor {
             )
         }
 
-        engine.eval(sentence)
+        try {
+            engine.eval(sentence)
 
-        SignatureDispatcher.dispatch(
-            context = context,
-            scriptPath = scriptPath,
-            sentence = sentence,
-            engine = engine,
-            params = mutableParams,
-            result = result
-        )
+            SignatureDispatcher.dispatch(
+                context = context,
+                scriptPath = scriptPath,
+                sentence = sentence,
+                engine = engine,
+                params = mutableParams,
+                result = result
+            )
+        } catch (e: ScriptException) {
+            app.createSingletonOf(LoggerCore::class).error { "Script error in [$context]: ${e.message}" }
+            result("Script error: ${e.message}" as T)
+        } catch (e: Throwable) {
+            app.createSingletonOf(LoggerCore::class).error { "Unexpected error in [$context]" }
+            result("Unexpected error: ${e.message}" as T)
+        }
     }
 
     override fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T {
@@ -249,15 +260,17 @@ fun listenForExternalCommands(processManager: ScriptExecutor) {
 
                             val parameters = inputData[2]
 
-                            println("📜 Executing script: $scriptPath with params: $parameters")
+                            app.createSingletonOf(LoggerCore::class).info { "📜 Executing script: $scriptPath with params: $parameters" }
 
                             context = inputData[0]
 
                             processManager.runFromScriptFile(context!!, scriptPath, parameters) { result: Any ->
-                                println("✅ Result from script execution: $result")
+                                app.createSingletonOf(LoggerCore::class).info { "✅ Result from script execution: $result" }
 
-                                if (result !== "kotlin.Unit" && (result as String).isNotEmpty()) {
+                                if (result !is Unit && (result as String).isNotEmpty()) {
                                     writer.write(result.toString())
+                                } else {
+                                    writer.write("")
                                 }
 
                                 writer.flush()
@@ -271,7 +284,7 @@ fun listenForExternalCommands(processManager: ScriptExecutor) {
                         }
                     }
                 } catch (e: Exception) {
-                    println("⚠️ Connection error: ${e.message}")
+                    println("⚠️ Connection error: ${e.printStackTrace()}")
                 }
             }
         }
@@ -340,6 +353,24 @@ fun isPrimitiveType(value: Any): Boolean {
 fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
     val octopus = Octopus(container)
     octopus.registerBuildInServicesProvidersInContainer()
+
+    val logsDir   = File(System.getProperty("user.home"), ".koupper/logs")
+
+    val appLogger = LoggerFactory.get("Octopus.Dispatcher")
+    appLogger.clearAppenders(close = true)
+    appLogger.level = LogLevel.INFO
+    appLogger.addAppender(
+        AsyncAppender(
+            RollingFileAppender(
+                dir = logsDir,
+                baseName = "Octopus.Dispatcher"
+            )
+        )
+    )
+
+    app.singleton(LoggerCore::class) {
+        appLogger
+    }
 
     return octopus
 }

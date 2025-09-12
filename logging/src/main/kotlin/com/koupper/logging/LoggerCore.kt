@@ -1,4 +1,4 @@
-package com.koupper.octopus.logging
+package com.koupper.logging
 
 import java.io.File
 import java.io.RandomAccessFile
@@ -113,15 +113,14 @@ interface Appender : AutoCloseable {
 class ConsoleAppender(private val formatter: LogFormatter = PatternFormatter()) : Appender {
     override fun append(e: LogEvent) {
         val line = formatter.format(e)
-        // mandamos WARN/ERROR a err, resto a out (no redirigimos System.*)
         if (e.level.priority >= LogLevel.WARN.priority) System.err.print(line) else System.out.print(line)
     }
 }
 
-/* Simple rolling diario por fecha en nombre */
 class RollingFileAppender(
     private val dir: File,
     private val baseName: String,
+    private val datePattern: String = "yyyy-MM-dd",
     private val formatter: LogFormatter = PatternFormatter()
 ) : Appender {
 
@@ -132,7 +131,8 @@ class RollingFileAppender(
     init { dir.mkdirs() }
 
     private fun rotateIfNeeded(ts: Long) {
-        val newDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(ts))
+        val sdf = SimpleDateFormat(datePattern, Locale.US)
+        val newDate = sdf.format(Date(ts))
         if (newDate != currentDate) {
             raf?.close()
             currentDate = newDate
@@ -175,15 +175,36 @@ class MemoryAppender(private val formatter: LogFormatter = PatternFormatter()) :
 /* --------- Filtros --------- */
 typealias LogFilter = (LogEvent) -> Boolean
 
-/* --------- Logger --------- */
-class Logger(
-    private val name: String,
+interface LoggerCore {
+    fun addAppender(a: Appender): LoggerCore
+    fun addFilter(f: LogFilter): LoggerCore
+
+    fun clearAppenders(close: Boolean = false): LoggerCore
+    fun appendersSnapshot(): List<Appender>
+    fun clearFilters(): LoggerCore
+
+    fun removeAppender(a: Appender): LoggerCore
+    fun removeFilter(f: LogFilter): LoggerCore
+
+    fun trace(msg: () -> String)
+    fun debug(msg: () -> String)
+    fun info(msg: () -> String)
+    fun warn(msg: () -> String)
+    fun error(msg: () -> String)
+    fun error(t: Throwable, msg: () -> String)
+}
+
+class KLogger(
+    private val _name: String,
     @Volatile var level: LogLevel = LogLevel.INFO,
     private val appenders: MutableList<Appender> = mutableListOf(Appenders.console()),
     private val filters: MutableList<LogFilter> = mutableListOf()
-) {
-    fun addAppender(a: Appender): Logger = apply { appenders.add(a) }
-    fun addFilter(f: LogFilter): Logger = apply { filters.add(f) }
+) : LoggerCore {
+    val name: String
+        get() = _name.uppercase()
+
+    override fun addAppender(a: Appender): KLogger = apply { appenders.add(a) }
+    override fun addFilter(f: LogFilter): KLogger = apply { filters.add(f) }
 
     private fun emit(level: LogLevel, msg: String, t: Throwable? = null) {
         if (level.priority < this.level.priority) return
@@ -192,47 +213,50 @@ class Logger(
         appenders.forEach { it.append(ev) }
     }
 
-    fun clearAppenders(close: Boolean = false): Logger = apply {
+    override fun clearAppenders(close: Boolean): KLogger = apply {
         if (close) appenders.forEach { it.close() }
         appenders.clear()
     }
-    fun appendersSnapshot(): List<Appender> = appenders.toList()
-    fun clearFilters(): Logger = apply { filters.clear() }
+    override fun appendersSnapshot(): List<Appender> = appenders.toList()
+    override fun clearFilters(): KLogger = apply { filters.clear() }
 
-    fun removeAppender(a: Appender): Logger = apply { appenders.remove(a) }
-    fun removeFilter(f: LogFilter): Logger = apply { filters.remove(f) }
+    override fun removeAppender(a: Appender): KLogger = apply { appenders.remove(a) }
+    override fun removeFilter(f: LogFilter): KLogger = apply { filters.remove(f) }
 
-    fun trace(msg: () -> String) = emit(LogLevel.TRACE, msg())
-    fun debug(msg: () -> String) = emit(LogLevel.DEBUG, msg())
-    fun info (msg: () -> String) = emit(LogLevel.INFO , msg())
-    fun warn (msg: () -> String) = emit(LogLevel.WARN , msg())
-    fun error(msg: () -> String) = emit(LogLevel.ERROR, msg())
+    override fun trace(msg: () -> String) = emit(LogLevel.TRACE, msg())
+    override fun debug(msg: () -> String) = emit(LogLevel.DEBUG, msg())
+    override fun info (msg: () -> String) = emit(LogLevel.INFO, msg())
+    override fun warn (msg: () -> String) = emit(LogLevel.WARN, msg())
+    override fun error(msg: () -> String) = emit(LogLevel.ERROR, msg())
 
-    fun error(t: Throwable, msg: () -> String) = emit(LogLevel.ERROR, msg(), t)
+    override fun error(t: Throwable, msg: () -> String) = emit(LogLevel.ERROR, msg(), t)
 }
 
-/* --------- Fábrica/registry y presets --------- */
 object Appenders {
     fun console(pattern: String = "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger - %msg%ex%n") =
         ConsoleAppender(PatternFormatter(pattern))
 
     fun consoleJson() = ConsoleAppender(JsonFormatter())
 
-    fun rollingFile(dir: String = "logs", baseName: String = "app",
-                    pattern: String = "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger - %msg%ex%n") =
-        RollingFileAppender(File(dir), baseName, PatternFormatter(pattern))
+    fun rollingFile(
+        dir: String = "logs",
+        baseName: String = "app",
+        pattern: String = "yyyy-MM-dd",
+        linePattern: String = "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger - %msg%ex%n"
+    ): Appender {
+        return RollingFileAppender(File(dir), baseName, pattern, PatternFormatter(linePattern))
+    }
 
     fun rollingJson(dir: String = "logs", baseName: String = "app") =
-        RollingFileAppender(File(dir), baseName, JsonFormatter())
+        RollingFileAppender(File(dir), baseName, formatter = JsonFormatter())
 }
 
 object LoggerFactory {
-    private val registry = mutableMapOf<String, Logger>()
-    @Synchronized fun get(name: String): Logger =
-        registry.getOrPut(name) { Logger(name) }
+    private val registry = mutableMapOf<String, KLogger>()
+    @Synchronized fun get(name: String): KLogger =
+        registry.getOrPut(name) { KLogger(name) }
 }
 
-/* --------- Especificación dinámica y helpers de ejecución --------- */
 data class LogSpec(
     val level: String = "INFO",
     val destination: String = "console",
@@ -240,49 +264,140 @@ data class LogSpec(
     val async: Boolean = true
 )
 
-private fun configure(logger: Logger, spec: LogSpec): () -> Unit {
-    val prevLevel = logger.level
-    val prevAppenders = logger.appendersSnapshot()
+private fun configure(kLogger: KLogger, spec: LogSpec): () -> Unit {
+    val prevLevel = kLogger.level
 
-    logger.clearFilters()
+    val prevAppenders = kLogger.appendersSnapshot()
 
-    logger.clearAppenders(close = false)
+    kLogger.clearFilters()
 
-    logger.level = LogLevel.parse(spec.level)
+    kLogger.clearAppenders(close = false)
+
+    kLogger.level = LogLevel.parse(spec.level)
 
     val newAppenders = mutableListOf<Appender>()
 
     fun addNew(a: Appender) {
         val wrapped = if (spec.async) AsyncAppender(a) else a
         newAppenders.add(wrapped)
-        logger.addAppender(wrapped)
+        kLogger.addAppender(wrapped)
     }
 
-    when (spec.destination.lowercase()) {
-        "console"      -> addNew(Appenders.console())
-        "console-json" -> addNew(Appenders.consoleJson())
-        "file"         -> addNew(Appenders.rollingFile())
-        "json"         -> addNew(Appenders.rollingJson())
-        "both"         -> { addNew(Appenders.console()); addNew(Appenders.rollingFile()) }
-        "all"          -> { addNew(Appenders.console()); addNew(Appenders.rollingFile()); addNew(Appenders.rollingJson()) }
-        else           -> addNew(Appenders.console())
+    when {
+        spec.destination.equals("console", ignoreCase = true) ->
+            addNew(Appenders.console())
+
+        spec.destination.equals("console-json", ignoreCase = true) ->
+            addNew(Appenders.consoleJson())
+
+        spec.destination.equals("file", ignoreCase = true) ->
+            addNew(Appenders.rollingFile(baseName = kLogger.name)) // -> logs/app.YYYY-MM-DD.log
+
+        spec.destination.lowercase().startsWith("file:") -> {
+            val (base, datePat) = parseFileDestination(spec.destination)
+
+            val baseFile = File(base)
+            val dir = baseFile.parentFile ?: File(".")
+            val baseName = baseFile.name
+
+            addNew(Appenders.rollingFile(
+                dir = dir.absolutePath,
+                baseName = baseName,
+                pattern = datePat
+            ))
+        }
+
+
+        spec.destination.equals("json", ignoreCase = true) ->
+            addNew(Appenders.rollingJson())
+
+        spec.destination.equals("both", ignoreCase = true) -> {
+            addNew(Appenders.console())
+            addNew(Appenders.rollingFile())
+        }
+
+        spec.destination.equals("all", ignoreCase = true) -> {
+            addNew(Appenders.console())
+            addNew(Appenders.rollingFile())
+            addNew(Appenders.rollingJson())
+        }
+
+        else -> addNew(Appenders.console())
     }
+
 
     return {
         newAppenders.forEach { it.close() }
 
-        logger.clearAppenders(close = false)
+        kLogger.clearAppenders(close = false)
 
-        prevAppenders.forEach { logger.addAppender(it) }
+        prevAppenders.forEach { kLogger.addAppender(it) }
 
-        logger.level = prevLevel
+        kLogger.level = prevLevel
     }
 }
+
+private fun parseFileDestination(dest: String): Pair<String, String> {
+    val rest = dest.substringAfter("file", "")
+        .removePrefix(":")
+        .trim()
+
+    // Verificar si hay patrón de fecha primero
+    val hasPattern = rest.contains('[') && rest.contains(']')
+
+    val rawPath = if (hasPattern) {
+        rest.substringBefore("[", "").trim()
+    } else {
+        rest.trim()
+    }
+
+    val base = if (rawPath.isBlank()) {
+        "app"
+    } else if (rawPath.contains('\\') || rawPath.contains('/') || rawPath.contains(':')) {
+        rawPath
+    } else {
+        rawPath.replace(Regex("""[^\w\-.]"""), "_")
+    }
+
+    val rawPattern = if (hasPattern) {
+        rest.substringAfter("[", "")
+            .substringBefore("]", "")
+            .trim()
+    } else {
+        ""
+    }
+
+    val pattern = if (rawPattern.isBlank()) "yyyy-MM-dd" else validateDatePattern(rawPattern)
+
+    return base to pattern
+}
+
+private fun validateDatePattern(pat: String): String {
+    if (canFormatWith(pat)) return pat
+
+    val fixed = pat.replace('m', 'M')
+    if (fixed != pat && canFormatWith(fixed)) {
+        println("⚠️ Logger: date pattern '$pat' invalid; using '$fixed' (months use 'MM').")
+        return fixed
+    }
+
+    println("⚠️ Logger: date pattern '$pat' invalid; falling back to 'yyyy-MM-dd'.")
+    return "yyyy-MM-dd"
+}
+
+private fun canFormatWith(pattern: String): Boolean =
+    try {
+        SimpleDateFormat(pattern, Locale.US).format(Date())
+        true
+    } catch (_: IllegalArgumentException) {
+        false
+    }
+
 
 fun <T> withLogging(
     loggerName: String,
     spec: LogSpec,
-    block: (Logger) -> T
+    block: (KLogger) -> T
 ): T {
     val logger = LoggerFactory.get(loggerName)
     val restore = configure(logger, spec)
@@ -304,34 +419,23 @@ fun <T> withLogging(
 fun <T> captureLogs(
     loggerName: String,
     spec: LogSpec,
-    block: (Logger) -> T
+    block: (KLogger) -> T
 ): Pair<T, String> {
     val logger = LoggerFactory.get(loggerName)
+
     val restore = configure(logger, spec)
 
     val mem = MemoryAppender(
         PatternFormatter("%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger - %msg%ex%n")
     )
 
-    val fileAppender = if (spec.destination.equals("file", ignoreCase = true)) {
-        val dir = File(System.getProperty("user.home"), ".koupper/logs")
-        dir.mkdirs()
-        val exportName = spec.mdc["export"] ?: loggerName
-        RollingFileAppender(
-            dir = dir,
-            baseName = exportName,
-            formatter = PatternFormatter("%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger - %msg%ex%n")
-        )
-    } else null
-
-    val captureFilter: LogFilter = { e ->
-        spec.mdc.isEmpty() || spec.mdc.all { (k, v) -> e.mdc[k] == v }
+    val captureFilter: LogFilter = { logEvent ->
+        spec.mdc.isEmpty() || spec.mdc.all { (k, v) -> logEvent.mdc[k] == v }
     }
 
     try {
         logger.addFilter(captureFilter)
         logger.addAppender(mem)
-        fileAppender?.let { logger.addAppender(it) }
 
         val result = ScopedMDC(spec.mdc).use {
             block(logger)
@@ -339,12 +443,9 @@ fun <T> captureLogs(
         return result to mem.content()
     } finally {
         logger.removeAppender(mem)
-        fileAppender?.let {
-            logger.removeAppender(it)
-            it.close()
-        }
         logger.removeFilter(captureFilter)
         mem.close()
+        restore()
     }
 }
 

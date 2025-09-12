@@ -1,6 +1,10 @@
 package com.koupper.orchestrator
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.koupper.logging.GlobalLogger
+import com.koupper.logging.KLogger
+import com.koupper.logging.LogSpec
+import com.koupper.logging.captureLogs
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.os.env
 import com.koupper.os.envOptional
@@ -42,6 +46,30 @@ data class KouTask(
     val artifactUri: String? = null,
     val artifactSha256: String? = null
 )
+
+object LoggerHolder {
+    lateinit var LOGGER: KLogger
+
+    init {
+        if (GlobalLogger.log.name.equals("GlobalLogger")) {
+            val logSpec = LogSpec(
+                level = "INFO",
+                destination = "console",
+                mdc = mapOf(
+                    "LOGGING_LOGS" to UUID.randomUUID().toString(),
+                ),
+                async = true
+            )
+
+            captureLogs("JobsOrchestrator.Dispatcher", logSpec) { log ->
+                LOGGER = log
+                "initialized"
+            }
+        } else {
+            LOGGER = GlobalLogger.log
+        }
+    }
+}
 
 object JobSerializer {
     val mapper = jacksonObjectMapper()
@@ -267,15 +295,15 @@ object JobRunner {
 object JobLister {
     fun list(queue: String = "default", driver: String = "file", jobId: String? = null) {
         val d = JobDrivers.resolve(driver)
-        println("\n🔧 List jobs from [$queue] using [$driver]${if (!jobId.isNullOrBlank()) " (jobId=$jobId)" else ""}\n")
+        LoggerHolder.LOGGER.info { "\n🔧 List jobs from [$queue] using [$driver]${if (!jobId.isNullOrBlank()) " (jobId=$jobId)" else ""}\n" }
         d.forEachPending(queue, jobId) { task ->
-            println("📦 Job ID: ${task.id}")
-            println(" - Function: ${task.functionName}")
-            println(" - Params: ${task.params}")
-            println(" - Source: ${task.scriptPath}")
-            println(" - Context: ${task.context}")
-            println(" - Version: ${task.contextVersion}")
-            println(" - Origin: ${task.origin}\n")
+            LoggerHolder.LOGGER.info { "📦 Job ID: ${task.id}" }
+            LoggerHolder.LOGGER.info { " - Function: ${task.functionName}" }
+            LoggerHolder.LOGGER.info { " - Params: ${task.params}" }
+            LoggerHolder.LOGGER.info { " - Source: ${task.scriptPath}" }
+            LoggerHolder.LOGGER.info { " - Context: ${task.context}"}
+            LoggerHolder.LOGGER.info { " - Version: ${task.contextVersion}" }
+            LoggerHolder.LOGGER.info { " - Origin: ${task.origin}\n" }
         }
     }
 }
@@ -472,7 +500,7 @@ object FileJobDriver : JobDriver {
         }
 
         if (files.isEmpty()) {
-            println("⚠️ No jobs to run.")
+            LoggerHolder.LOGGER.info { "⚠️ No jobs to run." }
             return
         }
 
@@ -708,5 +736,3 @@ fun KouTask.dispatchToQueue(
 
     JobDispatcher.dispatch(this, resolvedQueue, resolvedDriver)
 }
-
-
