@@ -49,7 +49,7 @@ interface ScriptExecutor {
      * @param params the script params
      * @param result a callback
      */
-    fun <T> run(context: String, scriptPath: String? = null, sentence: String, params: Map<String, Any> = emptyMap(), result: (value: T) -> Unit)
+    fun <T> run(context: String, scriptPath: String? = null, sentence: String, params: ParsedParams?, result: (value: T) -> Unit)
 
     /**
      * call a  function

@@ -1,6 +1,5 @@
 package com.koupper.logging
 
-import com.koupper.shared.octopus.extractExportFunctionName
 import javax.script.ScriptEngine
 
 inline fun <T> withScriptLogger(
@@ -17,11 +16,8 @@ inline fun <T> withScriptLogger(
     }
 }
 
-fun exportName(sentence: String): String =
-    extractExportFunctionName(sentence) ?: error("No @Export function found")
+inline fun <reified F> evalExport(engine: ScriptEngine, sentenceName: String): F {
 
-inline fun <reified F> evalExport(engine: ScriptEngine, sentence: String): F {
-    val name = exportName(sentence)
     @Suppress("UNCHECKED_CAST")
-    return engine.eval(name) as F
+    return engine.eval(sentenceName) as F
 }

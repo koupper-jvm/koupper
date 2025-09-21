@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Introduced ScriptLogger to execute scripts within a defined scope.
 - Replaced print statements with logger usage in JobLister.
 - Improved Logger annotation handling: destination now supports string patterns for file names.
+- Change the way to process annotations, now they are validated separately.
+- Improved run method implementation for Octopus.
+- Enabled logging based on configured properties or annotations. 
 
 ### Added
 - JobListener support: a JobEvent script can be used as a callback when a job runs.
@@ -34,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a logging module to the Koupper Gradle configuration.
 - Implemented LoggerHolder to provide a shared LOGGER instance for all objects in OrchestratorExtensions.
 - Registered a default logger instance in the container.
+- Added new extensions for validating types from string.
+- Added support for passing parameters to script execution.
+- Added support for executing script sentences.
 
 --
 

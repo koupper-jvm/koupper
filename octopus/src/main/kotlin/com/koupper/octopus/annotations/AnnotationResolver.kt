@@ -1,7 +1,7 @@
 package com.koupper.octopus.annotations
 
 interface AnnotationResolver {
-    fun prepare(
+    fun prepareParams(
         scriptPath: String?,
         baseParams: MutableMap<String, Any>,
         annotationParams: Map<String, Any>,

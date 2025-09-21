@@ -22,6 +22,13 @@ class JSONFileHandlerImpl<T> : JSONFileHandler<T> {
     }
 
     override fun toJsonString(data: T): String {
+        if (data is String) {
+            val t = data.trim()
+            if ((t.startsWith("{") && t.endsWith("}")) ||
+                (t.startsWith("[") && t.endsWith("]"))) {
+                return data
+            }
+        }
         return jacksonObjectMapper().writeValueAsString(data)
     }
 
@@ -36,6 +43,7 @@ class JSONFileHandlerImpl<T> : JSONFileHandler<T> {
     override fun listOfMapsToJsonString(data: List<Map<String, Any>>?): String {
         return jacksonObjectMapper().writeValueAsString(data)
     }
+
 }
 
 inline fun <reified T> JSONFileHandler<T>.toType(): T {
