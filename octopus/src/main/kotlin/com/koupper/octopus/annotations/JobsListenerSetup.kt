@@ -1,6 +1,7 @@
 package com.koupper.octopus.annotations
 
 import com.koupper.container.app
+import com.koupper.logging.LogSpec
 import com.koupper.octopus.DispatcherInputParams
 import com.koupper.octopus.process.JobEvent
 import com.koupper.octopus.process.ModuleAnalyzer
@@ -106,13 +107,11 @@ object JobsListenerSetup {
 
         this.jobListenerParams = annotationParams as? Map<*, *> ?: emptyMap<Any?, Any?>()
 
-        val sb = StringBuilder()
-
         val creationWorkerJobResult = this.createWorkerListener()
 
         val listenByJobsResult = this.listenByJobs()
 
-        return sb.append("$creationWorkerJobResult \n $listenByJobsResult")
+        return "$creationWorkerJobResult\n$listenByJobsResult"
     }
 
     private fun createWorkerListener(): String {
@@ -224,11 +223,34 @@ object JobsListenerSetup {
         return "Worker listener created."
     }
 
+    private var replaySpec: LogSpec? = null
+
+    fun attachLogSpec(spec: LogSpec) { replaySpec = spec }
+
+    private fun Any?.asBool(default: Boolean = false): Boolean = when (this) {
+        null       -> default
+        is Boolean -> this
+        is String  -> this.equals("true", true) || this == "1" || this.equals("yes", true) || this.equals("on", true)
+        is Number  -> this.toInt() != 0
+        else       -> default
+    }
+
+    private fun Any?.asLong(default: Long): Long = when (this) {
+        null       -> default
+        is Number  -> this.toLong()
+        is String  -> this.toLongOrNull() ?: default
+        else       -> default
+    }
+
     private fun listenByJobs(): String {
         val cfgQueue  = getJobQueueFromConfig(this.inp.scriptContext) ?: "default"
         val cfgDriver = getJobDriverFromConfig(this.inp.scriptContext) ?: "file"
         val sleepTime = (this.jobListenerParams["time"] as? Long) ?: 5000L
         val key       = "${inp.scriptContext}::$cfgQueue"
+
+        val debug = jobListenerParams["debug"].asBool(false)
+
+        if (debug) enableDebugMode()
 
         ListenersRegistry.start(
             key = key,
@@ -315,6 +337,7 @@ object JobsListenerSetup {
                             else -> null
                         }
                     },
+                    logSpec = replaySpec
                 ) { updatedWorkerJob ->
                     updatedWorkerJob.dispatchToQueue(queue = workerQueue, driver = workerDriver)
                 }

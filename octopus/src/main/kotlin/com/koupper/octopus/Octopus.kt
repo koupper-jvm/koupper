@@ -109,6 +109,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             app.createSingletonOf(LoggerCore::class).error { "Script error in [$context]: ${e.message}" }
             result("Script error: ${e.message}" as T)
         } catch (e: Throwable) {
+            e.printStackTrace()
             app.createSingletonOf(LoggerCore::class).error { "Unexpected error in [$context]" }
             result("Unexpected error: ${e.message}" as T)
         }
@@ -220,6 +221,24 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
 fun main() = runBlocking {
     val processManager = createDefaultConfiguration()
+
+    /*val inputData = "C:\\Users\\dosek\\develop\\igly-comms .\\worker-listener.kts".split(" ").toTypedArray()
+
+    when {
+        inputData[1].endsWith(".kts") || inputData[1].endsWith(".kt") -> {
+            val scriptPath = inputData[1]
+
+            val parameters = inputData.drop(2).joinToString(" ")
+
+            app.createSingletonOf(LoggerCore::class).info { "📜 Executing script: $scriptPath with params: $parameters" }
+
+            context = inputData[0]
+
+            processManager.runFromScriptFile(context!!, scriptPath, parameters) { result: Any ->
+                app.createSingletonOf(LoggerCore::class).info { "✅ Result from script execution: $result" }
+            }
+        }
+    }*/
 
     launch {
         listenForExternalCommands(processManager)

@@ -47,8 +47,6 @@ object ScriptRunner {
         engine: ScriptEngine,
         injector: (String) -> Any? = { null }
     ): Any? {
-        engine.eval(call.code)
-
         val anyRef = engine.eval(call.functionName)
             ?: error("Símbolo no encontrado: ${call.functionName}")
 

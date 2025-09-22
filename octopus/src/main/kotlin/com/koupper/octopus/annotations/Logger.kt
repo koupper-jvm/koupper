@@ -4,5 +4,5 @@ package com.koupper.octopus.annotations
 @Retention(AnnotationRetention.SOURCE)
 annotation class Logger(
     val level: String = "INFO",
-    val destination: String = "console"
+    val destination: String = "console",
 )

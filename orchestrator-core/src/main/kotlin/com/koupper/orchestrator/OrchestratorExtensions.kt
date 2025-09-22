@@ -1,10 +1,7 @@
 package com.koupper.orchestrator
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.koupper.logging.GlobalLogger
-import com.koupper.logging.KLogger
-import com.koupper.logging.LogSpec
-import com.koupper.logging.captureLogs
+import com.koupper.logging.*
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.os.env
 import com.koupper.os.envOptional
@@ -28,6 +25,10 @@ import java.sql.DriverManager
 import java.util.*
 import javax.script.ScriptEngine
 import kotlin.reflect.KProperty0
+
+private var enableDebugMode: Boolean = false
+
+fun enableDebugMode() { enableDebugMode = true }
 
 data class KouTask(
     val id: String,
@@ -161,7 +162,7 @@ object JobRunner {
         }
     }
 
-    private fun runCompiled(task: KouTask) {
+    private fun runCompiled(task: KouTask): Any? {
         try {
             println("\n🔍 Buscando clase para ejecutar: ${task.functionName}")
 
@@ -212,12 +213,21 @@ object JobRunner {
             } ?: println("🧭 Loader: ${loader.javaClass.name}")
 
             val pkg = task.packageName?.trimEnd('.')
-            val fileBase = task.fileName.removeSuffix(".class").removeSuffix(".kt").removeSuffix("Kt")
+            val basePrefix = if (pkg.isNullOrBlank()) "" else "$pkg."
+            val fileBase = task.fileName
+                .removeSuffix(".class")
+                .removeSuffix(".kt")
+                .removeSuffix("Kt")
+
+            // Kotlin genera <FileBase>Kt para top-level; probamos varias opciones seguras
             val candidates = linkedSetOf(
-                "$pkg.${task.fileName}",
-                "$pkg.$fileBase",
-                "$pkg.${fileBase}Kt"
+                "${basePrefix}${fileBase}Kt",
+                "${basePrefix}${fileBase}"
             )
+            // Si task.fileName traía extensión rara, prueba también ese literal sin tocar
+            if (task.fileName != fileBase) {
+                candidates += "${basePrefix}${task.fileName.removeSuffix(".class")}"
+            }
 
             val clazz = candidates.asSequence()
                 .mapNotNull { fqcn -> try { loader.loadClass(fqcn) } catch (_: ClassNotFoundException) { null } }
@@ -226,11 +236,19 @@ object JobRunner {
             println("🧪 Campos disponibles en ${clazz.name}:")
             clazz.declaredFields.forEach { println(" - ${it.name}") }
 
-            val field = try { clazz.getDeclaredField(task.functionName) } catch (_: NoSuchFieldException) {
+            val field = try {
+                clazz.getDeclaredField(task.functionName)
+            } catch (_: NoSuchFieldException) {
                 error("No existe el field '${task.functionName}' en ${clazz.name}. Campos: ${clazz.declaredFields.joinToString { it.name }}")
             }
             field.isAccessible = true
             val functionRef = field.get(null)
+
+            // Si el field es una propiedad (::miFuncion), saca el valor real
+            val value = when (functionRef) {
+                is kotlin.reflect.KProperty0<*> -> functionRef.get()
+                else -> functionRef
+            } ?: error("Referencia nula para '${task.functionName}'")
 
             val kotlinToJava = mapOf(
                 "kotlin.String" to String::class.java,
@@ -243,7 +261,6 @@ object JobRunner {
                 "kotlin.collections.Map" to Map::class.java
             )
 
-            // ⚠️ Ordena por índice numérico: arg0 < arg1 < arg10
             fun argIndex(k: String) = k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE
 
             val args: List<Any?> = task.params.entries
@@ -255,9 +272,8 @@ object JobRunner {
                     val paramClass = kotlinToJava[rawType] ?: Class.forName(rawType, true, loader)
 
                     val raw = entry.value
-
                     val jsonForJackson =
-                        if (raw.length >= 2 && raw[0] == '"' && (raw[1] == '{' || raw[1] == '['))
+                        if (raw.length >= 2 && raw[0] == '"' && (raw.getOrNull(1) == '{' || raw.getOrNull(1) == '['))
                             JobSerializer.mapper.readValue(raw, String::class.java)
                         else raw
 
@@ -265,30 +281,40 @@ object JobRunner {
                 }
 
             val oldCl = Thread.currentThread().contextClassLoader
-            Thread.currentThread().contextClassLoader = loader
-            try {
-                val result: Any? = when (functionRef) {
-                    is kotlin.reflect.KFunction<*> -> {
-                        // Referencia a función exportada como ::miFuncion
-                        functionRef.call(*args.toTypedArray())
-                    }
-                    else -> {
-                        // Lambda / FunctionN: invoca dinámicamente 'invoke' con la aridad exacta
-                        val invoke = functionRef.javaClass.methods.firstOrNull {
-                            it.name == "invoke" && it.parameterCount == args.size
-                        } ?: error("❌ No se encontró método 'invoke' con aridad ${args.size} en ${functionRef.javaClass.name}")
-                        invoke.invoke(functionRef, *args.toTypedArray())
-                    }
+            Thread.currentThread().contextClassLoader = value::class.java.classLoader
+            return try {
+                // Buscar invoke incluso si la clase es package-private o synthetic
+                val lambdaClass = value::class.java
+                val invoke = (lambdaClass.methods.asSequence() + lambdaClass.declaredMethods.asSequence())
+                    .firstOrNull { it.name == "invoke" && it.parameterCount == args.size }
+                    ?: (lambdaClass.methods.asSequence() + lambdaClass.declaredMethods.asSequence())
+                        .firstOrNull {
+                            it.name == "invoke" &&
+                                    it.parameterCount == args.size + 1 &&
+                                    it.parameterTypes.last().name == "kotlin.coroutines.Continuation"
+                        }?.also {
+                            error("La función '${task.functionName}' es suspend (Continuation no soportado).")
+                        }
+                    ?: error("❌ No se encontró método 'invoke' con aridad ${args.size} en ${lambdaClass.name}")
+
+                try { invoke.isAccessible = true } catch (_: Exception) {
+                    try {
+                        val ao = Class.forName("java.lang.reflect.AccessibleObject")
+                        val m  = ao.getMethod("trySetAccessible")
+                        m.invoke(invoke)
+                    } catch (_: Throwable) { /* ignore */ }
                 }
 
-                print("✅ Job result: $result")
-                println()
+                val result = invoke.invoke(value, *args.toTypedArray())
+                println("✅ Job result: $result")
+                result
             } finally {
                 Thread.currentThread().contextClassLoader = oldCl
             }
         } catch (e: Exception) {
             println("❌ Error ejecutando job compilado: ${e.message}")
             e.printStackTrace()
+            return null
         }
     }
 }
@@ -500,7 +526,7 @@ object FileJobDriver : JobDriver {
             else -> dir.listFiles { f -> f.isFile && f.extension.equals("json", true) }?.sortedBy { it.name }.orEmpty()
         }
 
-        if (files.isEmpty()) {
+        if (files.isEmpty() && enableDebugMode) {
             LoggerHolder.LOGGER.info { "⚠️ No jobs to run." }
             return
         }
@@ -632,16 +658,29 @@ object JobReplayer {
         jobId: String? = null,
         newParams: Map<String, Any?>,
         injector: (String) -> Any? = { null },
+        logSpec: LogSpec? = null,
         onResult: (KouTask) -> Unit = {}
     ) {
         val d = JobDrivers.resolve(driver)
-        println("\n🔁 Replaying jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}\n")
+        LoggerHolder.LOGGER.info { "\n🔁 Replaying jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}\n" }
+
         d.forEachPending(queue, jobId) { task ->
             val updated = task.copy(
                 params = newParams.mapValues { JobSerializer.mapper.writeValueAsString(it.value) }
             )
 
-            ScriptRunner.runScript(updated, engine, injector)
+            if (logSpec != null) {
+                captureLogs<Any?>("Scripts.Dispatcher", logSpec) { logger ->
+                    withScriptLogger(logger, logSpec.mdc) {
+                        val result = ScriptRunner.runScript(updated, engine, injector)
+
+                        logger.info { result.toString() }
+                    }
+                }
+            } else {
+                ScriptRunner.runScript(updated, engine, injector)
+            }
+
             onResult(updated)
         }
     }

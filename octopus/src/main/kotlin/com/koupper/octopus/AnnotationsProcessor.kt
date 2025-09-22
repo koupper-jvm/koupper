@@ -4,9 +4,11 @@ import com.koupper.logging.LogSpec
 import com.koupper.logging.captureLogs
 import com.koupper.logging.withScriptLogger
 import com.koupper.octopus.annotations.JobsListenerSetup
-import com.koupper.orchestrator.ScriptCall
-import com.koupper.orchestrator.ScriptRunner
-import com.koupper.orchestrator.buildParamsJson
+import com.koupper.octopus.process.ModuleAnalyzer
+import com.koupper.octopus.process.ModuleProcessor
+import com.koupper.octopus.process.RoutesRegistration
+import com.koupper.orchestrator.*
+import com.koupper.shared.normalizeType
 import com.koupper.shared.octopus.extractExportFunctionSignature
 
 fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
@@ -47,13 +49,15 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
 
         val spec = finalSpec!!
 
-        val (value, _) = captureLogs("Scripts.Dispatcher", spec) { logger ->
+        JobsListenerSetup.attachLogSpec(spec)
+
+        val (result, _) = captureLogs<Any?>("Scripts.Dispatcher", spec) { logger ->
             withScriptLogger(logger, spec.mdc) {
-                JobsListenerSetup.run(diParams) as T
+                JobsListenerSetup.run(diParams)
             }
         }
-
-        res(value)
+        @Suppress("UNCHECKED_CAST")
+        res(result as T)
     }
 
     put("Export") { diParams, res ->
@@ -84,21 +88,32 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
 
         val paramsJson   = buildParamsJson(functionArgTypeNames, positionals, kvParams)
 
-        val (value, _) = captureLogs("Scripts.Dispatcher", spec) { logger ->
+        val (result, _) = captureLogs<Any?>("Scripts.Dispatcher", spec) { logger ->
             withScriptLogger(logger, spec.mdc) {
                 ScriptRunner.runScript(
                     ScriptCall(
-                        code = diParams.sentence,
+                        code         = diParams.sentence,
                         functionName = diParams.functionName,
-                        paramsJson = paramsJson,
-                        argTypes = functionArgTypeNames
+                        paramsJson   = paramsJson,
+                        argTypes     = functionArgTypeNames
                     ),
                     diParams.engine
-                ) { _ -> null }
+                ) { typeName ->
+                    when (typeName.normalizeType()) {
+                        "JobRunner"          -> JobRunner
+                        "JobLister"          -> JobLister
+                        "JobBuilder"         -> JobBuilder
+                        "JobDisplayer"       -> JobDisplayer
+                        "RoutesRegistration" -> RoutesRegistration(diParams.scriptContext)
+                        "ModuleAnalyzer"     -> ModuleAnalyzer(diParams.scriptContext)
+                        "ModuleProcessor"    -> ModuleProcessor(diParams.scriptContext)
+                        else -> null
+                    }
+                }
             }
         }
 
         @Suppress("UNCHECKED_CAST")
-        res(value as T)
+        res(result as T)
     }
 }
