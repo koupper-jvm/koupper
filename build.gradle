@@ -82,6 +82,7 @@ project(':octopus') {
         implementation project(':configurations')
         implementation project(':os')
         implementation project(':orchestrator-core')
+        implementation project(':logging')
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
         implementation "org.jetbrains.kotlin:kotlin-script-util:1.8.22"
         implementation "org.jetbrains.kotlin:kotlin-scripting-jvm"
@@ -132,6 +133,7 @@ project(':orchestrator-core') {
         implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion"
         implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.12.0'
         implementation project(':shared')
+        implementation project(':logging')
         // Redis
         implementation("redis.clients:jedis:4.4.3")
 
@@ -146,6 +148,13 @@ project(':orchestrator-core') {
 }
 
 project(':os') {
+    dependencies {
+        implementation project(':shared')
+        implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
+    }
+}
+
+project(':logging') {
     dependencies {
         implementation project(':shared')
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"

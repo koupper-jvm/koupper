@@ -5,7 +5,7 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
 import com.koupper.container.context
 import com.koupper.container.interfaces.Container
-import com.koupper.octopus.annotations.*
+import com.koupper.logging.*
 import com.koupper.octopus.process.Process
 import com.koupper.os.env
 import com.koupper.providers.ServiceProvider
@@ -15,13 +15,14 @@ import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
 import com.koupper.providers.http.HtppClient
-import com.koupper.shared.octopus.*
+import com.koupper.shared.octopus.extractExportedAnnotations
 import kotlinx.coroutines.*
 import java.io.File
 import java.net.ServerSocket
 import java.net.URL
 import java.nio.file.Paths
 import javax.script.ScriptEngineManager
+import javax.script.ScriptException
 import kotlin.reflect.KClass
 import kotlin.system.exitProcess
 
@@ -32,6 +33,12 @@ fun String.toCamelCase(): String {
 val isRelativeScriptFile: (String) -> Boolean = {
     it.matches("^[a-zA-Z0-9_-]+\\.kts$".toRegex())
 }
+
+data class ParsedParams(
+    val flags: Set<String>,
+    val params: Map<String, String>,
+    val positionals: List<String> = emptyList()
+)
 
 class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
@@ -44,7 +51,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
     ) {
         val content = app.getInstance(FileHandler::class).load(scriptPath).readText(Charsets.UTF_8)
 
-        this.run(context = context, scriptPath, sentence = content, params = this.convertStringParamsToListParams(params)) { process: T ->
+        this.run(context = context, scriptPath, sentence = content, params = this.parseArgs(params)) { process: T ->
             result(process)
         }
     }
@@ -52,7 +59,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
     override fun <T> runFromUrl(context: String, scriptUrl: String, params: String, result: (value: T) -> Unit) {
         val content = URL(scriptUrl).readText()
 
-        this.run(context, sentence = content, params = this.convertStringParamsToListParams(params)) { process: T ->
+        this.run(context, sentence = content, params = this.parseArgs(params)) { process: T ->
             result(process)
         }
     }
@@ -61,53 +68,51 @@ class Octopus(private var container: Container) : ScriptExecutor {
         context: String,
         scriptPath: String?,
         sentence: String,
-        params: Map<String, Any>,
+        params: ParsedParams?,
         result: (value: T) -> Unit
     ) {
         System.setProperty("kotlin.script.classpath", currentClassPath)
+
         System.setProperty("idea.use.native.fs.for.win", "false")
 
         val engine = ScriptEngineManager().getEngineByExtension("kts")
             ?: error("No script engine found for .kts extension")
 
-        val mutableParams = params.toMutableMap()
+        val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence)
+            ?: run {
+                result("No function annotated with @Export was found." as T)
+                return
+            }
 
-        val flags = params.filterKeys { it.startsWith("--") || it.startsWith("-") }.keys.toTypedArray()
-        mutableParams["context"] = context
-        mutableParams["flags"] = flags
-
-        val exported = extractExportedAnnotations(sentence)
-
-        if (exported == null) {
+        if ("Export" !in annotations) {
             result("No function annotated with @Export was found." as T)
             return
         }
 
-        val (exportName, annotations) = exported
+        try {
+            engine.eval(sentence)
 
-        mutableParams["exportName"] = exportName
-        mutableParams["annotations"] = annotations
-
-        for ((name, annParams) in annotations) {
-            annotationResolvers[name]?.prepare(
-                scriptPath = scriptPath,
-                baseParams = mutableParams,
-                annotationParams = annParams,
-                sentence = sentence,
-                context = context
+            val dispatcherInputParams = DispatcherInputParams(
+                context,
+                scriptPath,
+                annotations,
+                exportedFunctionName,
+                params,
+                sentence,
+                engine,
             )
+
+            FunctionDispatcher.dispatch<T>(dispatcherInputParams) {
+                result(it)
+            }
+        } catch (e: ScriptException) {
+            app.createSingletonOf(LoggerCore::class).error { "Script error in [$context]: ${e.message}" }
+            result("Script error: ${e.message}" as T)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+            app.createSingletonOf(LoggerCore::class).error { "Unexpected error in [$context]" }
+            result("Unexpected error: ${e.message}" as T)
         }
-
-        engine.eval(sentence)
-
-        SignatureDispatcher.dispatch(
-            context = context,
-            scriptPath = scriptPath,
-            sentence = sentence,
-            engine = engine,
-            params = mutableParams,
-            result = result
-        )
     }
 
     override fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T {
@@ -132,23 +137,33 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
     }
 
-    private fun convertStringParamsToListParams(args: String): Map<String, Any> {
-        if (args.isEmpty() || args == "EMPTY_PARAMS") return emptyMap()
+    private fun parseArgs(args: String): ParsedParams {
+        if (args.isBlank() || args == "EMPTY_PARAMS") return ParsedParams(emptySet(), emptyMap())
 
-        val params = mutableMapOf<String, Any>()
+        val flags = linkedSetOf<String>()
+        val params = linkedMapOf<String, String>()
+        val positionals = mutableListOf<String>()
 
-        args.split(",").forEach { arg ->
-            if ("=" in arg) {
-                val keyValue = arg.split("=")
-                val key = keyValue[0]
-                val value = keyValue[1]
-                params[key] = value
+        val tokenRegex = Regex("""(?:"([^"]*)"|'([^']*)'|[^\s,]+)""")
+        val tokens = tokenRegex.findAll(args).map { m ->
+            m.groups[1]?.value ?: m.groups[2]?.value ?: m.value
+        }
+
+        for (tok in tokens) {
+            val t = tok.trim()
+            if (t.isEmpty()) continue
+
+            if ('=' in t) {
+                val (k, v) = t.split('=', limit = 2)
+                params[k.trim()] = v.trim()
+            } else if (t.startsWith("--") || (t.startsWith("-") && t.length > 1)) {
+                flags += t
             } else {
-                params[arg] = true
+                positionals += t
             }
         }
 
-        return params
+        return ParsedParams(flags, params, positionals)
     }
 
     override fun <T> runScriptFiles(
@@ -177,14 +192,14 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 val scriptName = File(finalInitPath).name
 
                 if (params.isEmpty()) {
-                    this.run(context = context, sentence = scriptContent, params = emptyMap()) { container: Container ->
+                    this.run(context = context, sentence = scriptContent, params = null) { container: Container ->
                         result(container as T, scriptName)
                     }
 
                     return@forEach
                 }
 
-                this.run(context = context, sentence = scriptContent, params = params) { container: Container ->
+                this.run(context = context, sentence = scriptContent, params = null) { container: Container ->
                     result(container as T, scriptName)
                 }
             }
@@ -206,6 +221,24 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
 fun main() = runBlocking {
     val processManager = createDefaultConfiguration()
+
+    /*val inputData = "C:\\Users\\dosek\\develop\\igly-comms .\\worker-listener.kts".split(" ").toTypedArray()
+
+    when {
+        inputData[1].endsWith(".kts") || inputData[1].endsWith(".kt") -> {
+            val scriptPath = inputData[1]
+
+            val parameters = inputData.drop(2).joinToString(" ")
+
+            app.createSingletonOf(LoggerCore::class).info { "📜 Executing script: $scriptPath with params: $parameters" }
+
+            context = inputData[0]
+
+            processManager.runFromScriptFile(context!!, scriptPath, parameters) { result: Any ->
+                app.createSingletonOf(LoggerCore::class).info { "✅ Result from script execution: $result" }
+            }
+        }
+    }*/
 
     launch {
         listenForExternalCommands(processManager)
@@ -249,15 +282,17 @@ fun listenForExternalCommands(processManager: ScriptExecutor) {
 
                             val parameters = inputData[2]
 
-                            println("📜 Executing script: $scriptPath with params: $parameters")
+                            app.createSingletonOf(LoggerCore::class).info { "📜 Executing script: $scriptPath with params: $parameters" }
 
                             context = inputData[0]
 
                             processManager.runFromScriptFile(context!!, scriptPath, parameters) { result: Any ->
-                                println("✅ Result from script execution: $result")
+                                app.createSingletonOf(LoggerCore::class).info { "✅ Result from script execution: $result" }
 
-                                if (result !== "kotlin.Unit" && (result as String).isNotEmpty()) {
+                                if (result !is Unit && (result as String).isNotEmpty()) {
                                     writer.write(result.toString())
+                                } else {
+                                    writer.write("")
                                 }
 
                                 writer.flush()
@@ -271,7 +306,7 @@ fun listenForExternalCommands(processManager: ScriptExecutor) {
                         }
                     }
                 } catch (e: Exception) {
-                    println("⚠️ Connection error: ${e.message}")
+                    println("⚠️ Connection error: ${e.printStackTrace()}")
                 }
             }
         }
@@ -340,6 +375,24 @@ fun isPrimitiveType(value: Any): Boolean {
 fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
     val octopus = Octopus(container)
     octopus.registerBuildInServicesProvidersInContainer()
+
+    val logsDir   = File(System.getProperty("user.home"), ".koupper/logs")
+
+    val appLogger = LoggerFactory.get("Octopus.Dispatcher")
+    appLogger.clearAppenders(close = true)
+    appLogger.level = LogLevel.INFO
+    appLogger.addAppender(
+        AsyncAppender(
+            RollingFileAppender(
+                dir = logsDir,
+                baseName = "Octopus.Dispatcher"
+            )
+        )
+    )
+
+    app.singleton(LoggerCore::class) {
+        appLogger
+    }
 
     return octopus
 }

@@ -45,8 +45,6 @@ fun extractExportedAnnotations(script: String): Pair<String, Map<String, Map<Str
 
     for (m in declWithAnns.findAll(script)) {
         val annsBlock = m.groupValues[1]
-
-        // Saco TODAS las anotaciones del bloque
         val foundAnns = singleAnn.findAll(annsBlock).toList()
         val hasExport = foundAnns.any { it.groupValues[1].endsWith("Export") }
         if (!hasExport) continue

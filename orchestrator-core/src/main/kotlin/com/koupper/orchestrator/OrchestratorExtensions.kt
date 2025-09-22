@@ -1,6 +1,7 @@
 package com.koupper.orchestrator
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.koupper.logging.*
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.os.env
 import com.koupper.os.envOptional
@@ -22,7 +23,12 @@ import java.net.URLClassLoader
 import java.nio.file.Paths
 import java.sql.DriverManager
 import java.util.*
+import javax.script.ScriptEngine
 import kotlin.reflect.KProperty0
+
+private var enableDebugMode: Boolean = false
+
+fun enableDebugMode() { enableDebugMode = true }
 
 data class KouTask(
     val id: String,
@@ -42,6 +48,30 @@ data class KouTask(
     val artifactUri: String? = null,
     val artifactSha256: String? = null
 )
+
+object LoggerHolder {
+    lateinit var LOGGER: KLogger
+
+    init {
+        if (GlobalLogger.log.name.equals("GlobalLogger")) {
+            val logSpec = LogSpec(
+                level = "INFO",
+                destination = "console",
+                mdc = mapOf(
+                    "LOGGING_LOGS" to UUID.randomUUID().toString(),
+                ),
+                async = true
+            )
+
+            captureLogs("JobsOrchestrator.Dispatcher", logSpec) { log ->
+                LOGGER = log
+                "initialized"
+            }
+        } else {
+            LOGGER = GlobalLogger.log
+        }
+    }
+}
 
 object JobSerializer {
     val mapper = jacksonObjectMapper()
@@ -127,19 +157,12 @@ object JobRunner {
         val d = JobDrivers.resolve(driver)
         d.forEachPending(queue, jobId) { task ->
             println("\n🔧 Running jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}")
-            executeTask(task)
+            runCompiled(task)
             onResult(task)
         }
     }
 
-    fun executeTask(task: KouTask) {
-        when (task.sourceType) {
-            "compiled", "jar" -> runCompiled(task)
-            else -> println("❓ Unknown source type: ${task.sourceType} \n")
-        }
-    }
-
-    private fun runCompiled(task: KouTask) {
+    private fun runCompiled(task: KouTask): Any? {
         try {
             println("\n🔍 Buscando clase para ejecutar: ${task.functionName}")
 
@@ -162,23 +185,19 @@ object JobRunner {
                         urls += latestJar.toURI().toURL()
                     }
                 }
-
-                return if (urls.isNotEmpty())
-                    URLClassLoader(urls.toTypedArray(), base)
-                else
-                    base
+                return if (urls.isNotEmpty()) URLClassLoader(urls.toTypedArray(), base) else base
             }
 
             val base = Thread.currentThread().contextClassLoader ?: ClassLoader.getSystemClassLoader()
             val loader: ClassLoader = when {
-                !task.scriptPath.isNullOrBlank() && task.scriptPath.endsWith(".jar") -> {
+                !task.scriptPath.isNullOrBlank() && task.scriptPath!!.endsWith(".jar") -> {
                     val jar = File(task.scriptPath!!)
                     require(jar.exists()) { "❌ No existe jar: ${task.scriptPath}" }
                     URLClassLoader(arrayOf(jar.toURI().toURL()), base)
                 }
                 !task.scriptPath.isNullOrBlank() &&
-                        (task.scriptPath.contains("/kotlin/main") || task.scriptPath.contains("\\kotlin\\main")) -> {
-                    val dir = File(task.scriptPath)
+                        (task.scriptPath!!.contains("/kotlin/main") || task.scriptPath!!.contains("\\kotlin\\main")) -> {
+                    val dir = File(task.scriptPath!!)
                     require(dir.exists() && dir.isDirectory) { "❌ Ruta inválida: ${task.scriptPath}" }
                     URLClassLoader(arrayOf(dir.toURI().toURL()), base)
                 }
@@ -194,13 +213,21 @@ object JobRunner {
             } ?: println("🧭 Loader: ${loader.javaClass.name}")
 
             val pkg = task.packageName?.trimEnd('.')
-            val fileBase = task.fileName.removeSuffix(".class").removeSuffix(".kt").removeSuffix("Kt")
+            val basePrefix = if (pkg.isNullOrBlank()) "" else "$pkg."
+            val fileBase = task.fileName
+                .removeSuffix(".class")
+                .removeSuffix(".kt")
+                .removeSuffix("Kt")
 
+            // Kotlin genera <FileBase>Kt para top-level; probamos varias opciones seguras
             val candidates = linkedSetOf(
-                "$pkg.${task.fileName}",
-                "$pkg.$fileBase",
-                "$pkg.${fileBase}Kt"
+                "${basePrefix}${fileBase}Kt",
+                "${basePrefix}${fileBase}"
             )
+            // Si task.fileName traía extensión rara, prueba también ese literal sin tocar
+            if (task.fileName != fileBase) {
+                candidates += "${basePrefix}${task.fileName.removeSuffix(".class")}"
+            }
 
             val clazz = candidates.asSequence()
                 .mapNotNull { fqcn -> try { loader.loadClass(fqcn) } catch (_: ClassNotFoundException) { null } }
@@ -209,11 +236,19 @@ object JobRunner {
             println("🧪 Campos disponibles en ${clazz.name}:")
             clazz.declaredFields.forEach { println(" - ${it.name}") }
 
-            val field = try { clazz.getDeclaredField(task.functionName) } catch (_: NoSuchFieldException) {
+            val field = try {
+                clazz.getDeclaredField(task.functionName)
+            } catch (_: NoSuchFieldException) {
                 error("No existe el field '${task.functionName}' en ${clazz.name}. Campos: ${clazz.declaredFields.joinToString { it.name }}")
             }
             field.isAccessible = true
             val functionRef = field.get(null)
+
+            // Si el field es una propiedad (::miFuncion), saca el valor real
+            val value = when (functionRef) {
+                is kotlin.reflect.KProperty0<*> -> functionRef.get()
+                else -> functionRef
+            } ?: error("Referencia nula para '${task.functionName}'")
 
             val kotlinToJava = mapOf(
                 "kotlin.String" to String::class.java,
@@ -226,40 +261,60 @@ object JobRunner {
                 "kotlin.collections.Map" to Map::class.java
             )
 
-            val args = task.params.entries.sortedBy { it.key }.mapIndexed { index, entry ->
-                val typeName = task.signature?.first?.get(index) ?: error("Missing type for arg$index")
-                val rawType = typeName.removeSuffix("?")
-                val paramClass = kotlinToJava[rawType] ?: Class.forName(rawType, true, loader)
+            fun argIndex(k: String) = k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE
 
-                val raw = entry.value
-                val jsonForJackson =
-                    if (raw.length >= 2 && raw[0] == '"' && (raw[1] == '{' || raw[1] == '['))
-                        JobSerializer.mapper.readValue(raw, String::class.java)
-                    else raw
+            val args: List<Any?> = task.params.entries
+                .sortedBy { argIndex(it.key) }
+                .mapIndexed { index, entry ->
+                    val typeName = task.signature?.first?.get(index)
+                        ?: error("Missing type for arg$index")
+                    val rawType = typeName.removeSuffix("?")
+                    val paramClass = kotlinToJava[rawType] ?: Class.forName(rawType, true, loader)
 
-                JobSerializer.mapper.readValue(jsonForJackson, paramClass)
-            }
+                    val raw = entry.value
+                    val jsonForJackson =
+                        if (raw.length >= 2 && raw[0] == '"' && (raw.getOrNull(1) == '{' || raw.getOrNull(1) == '['))
+                            JobSerializer.mapper.readValue(raw, String::class.java)
+                        else raw
+
+                    JobSerializer.mapper.readValue(jsonForJackson, paramClass)
+                }
 
             val oldCl = Thread.currentThread().contextClassLoader
-            Thread.currentThread().contextClassLoader = loader
-            try {
-                val result = when (args.size) {
-                    0 -> (functionRef as Function0<*>).invoke()
-                    1 -> (functionRef as Function1<Any?, *>).invoke(args[0])
-                    2 -> (functionRef as Function2<Any?, Any?, *>).invoke(args[0], args[1])
-                    3 -> (functionRef as Function3<Any?, Any?, Any?, *>).invoke(args[0], args[1], args[2])
-                    4 -> (functionRef as Function4<Any?, Any?, Any?, Any?, *>).invoke(args[0], args[1], args[2], args[3])
-                    5 -> (functionRef as Function5<Any?, Any?, Any?, Any?, Any?, *>).invoke(args[0], args[1], args[2], args[3], args[4])
-                    else -> error("❌ Demasiados argumentos para ejecutar la función.")
+            Thread.currentThread().contextClassLoader = value::class.java.classLoader
+            return try {
+                // Buscar invoke incluso si la clase es package-private o synthetic
+                val lambdaClass = value::class.java
+                val invoke = (lambdaClass.methods.asSequence() + lambdaClass.declaredMethods.asSequence())
+                    .firstOrNull { it.name == "invoke" && it.parameterCount == args.size }
+                    ?: (lambdaClass.methods.asSequence() + lambdaClass.declaredMethods.asSequence())
+                        .firstOrNull {
+                            it.name == "invoke" &&
+                                    it.parameterCount == args.size + 1 &&
+                                    it.parameterTypes.last().name == "kotlin.coroutines.Continuation"
+                        }?.also {
+                            error("La función '${task.functionName}' es suspend (Continuation no soportado).")
+                        }
+                    ?: error("❌ No se encontró método 'invoke' con aridad ${args.size} en ${lambdaClass.name}")
+
+                try { invoke.isAccessible = true } catch (_: Exception) {
+                    try {
+                        val ao = Class.forName("java.lang.reflect.AccessibleObject")
+                        val m  = ao.getMethod("trySetAccessible")
+                        m.invoke(invoke)
+                    } catch (_: Throwable) { /* ignore */ }
                 }
-                print("✅ Job result: $result")
-                println()
+
+                val result = invoke.invoke(value, *args.toTypedArray())
+                println("✅ Job result: $result")
+                result
             } finally {
                 Thread.currentThread().contextClassLoader = oldCl
             }
         } catch (e: Exception) {
             println("❌ Error ejecutando job compilado: ${e.message}")
             e.printStackTrace()
+            return null
         }
     }
 }
@@ -267,15 +322,15 @@ object JobRunner {
 object JobLister {
     fun list(queue: String = "default", driver: String = "file", jobId: String? = null) {
         val d = JobDrivers.resolve(driver)
-        println("\n🔧 List jobs from [$queue] using [$driver]${if (!jobId.isNullOrBlank()) " (jobId=$jobId)" else ""}\n")
+        LoggerHolder.LOGGER.info { "\n🔧 List jobs from [$queue] using [$driver]${if (!jobId.isNullOrBlank()) " (jobId=$jobId)" else ""}\n" }
         d.forEachPending(queue, jobId) { task ->
-            println("📦 Job ID: ${task.id}")
-            println(" - Function: ${task.functionName}")
-            println(" - Params: ${task.params}")
-            println(" - Source: ${task.scriptPath}")
-            println(" - Context: ${task.context}")
-            println(" - Version: ${task.contextVersion}")
-            println(" - Origin: ${task.origin}\n")
+            LoggerHolder.LOGGER.info { "📦 Job ID: ${task.id}" }
+            LoggerHolder.LOGGER.info { " - Function: ${task.functionName}" }
+            LoggerHolder.LOGGER.info { " - Params: ${task.params}" }
+            LoggerHolder.LOGGER.info { " - Source: ${task.scriptPath}" }
+            LoggerHolder.LOGGER.info { " - Context: ${task.context}"}
+            LoggerHolder.LOGGER.info { " - Version: ${task.contextVersion}" }
+            LoggerHolder.LOGGER.info { " - Origin: ${task.origin}\n" }
         }
     }
 }
@@ -471,8 +526,8 @@ object FileJobDriver : JobDriver {
             else -> dir.listFiles { f -> f.isFile && f.extension.equals("json", true) }?.sortedBy { it.name }.orEmpty()
         }
 
-        if (files.isEmpty()) {
-            println("⚠️ No jobs to run.")
+        if (files.isEmpty() && enableDebugMode) {
+            LoggerHolder.LOGGER.info { "⚠️ No jobs to run." }
             return
         }
 
@@ -596,20 +651,36 @@ object JobDrivers {
 }
 
 object JobReplayer {
-    fun replayWithParams(
+    fun replayJobsListenerScript(
+        engine: ScriptEngine,
         queue: String = "default",
         driver: String = "file",
         jobId: String? = null,
         newParams: Map<String, Any?>,
+        injector: (String) -> Any? = { null },
+        logSpec: LogSpec? = null,
         onResult: (KouTask) -> Unit = {}
     ) {
         val d = JobDrivers.resolve(driver)
-        println("\n🔁 Replaying jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}\n")
+        LoggerHolder.LOGGER.info { "\n🔁 Replaying jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}\n" }
+
         d.forEachPending(queue, jobId) { task ->
             val updated = task.copy(
                 params = newParams.mapValues { JobSerializer.mapper.writeValueAsString(it.value) }
             )
-            JobRunner.executeTask(updated)
+
+            if (logSpec != null) {
+                captureLogs<Any?>("Scripts.Dispatcher", logSpec) { logger ->
+                    withScriptLogger(logger, logSpec.mdc) {
+                        val result = ScriptRunner.runScript(updated, engine, injector)
+
+                        logger.info { result.toString() }
+                    }
+                }
+            } else {
+                ScriptRunner.runScript(updated, engine, injector)
+            }
+
             onResult(updated)
         }
     }
@@ -708,5 +779,3 @@ fun KouTask.dispatchToQueue(
 
     JobDispatcher.dispatch(this, resolvedQueue, resolvedDriver)
 }
-
-

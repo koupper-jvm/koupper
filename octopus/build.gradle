@@ -24,12 +24,16 @@ tasks.withType(Test).configureEach {
 }
 
 tasks.named('jar', Jar) {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE // Cambia de INCLUDE a EXCLUDE
     manifest { attributes 'Main-Class': 'com.koupper.octopus.OctopusKt' }
 
+    from sourceSets.main.output
     from({
+        // Usar un Set para evitar duplicados
         def files = configurations.runtimeClasspath.getFiles().findAll { it?.exists() }
-        files.collect { it.isDirectory() ? it : zipTree(it) }
+        def uniqueFiles = files.toSet() // Elimina duplicados
+        uniqueFiles.each { println "Unique JAR dependency: ${it.name}" }
+        uniqueFiles.collect { it.isDirectory() ? it : zipTree(it) }
     })
 
     preserveFileTimestamps = false
@@ -50,7 +54,8 @@ tasks.register('optimized', Jar) {
                             f.name.contains('shared') ||
                             f.name.contains('os') ||
                             f.name.contains('annotations') ||
-                            f.name.contains('orchestrator-core')
+                            f.name.contains('orchestrator-core') ||
+                            f.name.contains('logging')
             )
         }
         filtered.each { println "Octopus dependency Included: ${it.name}" }
