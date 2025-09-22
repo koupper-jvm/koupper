@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated Octopus.run(...): the method now receives the script path as a parameter.
 - Relocated LoggerCore into a dedicated logging module as part of the Koupper architecture.
 - Updated the default destination for the Annotation resolver to console.
+- `ListenersRegistry`: worker threads inherit the parent `Thread.contextClassLoader` (prevents losing classpath/loggers on replay).
+- `JobRunner.runCompiled` now returns the function **result** and uses `trySetAccessible()` when needed.
+- `FileJobDriver` logs with `LoggerHolder.LOGGER` instead of `println`.
+
+### Fixed
+- Script logs during replay now respect the destination configured by `@Logger` (no longer dumped into `Octopus.Dispatcher`).
+- `ClassCastException` caused by `StringBuilder` return in `JobsListenerSetup.run` (now returns `String`).
+- `NullPointerException`/`ClassCastException` when reading `@JobsListener(debug = ...)` and `time`: added coercion for `Boolean`/`String`/`Number`.
+
 
 ### Improved
 - Removed unnecessary code and cleaned up internal implementations.
@@ -40,6 +49,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added new extensions for validating types from string.
 - Added support for passing parameters to script execution.
 - Added support for executing script sentences.
+- `ScriptRunner.runScript(ScriptCall, ScriptEngine, injector): Any?` with:
+  - mixed `positionals` + `params` (kv) support
+  - JSON-string unwrapping for complex args
+  - dependency injection by type and nullable handling
+- LogSpec propagation into job replay via `JobsListenerSetup.attachLogSpec(...)` + `JobReplayer.replayJobsListenerScript(...)`.
+
+### Notes
+- When parsing annotation text, compiler defaults don’t apply automatically; added safe coercion for `debug` and `time`.
+- If your `captureLogs` returns `(logs, result)`, adjust destructuring accordingly.
 
 --
 
