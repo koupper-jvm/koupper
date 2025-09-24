@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ListenersRegistry`: worker threads inherit the parent `Thread.contextClassLoader` (prevents losing classpath/loggers on replay).
 - `JobRunner.runCompiled` now returns the function **result** and uses `trySetAccessible()` when needed.
 - `FileJobDriver` logs with `LoggerHolder.LOGGER` instead of `println`.
+- Set `file` as default work driver for JobListener setup
 
 ### Fixed
 - Script logs during replay now respect the destination configured by `@Logger` (no longer dumped into `Octopus.Dispatcher`).
@@ -33,7 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved Logger annotation handling: destination now supports string patterns for file names.
 - Change the way to process annotations, now they are validated separately.
 - Improved run method implementation for Octopus.
-- Enabled logging based on configured properties or annotations. 
+- Enabled logging based on configured properties or annotations.
+- SQS configuration now falls back to IAM credentials if environment variables are not set.
 
 ### Added
 - JobListener support: a JobEvent script can be used as a callback when a job runs.
@@ -54,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - JSON-string unwrapping for complex args
   - dependency injection by type and nullable handling
 - LogSpec propagation into job replay via `JobsListenerSetup.attachLogSpec(...)` + `JobReplayer.replayJobsListenerScript(...)`.
+- Added extractSignature method.
 
 ### Notes
 - When parsing annotation text, compiler defaults don’t apply automatically; added safe coercion for `debug` and `time`.
