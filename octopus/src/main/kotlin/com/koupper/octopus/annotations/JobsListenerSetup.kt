@@ -20,7 +20,6 @@ import java.nio.file.Paths
 object JobsListenerSetup {
     private lateinit var inp: DispatcherInputParams
     private lateinit var jobListenerParams: Map<*, *>
-    private lateinit var workerTask: KouTask
     private lateinit var workerQueue: String
     private lateinit var workerDriver: String
     @Suppress("UNCHECKED_CAST")
@@ -109,14 +108,12 @@ object JobsListenerSetup {
 
         val creationWorkerJobResult = this.createWorkerListener()
 
-        val listenByJobsResult = this.listenByJobs()
-
-        return "$creationWorkerJobResult\n$listenByJobsResult"
+        return creationWorkerJobResult
     }
 
     private fun createWorkerListener(): String {
         this.workerQueue = jobListenerParams["queue"] as? String ?: "job-callbacks"
-        this.workerDriver = (jobListenerParams["driver"] as? String) ?: (getJobDriverFromConfig(this.inp.scriptContext) ?: "default")
+        this.workerDriver = (jobListenerParams["driver"] as? String) ?: "file"
 
         val jobInfo = JobMetricsCollector.collect(workerQueue, workerDriver)
 
@@ -199,7 +196,7 @@ object JobsListenerSetup {
 
         val fileName = File(finalScriptPath).name
 
-        this.workerTask = KouTask(
+        val workerTask = KouTask(
             id = java.util.UUID.randomUUID().toString(),
             fileName = fileName,
             functionName = this.inp.functionName,
@@ -218,9 +215,11 @@ object JobsListenerSetup {
             artifactSha256 = null
         )
 
-        JobDispatcher.dispatch(this.workerTask, queue = workerQueue, driver = workerDriver)
+        JobDispatcher.dispatch(workerTask, queue = workerQueue, driver = workerDriver)
 
-        return "Worker listener created."
+        val listenByJobsResult = this.listenByJobs(workerTask)
+
+        return "Worker listener created. \n$listenByJobsResult"
     }
 
     private var replaySpec: LogSpec? = null
@@ -242,7 +241,7 @@ object JobsListenerSetup {
         else       -> default
     }
 
-    private fun listenByJobs(): String {
+    private fun listenByJobs(workerTask : KouTask): String {
         val cfgQueue  = getJobQueueFromConfig(this.inp.scriptContext) ?: "default"
         val cfgDriver = getJobDriverFromConfig(this.inp.scriptContext) ?: "file"
         val sleepTime = (this.jobListenerParams["time"] as? Long) ?: 5000L
@@ -286,13 +285,13 @@ object JobsListenerSetup {
                     }
                 }
 
-                val workerFunctionArgs: List<String> = this.workerTask.signature?.first ?: emptyList()
+                val workerFunctionArgs: List<String> = workerTask.signature?.first ?: emptyList()
 
                 val jeIdx = workerFunctionArgs.indexOfFirst { it.normalizeType() == "JobEvent" }
 
                 val argsParams: MutableMap<String, Any?> = linkedMapOf()
 
-                this.workerTask.params.entries
+                workerTask.params.entries
                     .filter { (k, _) -> k.startsWith("arg") }
                     .sortedBy { (k, _) -> k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE }
                     .forEach { (k, vJson) ->

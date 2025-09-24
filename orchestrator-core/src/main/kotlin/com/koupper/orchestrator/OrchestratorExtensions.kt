@@ -10,6 +10,8 @@ import com.koupper.shared.octopus.readTextOrNull
 import com.koupper.shared.octopus.sha256Of
 import redis.clients.jedis.Jedis
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sqs.SqsClient
@@ -48,6 +50,19 @@ data class KouTask(
     val artifactUri: String? = null,
     val artifactSha256: String? = null
 )
+
+private fun sqsCredsProvider(): AwsCredentialsProvider {
+    val ak = envOptional("KQ_SQS_ACCESS_KEY")
+    val sk = envOptional("KQ_SQS_SECRET_KEY")
+
+    return if (!ak.isNullOrBlank() && !sk.isNullOrBlank()) {
+        StaticCredentialsProvider.create(
+            AwsBasicCredentials.create(ak, sk)
+        )
+    } else {
+        DefaultCredentialsProvider.create()
+    }
+}
 
 object LoggerHolder {
     lateinit var LOGGER: KLogger
@@ -104,19 +119,12 @@ object JobDispatcher {
                 // encolar en lista Redis con nombre `queue`
             }
             "sqs" -> {
-                val region    = Region.of(env("KQ_SQS_REGION"))
-                val accessKey = env("KQ_SQS_ACCESS_KEY")
-                val secretKey = env("KQ_SQS_SECRET_KEY")
-                val queueUrl  = env("KQ_SQS_QUEUE_URL")
-                val dlqUrl    = envOptional("KQ_SQS_DLQ_URL")
+                val region   = Region.of(env("KQ_SQS_REGION"))
+                val queueUrl = env("KQ_SQS_QUEUE_URL")
 
                 val sqsClient = SqsClient.builder()
                     .region(region)
-                    .credentialsProvider(
-                        StaticCredentialsProvider.create(
-                            AwsBasicCredentials.create(accessKey, secretKey)
-                        )
-                    )
+                    .credentialsProvider(sqsCredsProvider())
                     .build()
 
                 try {
@@ -127,10 +135,6 @@ object JobDispatcher {
 
                     val result = sqsClient.sendMessage(sendRequest)
                     println("✅ Job sent to SQS [$queueUrl] with message ID: ${result.messageId()}")
-
-                    if (dlqUrl.isNotBlank()) {
-                        println("ℹ️  DLQ configured: $dlqUrl")
-                    }
                 } catch (e: Exception) {
                     error("❌ Failed to dispatch job to SQS: ${e.message}")
                 } finally {
@@ -388,33 +392,32 @@ object JobMetricsCollector {
         val region = Region.of(env("KQ_SQS_REGION"))
         val sqs = SqsClient.builder()
             .region(region)
-            .credentialsProvider(
-                StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(env("KQ_SQS_ACCESS_KEY"), env("KQ_SQS_SECRET_KEY"))
-                )
-            ).build()
+            .credentialsProvider(sqsCredsProvider())
+            .build()
 
         sqs.use {
             val mainUrl = env("KQ_SQS_QUEUE_URL")
 
-            val attrs: MutableMap<QueueAttributeName, String> = it.getQueueAttributes { b ->
-                b.queueUrl(mainUrl).attributeNames(
-                    QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES,
-                    QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE
-                )
-            }.attributes()
+            val attrs: MutableMap<QueueAttributeName, String> =
+                it.getQueueAttributes { b ->
+                    b.queueUrl(mainUrl).attributeNames(
+                        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES,
+                        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE
+                    )
+                }.attributes()
 
             val pending  = attrs[QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES]?.toIntOrNull() ?: 0
             val inFlight = attrs[QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE]?.toIntOrNull() ?: 0
+            var failed   = 0
 
-            var failed = 0
             val dlqUrl = env("KQ_SQS_DLQ_URL")
             if (dlqUrl.isNotBlank()) {
-                val dlqAttrs: MutableMap<QueueAttributeName, String> = it.getQueueAttributes { b ->
-                    b.queueUrl(dlqUrl).attributeNames(
-                        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES
-                    )
-                }.attributes()
+                val dlqAttrs: MutableMap<QueueAttributeName, String> =
+                    it.getQueueAttributes { b ->
+                        b.queueUrl(dlqUrl).attributeNames(
+                            QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES
+                        )
+                    }.attributes()
 
                 failed = dlqAttrs[QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES]?.toIntOrNull() ?: 0
             }
@@ -567,15 +570,14 @@ object RedisJobDriver : JobDriver {
 
 object SqsJobDriver : JobDriver {
     override fun forEachPending(queue: String, jobId: String?, consume: (KouTask) -> Unit) {
-        val sqs = SqsClient.builder()
-            .region(Region.of(env("KQ_SQS_REGION")))
-            .credentialsProvider(
-                StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(env("KQ_SQS_ACCESS_KEY"), env("KQ_SQS_SECRET_KEY"))
-                )
-            ).build()
+        val region   = Region.of(env("KQ_SQS_REGION"))
 
-        sqs.use {
+        val sqsClient = SqsClient.builder()
+            .region(region)
+            .credentialsProvider(sqsCredsProvider())
+            .build()
+
+        sqsClient.use {
             val queueUrl = env("KQ_SQS_QUEUE_URL")
             val msgs = it.receiveMessage(
                 ReceiveMessageRequest.builder()
@@ -594,7 +596,6 @@ object SqsJobDriver : JobDriver {
             msgs.forEach { msg ->
                 try {
                     val task = JobSerializer.deserialize(msg.body())
-                    // Nota: safe-list → no filtramos por jobId aquí (como ya hacías)
                     consume(task)
                     it.deleteMessage(DeleteMessageRequest.builder().queueUrl(queueUrl).receiptHandle(msg.receiptHandle()).build())
                 } catch (e: Exception) {
@@ -686,6 +687,26 @@ object JobReplayer {
     }
 }
 
+fun extractSignature(typeStr: String): Pair<List<String>, String> {
+    // 1. Buscar la flecha "->"
+    val parts = typeStr.split("->").map { it.trim() }
+    if (parts.size != 2) {
+        error("Tipo inválido: $typeStr")
+    }
+
+    val argsPart = parts[0]
+    val returnPart = parts[1]
+
+    // 2. Limpiar paréntesis de los argumentos
+    val args = argsPart.removePrefix("(").removeSuffix(")")
+        .split(",")
+        .map { it.trim() }
+        .filter { it.isNotEmpty() } // puede ser vacío si no tiene parámetros
+
+    return args to returnPart
+}
+
+
 fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
     val ref = this.get() ?: error("Function reference is null")
 
@@ -697,7 +718,7 @@ fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
     val functionName = this.name
     val fullClassName = ref.javaClass.name
     val fileName = fullClassName.substringBefore("$$").substringAfterLast('.')
-    val signature = extractExportFunctionSignature(this.returnType.toString())
+    val signature: Pair<List<String>, String> = extractSignature(this.returnType.toString())
 
     val params = args.mapIndexed { index, arg ->
         "arg$index" to JobSerializer.mapper.writeValueAsString(arg)
