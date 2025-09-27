@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `JobRunner.runCompiled` now returns the function **result** and uses `trySetAccessible()` when needed.
 - `FileJobDriver` logs with `LoggerHolder.LOGGER` instead of `println`.
 - Set `file` as default work driver for JobListener setup
+- `JobLister.list` now returns a list of `Any` objects.
+- `forEachPending` now returns a list of `JobResult` objects.
+- Script executions for job listing now display both errors and success messages in the results.
 
 ### Fixed
 - Script logs during replay now respect the destination configured by `@Logger` (no longer dumped into `Octopus.Dispatcher`).
