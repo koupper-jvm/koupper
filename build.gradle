@@ -4,50 +4,42 @@ plugins {
 
 allprojects {
     apply plugin: 'java'
+
     repositories {
         mavenCentral()
-        maven { url 'https://repo.gradle.org/gradle/libs-releases' }
+        mavenLocal()
+        gradlePluginPortal()
         maven { url 'https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev' }
     }
-    test {
+
+    tasks.withType(Test) {
         useJUnitPlatform()
-    }
-    dependencies {
-        implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.0.20'
     }
 }
 
-version = '5.3.0'
+version = '6.0.0'  // sube versión para marcar el salto
 
 def kotlinVersion = '2.0.20'
-def kotestVersion = '4.5.0'
-def mockkVersion = '1.12.0'
-def jerseyVersion = '3.0.3'
-def coroutinesVersion = '1.6.0'
-def vertxVersion = '4.1.1'
-def jacksonVersion = '2.13.0'
-def slf4jVersion = '1.7.32'
-def kotlinScriptUtil = '1.6.0'
+def kotestVersion = '5.9.1'
+def mockkVersion = '1.13.12'
+def jerseyVersion = '3.1.6'
+def coroutinesVersion = '1.9.0'
+def vertxVersion = '4.5.8'
+def jacksonVersion = '2.17.2'
+def slf4jVersion = '2.0.13'
 
 subprojects {
     group = 'com.koupper'
 
-    test {
+    tasks.withType(Test) {
         useJUnitPlatform()
-
-        beforeTest { descriptor ->
-            logger.lifecycle("Running test: ${descriptor}")
-        }
-
         failFast = true
     }
 
     dependencies {
         testImplementation "org.jetbrains.kotlin:kotlin-test"
-        testImplementation "org.jetbrains.kotlin:kotlin-test-junit:1.4.30"
-        testImplementation("io.kotest:kotest-runner-junit5:$kotestVersion") {
-            exclude group: "org.jetbrains.kotlin", module: "kotlin-script-util"
-        }
+        testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:$kotlinVersion"
+        testImplementation "io.kotest:kotest-runner-junit5:$kotestVersion"
         testImplementation "io.kotest:kotest-assertions-core:$kotestVersion"
         testImplementation "io.mockk:mockk:$mockkVersion"
     }
@@ -59,6 +51,7 @@ project(':bootstrap') {
         implementation project(':container')
         implementation project(':providers')
         implementation project(':configurations')
+
         implementation "org.glassfish.jersey.containers:jersey-container-grizzly2-http:$jerseyVersion"
         implementation "org.glassfish.jersey.inject:jersey-hk2:$jerseyVersion"
         implementation "org.glassfish.jersey.media:jersey-media-json-jackson:$jerseyVersion"
@@ -83,15 +76,14 @@ project(':octopus') {
         implementation project(':os')
         implementation project(':orchestrator-core')
         implementation project(':logging')
+
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
-        implementation "org.jetbrains.kotlin:kotlin-script-util:1.8.22"
-        implementation "org.jetbrains.kotlin:kotlin-scripting-jvm"
-        implementation "org.jetbrains.kotlin:kotlin-script-runtime"
-        implementation "org.jetbrains.kotlin:kotlin-compiler-embeddable:$kotlinVersion"
+        implementation "org.jetbrains.kotlin:kotlin-scripting-jvm:$kotlinVersion"
         implementation "org.jetbrains.kotlin:kotlin-scripting-compiler-embeddable:$kotlinVersion"
-        implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2'
-        implementation 'net.java.dev.jna:jna:5.5.0'
-        implementation "org.gradle:gradle-tooling-api:8.2.1"
+
+        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion"
+        implementation "net.java.dev.jna:jna:5.14.0"
+
         runtimeOnly "org.slf4j:slf4j-simple:$slf4jVersion"
     }
 }
@@ -101,24 +93,22 @@ project(':providers') {
         implementation project(':container')
         implementation project(':os')
         implementation project(':shared')
-        implementation 'javax.mail:mail:1.4.7'
-        implementation 'io.zeko:zeko-sql-builder:1.2.4'
-        implementation 'io.vertx:vertx-jdbc-client:4.0.3'
-        implementation 'org.postgresql:postgresql:42.2.19'
-        implementation 'org.xerial:sqlite-jdbc:3.7.2'
-        implementation 'org.slf4j:slf4j-nop:1.7.30'
-        implementation 'io.github.rybalkinsd:kohttp:0.12.0'
-        implementation 'com.auth0:java-jwt:3.18.1'
-        implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.12.0'
-        implementation 'com.beust:klaxon:5.5'
+
+        implementation "com.sun.mail:jakarta.mail:2.0.1"
+        implementation "io.zeko:zeko-sql-builder:1.2.4"
+        implementation "io.vertx:vertx-jdbc-client:$vertxVersion"
+        implementation "org.postgresql:postgresql:42.7.3"
+        implementation "org.xerial:sqlite-jdbc:3.45.1.0"
+        implementation "org.slf4j:slf4j-nop:$slf4jVersion"
+        implementation "io.github.rybalkinsd:kohttp:0.12.0"
+        implementation "com.auth0:java-jwt:4.4.0"
+        implementation "com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion"
+        implementation "com.beust:klaxon:5.6"
         implementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion"
-        implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion"
-        implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
-        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
         implementation "software.amazon.awssdk:dynamodb:2.28.9"
-        implementation "software.amazon.awssdk:aws-core:2.28.9"
-        implementation "software.amazon.awssdk:utils:2.28.9"
+        implementation "software.amazon.awssdk:sqs:2.28.9"
         implementation "org.yaml:snakeyaml:2.3"
+        implementation "com.sun.activation:jakarta.activation:2.0.1"
     }
 }
 
@@ -131,18 +121,12 @@ project(':shared') {
 project(':orchestrator-core') {
     dependencies {
         implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion"
-        implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.12.0'
+        implementation "com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion"
         implementation project(':shared')
         implementation project(':logging')
-        // Redis
-        implementation("redis.clients:jedis:4.4.3")
-
-        // AWS SQS
-        implementation("software.amazon.awssdk:sqs:2.25.19")
-
-        // SQLite o Postgres (elige uno según el caso)
-        implementation("org.xerial:sqlite-jdbc:3.44.1.0")
-        // o: implementation("org.postgresql:postgresql:42.7.3")
+        implementation "redis.clients:jedis:5.2.0"
+        implementation "software.amazon.awssdk:sqs:2.28.9"
+        implementation "org.xerial:sqlite-jdbc:3.45.1.0"
         implementation project(':os')
     }
 }
