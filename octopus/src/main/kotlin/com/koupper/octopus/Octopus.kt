@@ -103,6 +103,9 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
             backend.eval(sentence)
 
+            val exported = backend.getSymbol(exportedFunctionName)
+                ?: error("❌ No se encontró el símbolo exportado: $exportedFunctionName")
+
             val dispatcherInputParams = DispatcherInputParams(
                 scriptContext = context,
                 scriptPath = scriptPath,
@@ -111,6 +114,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 params = params,
                 sentence = sentence,
                 backend = backend,
+                symbol = exported
             )
 
             FunctionDispatcher.dispatch<T>(dispatcherInputParams) {

@@ -22,14 +22,16 @@ fun validateScript(scriptPath: String): Result<File> {
         val scriptFile = File(scriptPath)
         val sentence = scriptFile.readText(Charsets.UTF_8)
 
-        if (sentence.isNotEmpty()) {
+        if (sentence.isNotBlank()) {
             val exportedFunctionName = extractExportFunctionName(sentence)
 
             if (exportedFunctionName != null) {
                 val backend = ScriptingHostBackend()
+                // 👇 evalúa el script completo y guarda la instancia
                 backend.eval(sentence)
 
-                val symbol = backend.eval(exportedFunctionName)
+                // 👇 recuperar el símbolo ya guardado en lastInstance
+                val symbol = backend.getSymbol(exportedFunctionName)
                     ?: throw IllegalStateException("No se encontró el símbolo exportado: $exportedFunctionName")
 
                 println("✅ Script válido, exporta: $exportedFunctionName (${symbol::class.simpleName})")

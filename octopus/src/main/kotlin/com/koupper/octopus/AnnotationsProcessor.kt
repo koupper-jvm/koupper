@@ -95,7 +95,8 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                         code         = diParams.sentence,
                         functionName = diParams.functionName,
                         paramsJson   = paramsJson,
-                        argTypes     = functionArgTypeNames
+                        argTypes     = functionArgTypeNames,
+                        symbol = diParams.symbol
                     ),
                     diParams.backend
                 ) { typeName ->

@@ -10,10 +10,11 @@ import com.koupper.shared.runtime.ScriptingHostBackend
 import kotlin.reflect.jvm.isAccessible
 
 data class ScriptCall(
-    val code: String,
     val functionName: String,
-    val paramsJson: Map<String, String>,
-    val argTypes: List<String>? = null
+    val code: String,
+    val argTypes: List<String>? = null,
+    val paramsJson: Map<String, String> = emptyMap(),
+    val symbol: Any? = null // 👈 Nuevo
 )
 
 fun serializeArgs(vararg args: Any?, mapper: com.fasterxml.jackson.databind.ObjectMapper): Map<String, String> =
@@ -49,7 +50,7 @@ object ScriptRunner {
         backend: ScriptBackend,
         injector: (String) -> Any? = { null }
     ): Any? {
-        val anyRef = (backend as? ScriptingHostBackend)?.eval(call.functionName)
+        val anyRef = call.symbol
             ?: error("Símbolo no encontrado: ${call.functionName}")
 
         val target: Any = when (anyRef) {

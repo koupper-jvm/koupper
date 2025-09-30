@@ -1,39 +1,45 @@
 package com.koupper.shared.runtime
 
-import java.io.File
-import java.net.URLClassLoader
-import javax.script.ScriptEngineManager
+import kotlin.script.experimental.api.*
+import kotlin.script.experimental.host.toScriptSource
+import kotlin.script.experimental.jvm.*
+import kotlin.script.experimental.jvmhost.BasicJvmScriptingHost
 
 class ScriptingHostBackend : ScriptBackend {
 
-    private val engine = run {
-        // 🚑 Forzar scripting a usar el classpath y no module-path
-        System.setProperty("kotlin.scripting.use.jvm.modules", "false")
-        System.setProperty("kotlin.scripting.jvm.module.path", "disabled")
-        System.setProperty("idea.use.native.fs.for.win", "false")
-
-        // 🚀 Construir classloader con el classpath real
-        val cp = System.getProperty("java.class.path")
-            .split(File.pathSeparator)
-            .map { File(it).toURI().toURL() }
-            .toTypedArray()
-
-        val loader = URLClassLoader(cp, Thread.currentThread().contextClassLoader)
-
-        ScriptEngineManager(loader).getEngineByExtension("kts")
-            ?: error("❌ No se encontró motor para .kts")
-    }
+    private val host = BasicJvmScriptingHost()
+    private var lastInstance: Any? = null  // guarda la última instancia del script
 
     override fun eval(code: String): Any? {
-        return try {
-            engine.eval(code)
-        } catch (e: Exception) {
-            throw RuntimeException("Script error: ${e.message}", e)
+        val compilationConfig = ScriptCompilationConfiguration {
+            jvm { dependenciesFromCurrentContext(wholeClasspath = true) }
         }
+
+        val evalConfig = ScriptEvaluationConfiguration {
+            jvm { baseClassLoader(Thread.currentThread().contextClassLoader) }
+        }
+
+        val result = host.eval(code.toScriptSource(), compilationConfig, evalConfig)
+        val evalRes = result.valueOrThrow()
+
+        // 🔹 guardar la instancia del script evaluado
+        lastInstance = evalRes.returnValue.scriptInstance
+
+        return evalRes.returnValue
     }
 
     override val classLoader: ClassLoader
-        get() = this::class.java.classLoader
+        get() = Thread.currentThread().contextClassLoader
 
-    fun get(symbol: String): Any? = engine.get(symbol)
+    fun getSymbol(symbol: String): Any? {
+        val instance = lastInstance ?: error("⚠️ No se ha evaluado ningún script todavía")
+        val clazz = instance.javaClass
+
+        val field = clazz.declaredFields.firstOrNull { it.name == symbol }
+            ?: error("No se encontró campo con nombre $symbol en ${clazz.name}")
+
+        field.isAccessible = true
+        return field.get(instance)
+    }
 }
+
