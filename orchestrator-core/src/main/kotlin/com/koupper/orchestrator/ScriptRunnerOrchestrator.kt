@@ -1,10 +1,12 @@
 package com.koupper.orchestrator
 
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.koupper.shared.runtime.ScriptBackend
 import com.koupper.shared.isSimpleType
 import com.koupper.shared.normalizeType
 import com.koupper.shared.octopus.extractExportFunctionSignature
-import javax.script.ScriptEngine
+import com.koupper.shared.runtime.ScriptingHostBackend
+
 import kotlin.reflect.jvm.isAccessible
 
 data class ScriptCall(
@@ -44,20 +46,17 @@ fun buildParamsJson(
 object ScriptRunner {
     fun runScript(
         call: ScriptCall,
-        engine: ScriptEngine,
+        backend: ScriptBackend,
         injector: (String) -> Any? = { null }
     ): Any? {
-        val anyRef = engine.eval(call.functionName)
+        val anyRef = (backend as? ScriptingHostBackend)?.eval(call.functionName)
             ?: error("Símbolo no encontrado: ${call.functionName}")
 
         val target: Any = when (anyRef) {
             is kotlin.reflect.KProperty0<*> -> {
-                val bound = engine.getBindings(javax.script.ScriptContext.ENGINE_SCOPE)?.get(call.functionName)
-                bound ?: run {
-                    anyRef.getter.isAccessible = true
-                    anyRef.isAccessible = true
-                    anyRef.get() ?: error("La propiedad '${call.functionName}' es nula")
-                }
+                anyRef.getter.isAccessible = true
+                anyRef.isAccessible = true
+                anyRef.get() ?: error("La propiedad '${call.functionName}' es nula")
             }
             else -> anyRef
         }
@@ -87,7 +86,7 @@ object ScriptRunner {
                 "Short"   -> java.lang.Short::class.java
                 "Byte"    -> java.lang.Byte::class.java
                 "Char"    -> Char::class.java
-                else      -> Class.forName(full, true, targetCL) // requiere FQCN si no es simple
+                else      -> Class.forName(full, true, targetCL)
             }
         }
 
@@ -183,8 +182,9 @@ object ScriptRunner {
 
     fun runScript(
         task: KouTask,
-        engine: ScriptEngine,
+        backend: ScriptBackend,
         injector: (String) -> Any? = { null }
-    ): Any? = runScript(ScriptCall(task), engine, injector)
+    ): Any? = runScript(ScriptCall(task), backend, injector)
 }
+
 

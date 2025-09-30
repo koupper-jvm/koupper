@@ -16,14 +16,25 @@ import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
 import com.koupper.providers.http.HtppClient
 import com.koupper.shared.octopus.extractExportedAnnotations
+import com.koupper.shared.runtime.ScriptingHostBackend
 import kotlinx.coroutines.*
 import java.io.File
 import java.net.ServerSocket
 import java.net.URL
+import java.net.URLClassLoader
 import java.nio.file.Paths
 import javax.script.ScriptEngineManager
 import javax.script.ScriptException
 import kotlin.reflect.KClass
+import kotlin.script.experimental.api.ResultWithDiagnostics
+import kotlin.script.experimental.api.ScriptCompilationConfiguration
+import kotlin.script.experimental.api.ScriptEvaluationConfiguration
+import kotlin.script.experimental.api.valueOrThrow
+import kotlin.script.experimental.host.toScriptSource
+import kotlin.script.experimental.jvm.baseClassLoader
+import kotlin.script.experimental.jvm.dependenciesFromCurrentContext
+import kotlin.script.experimental.jvm.jvm
+import kotlin.script.experimental.jvmhost.BasicJvmScriptingHost
 import kotlin.system.exitProcess
 
 fun String.toCamelCase(): String {
@@ -72,11 +83,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
         result: (value: T) -> Unit
     ) {
         System.setProperty("kotlin.script.classpath", currentClassPath)
-
         System.setProperty("idea.use.native.fs.for.win", "false")
-
-        val engine = ScriptEngineManager().getEngineByExtension("kts")
-            ?: error("No script engine found for .kts extension")
 
         val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence)
             ?: run {
@@ -90,29 +97,38 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
 
         try {
-            engine.eval(sentence)
+            Thread.currentThread().contextClassLoader = buildLibsClassLoader()
+
+            val backend = ScriptingHostBackend()
+
+            backend.eval(sentence)
 
             val dispatcherInputParams = DispatcherInputParams(
-                context,
-                scriptPath,
-                annotations,
-                exportedFunctionName,
-                params,
-                sentence,
-                engine,
+                scriptContext = context,
+                scriptPath = scriptPath,
+                annotations = annotations,
+                functionName = exportedFunctionName,
+                params = params,
+                sentence = sentence,
+                backend = backend,
             )
 
             FunctionDispatcher.dispatch<T>(dispatcherInputParams) {
                 result(it)
             }
-        } catch (e: ScriptException) {
-            app.createSingletonOf(LoggerCore::class).error { "Script error in [$context]: ${e.message}" }
-            result("Script error: ${e.message}" as T)
         } catch (e: Throwable) {
             e.printStackTrace()
-            app.createSingletonOf(LoggerCore::class).error { "Unexpected error in [$context]" }
-            result("Unexpected error: ${e.message}" as T)
+            app.createSingletonOf(LoggerCore::class).error { "Script error in [$context]: ${e.message}" }
+            result("Script error: ${e.message}" as T)
         }
+    }
+
+    fun buildLibsClassLoader(): ClassLoader {
+        val libsDir = File(System.getProperty("user.home"), ".koupper/libs")
+        val jars = libsDir.listFiles { f -> f.isFile && f.extension == "jar" } ?: emptyArray()
+
+        val urls = jars.map { it.toURI().toURL() }.toTypedArray()
+        return URLClassLoader(urls, Octopus::class.java.classLoader)
     }
 
     override fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T {
@@ -222,7 +238,9 @@ class Octopus(private var container: Container) : ScriptExecutor {
 fun main() = runBlocking {
     val processManager = createDefaultConfiguration()
 
-    /*val inputData = "C:\\Users\\dosek\\develop\\igly-comms .\\worker-listener.kts".split(" ").toTypedArray()
+    configureJava17Compatibility()
+
+    /*val inputData = "C:\\Users\\dosek\\.koupper\\helpers\\ .\\list.kts".split(" ").toTypedArray()
 
     when {
         inputData[1].endsWith(".kts") || inputData[1].endsWith(".kt") -> {
@@ -245,6 +263,21 @@ fun main() = runBlocking {
     }
 
     while (true) delay(1000)
+}
+
+fun configureJava17Compatibility() {
+    try {
+        System.setProperty("idea.use.native.fs.for.win", "false")
+        System.setProperty("java.awt.headless", "true")
+
+        // 👇 esto es lo importante
+        System.setProperty("kotlin.scripting.use.jvm.modules", "false")
+        System.setProperty("kotlin.scripting.disable.module.system", "true")
+
+        println("✅ Java 17 compatibility configured")
+    } catch (e: Exception) {
+        println("⚠️ Could not configure Java 17 compatibility: ${e.message}")
+    }
 }
 
 fun listenForExternalCommands(processManager: ScriptExecutor) {

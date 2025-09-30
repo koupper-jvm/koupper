@@ -4,7 +4,6 @@ plugins {
 }
 
 group = 'com.koupper'
-version = '5.0.0'
 
 application {
     mainClass = 'com.koupper.octopus.OctopusKt'
@@ -12,15 +11,6 @@ application {
 
 repositories {
     mavenCentral()
-}
-
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib"
-    // ...
-}
-
-tasks.withType(Test).configureEach {
-    useJUnitPlatform()
 }
 
 tasks.named('jar', Jar) {
@@ -38,6 +28,27 @@ tasks.named('jar', Jar) {
 
     preserveFileTimestamps = false
     reproducibleFileOrder = true
+}
+
+tasks.register('verifyFatJar') {
+    dependsOn fatJar
+    doLast {
+        println "🔍 Verificando contenido del JAR..."
+        def jarFile = tasks.fatJar.archiveFile.get().asFile
+        def process = "jar tf ${jarFile}".execute()
+        def foundServices = false
+        process.inputStream.eachLine { line ->
+            if (line.contains("META-INF/services")) {
+                println "   ✅ $line"
+                foundServices = true
+            }
+        }
+        if (foundServices) {
+            println "🎉 Archivos de servicio encontrados!"
+        } else {
+            println "⚠️ No se encontraron archivos de servicio META-INF/services"
+        }
+    }
 }
 
 tasks.register('optimized', Jar) {

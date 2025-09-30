@@ -122,7 +122,15 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
 
             when {
                 file.name == "init.kts" -> tags.add("[init]")
-                file.name == "jobs.json" -> tags.add("[cfg][driver:${JobConfig.loadOrFail().driver}]|[queue:${JobConfig.loadOrFail().queue}]")
+                file.name == "jobs.json" -> {
+                    try {
+                        val config = JobConfig.loadOrFail()
+                        tags.add("[cfg][driver:${config.driver}]|[queue:${config.queue}]")
+                    } catch (e: Exception) {
+                        // Silenciar el error y no agregar tags
+                        // Opcional: logging.debug("No se pudo cargar JobConfig: ${e.message}")
+                    }
+                }
                 file.name == "$name.http.json" || file.name == "$name.http.yml" || file.name == "$name.http.yaml" -> tags.add("[http config]")
                 file.extension in listOf("yml", "yaml", "json") -> tags.add("[cfg]")
                 file.extension == "env" -> tags.add("[envs]")

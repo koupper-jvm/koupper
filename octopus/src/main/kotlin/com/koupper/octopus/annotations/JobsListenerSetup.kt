@@ -123,7 +123,7 @@ object JobsListenerSetup {
 
         val finalScriptPath = Paths.get(this.inp.scriptContext, this.inp.scriptPath ?: "").normalize().toAbsolutePath().toString()
 
-        this.inp.engine.eval(this.inp.functionName) ?: return "Invalid JobListener structure."
+        this.inp.backend.eval(this.inp.functionName) ?: return "Invalid JobListener structure."
 
         val flags: Set<String> = this.inp.params?.flags ?: emptySet()
         val params: Map<String, String> = this.inp.params?.params ?: emptyMap()
@@ -319,7 +319,7 @@ object JobsListenerSetup {
                 val mergedParams: Map<String, Any?> = argsParams
 
                 JobReplayer.replayJobsListenerScript(
-                    engine = inp.engine,
+                    backend = inp.backend,
                     queue = workerQueue,
                     driver = workerDriver,
                     newParams = mergedParams,

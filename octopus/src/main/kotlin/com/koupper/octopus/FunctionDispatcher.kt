@@ -1,6 +1,6 @@
 package com.koupper.octopus
 
-import javax.script.ScriptEngine
+import com.koupper.shared.runtime.ScriptBackend
 import java.util.LinkedHashMap
 
 private enum class Kind { TERMINAL, SIDE_EFFECT }
@@ -19,7 +19,8 @@ data class DispatcherInputParams(
     val functionName: String,
     val params: ParsedParams?,
     val sentence: String,
-    val engine: ScriptEngine,
+    val backend: ScriptBackend,
+    val symbol: Any? = null
 )
 
 typealias UnifiedResolver<T> = (DispatcherInputParams, (T) -> Unit) -> Unit

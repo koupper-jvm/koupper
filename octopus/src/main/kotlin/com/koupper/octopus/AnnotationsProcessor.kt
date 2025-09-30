@@ -97,7 +97,7 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                         paramsJson   = paramsJson,
                         argTypes     = functionArgTypeNames
                     ),
-                    diParams.engine
+                    diParams.backend
                 ) { typeName ->
                     when (typeName.normalizeType()) {
                         "JobRunner"          -> JobRunner

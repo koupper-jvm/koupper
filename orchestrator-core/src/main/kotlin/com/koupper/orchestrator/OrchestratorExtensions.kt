@@ -2,10 +2,10 @@ package com.koupper.orchestrator
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.koupper.logging.*
+import com.koupper.shared.runtime.ScriptBackend
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.os.env
 import com.koupper.os.envOptional
-import com.koupper.shared.octopus.extractExportFunctionSignature
 import com.koupper.shared.octopus.readTextOrNull
 import com.koupper.shared.octopus.sha256Of
 import redis.clients.jedis.Jedis
@@ -25,7 +25,6 @@ import java.net.URLClassLoader
 import java.nio.file.Paths
 import java.sql.DriverManager
 import java.util.*
-import javax.script.ScriptEngine
 import kotlin.reflect.KProperty0
 
 private var enableDebugMode: Boolean = false
@@ -733,7 +732,7 @@ object JobDrivers {
 
 object JobReplayer {
     fun replayJobsListenerScript(
-        engine: ScriptEngine,
+        backend: ScriptBackend,             // ← antes era ScriptEngine
         queue: String = "default",
         driver: String = "file",
         jobId: String? = null,
@@ -760,12 +759,12 @@ object JobReplayer {
                     if (logSpec != null) {
                         captureLogs<Any?>("Scripts.Dispatcher", logSpec) { logger ->
                             withScriptLogger(logger, logSpec.mdc) {
-                                val result = ScriptRunner.runScript(updated, engine, injector)
+                                val result = ScriptRunner.runScript(updated, backend, injector) // ← backend
                                 logger.info { result.toString() }
                             }
                         }
                     } else {
-                        ScriptRunner.runScript(updated, engine, injector)
+                        ScriptRunner.runScript(updated, backend, injector) // ← backend
                     }
 
                     onResult(updated)

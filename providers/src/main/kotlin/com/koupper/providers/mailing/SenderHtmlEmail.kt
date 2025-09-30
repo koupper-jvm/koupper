@@ -4,13 +4,13 @@ import com.koupper.os.env
 import com.koupper.providers.Setup
 import java.io.File
 import java.util.*
-import javax.activation.DataHandler
-import javax.activation.FileDataSource
-import javax.mail.*
-import javax.mail.internet.InternetAddress
-import javax.mail.internet.MimeBodyPart
-import javax.mail.internet.MimeMessage
-import javax.mail.internet.MimeMultipart
+import jakarta.activation.DataHandler
+import jakarta.activation.FileDataSource
+import jakarta.mail.*
+import jakarta.mail.internet.InternetAddress
+import jakarta.mail.internet.MimeBodyPart
+import jakarta.mail.internet.MimeMessage
+import jakarta.mail.internet.MimeMultipart
 
 class SenderHtmlEmail : Sender, Setup() {
     private var fromAddress: String? = null
