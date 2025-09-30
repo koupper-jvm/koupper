@@ -10,7 +10,7 @@ class ScriptingHostBackend : ScriptBackend {
     private val host = BasicJvmScriptingHost()
     private var lastInstance: Any? = null  // guarda la última instancia del script
 
-    override fun eval(code: String): Any? {
+    override fun eval(code: String): Any {
         val compilationConfig = ScriptCompilationConfiguration {
             jvm { dependenciesFromCurrentContext(wholeClasspath = true) }
         }

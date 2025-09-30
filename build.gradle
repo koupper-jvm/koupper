@@ -106,8 +106,9 @@ project(':octopus') {
                     dep
                 } else {
                     zipTree(dep).matching {
+                        // QUITA TODOS LOS EXCLUDE - esto es importante
+                        // Solo excluye archivos de firma, nada más
                         exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
-                        // ¡No excluir META-INF/services de Kotlin!
                     }
                 }
             }
@@ -117,9 +118,9 @@ project(':octopus') {
 
         doLast {
             println "✅ JAR generado: ${archiveFile.get()}"
+            println "📦 Tamaño: ${archiveFile.get().asFile.length() / (1024 * 1024)} MB"
         }
     }
-
 }
 
 project(':providers') {

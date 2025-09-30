@@ -19,12 +19,15 @@ import com.koupper.shared.octopus.extractExportedAnnotations
 import com.koupper.shared.runtime.ScriptingHostBackend
 import kotlinx.coroutines.*
 import java.io.File
+import java.lang.reflect.Method
 import java.net.ServerSocket
 import java.net.URL
 import java.net.URLClassLoader
 import java.nio.file.Paths
 import javax.script.ScriptEngineManager
 import javax.script.ScriptException
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.reflect.KClass
 import kotlin.script.experimental.api.ResultWithDiagnostics
 import kotlin.script.experimental.api.ScriptCompilationConfiguration
@@ -82,8 +85,48 @@ class Octopus(private var container: Container) : ScriptExecutor {
         params: ParsedParams?,
         result: (value: T) -> Unit
     ) {
-        System.setProperty("kotlin.script.classpath", currentClassPath)
-        System.setProperty("idea.use.native.fs.for.win", "false")
+        // ⚡ DIAGNÓSTICO - Ver qué hay en el classpath
+        println("=== DIAGNÓSTICO DEL CLASSPATH ===")
+        val classpath = System.getProperty("java.class.path")
+        println("java.class.path: $classpath")
+
+        // Verificar si la anotación @Export está disponible
+        try {
+            // ⚡ AGREGAR AQUÍ EL DIAGNÓSTICO DE LÍNEAS
+            println("=== SCRIPT LINE BY LINE ===")
+            sentence.lineSequence().forEachIndexed { index, line ->
+                println("${index + 1}: $line")
+                if (index + 1 == 4) {  // ⬅️ Línea específica donde falla
+                    println("⬅️ ⬅️ ⬅️ ESTA ES LA LÍNEA 4 - Columna 32: '${line.getOrNull(31)}'")
+                    if (line.length >= 32) {
+                        println("⬅️ CARACTER EN COL 32: '${line[31]}'")
+                        println("⬅️ CONTEXTO: ...${line.substring(max(0, 20), min(line.length, 40))}...")
+                    }
+                }
+            }
+            println("=== END SCRIPT ===")
+
+            val exportClass = Class.forName("com.koupper.octopus.annotations.Export")
+            println("✅ Clase @Export encontrada: $exportClass")
+            println("✅ ClassLoader de @Export: ${exportClass.classLoader}")
+        } catch (e: ClassNotFoundException) {
+            println("❌ CLASE @Export NO ENCONTRADA")
+        }
+
+        // Verificar el JAR actual
+        try {
+            val currentJar = File(javaClass.protectionDomain.codeSource.location.toURI())
+            println("✅ JAR actual: $currentJar")
+            println("✅ Tamaño del JAR: ${currentJar.length()} bytes")
+        } catch (e: Exception) {
+            println("❌ No se pudo obtener el JAR actual: ${e.message}")
+        }
+
+        // Verificar qué ClassLoader se está usando
+        println("✅ Thread ClassLoader: ${Thread.currentThread().contextClassLoader}")
+        println("✅ System ClassLoader: ${ClassLoader.getSystemClassLoader()}")
+
+        System.setProperty("kotlin.script.classpath", classpath)
 
         val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence)
             ?: run {
@@ -97,10 +140,9 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
 
         try {
-            Thread.currentThread().contextClassLoader = buildLibsClassLoader()
+            println("=== EJECUTANDO SCRIPT ===")
 
             val backend = ScriptingHostBackend()
-
             backend.eval(sentence)
 
             val exported = backend.getSymbol(exportedFunctionName)
@@ -121,18 +163,17 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 result(it)
             }
         } catch (e: Throwable) {
-            e.printStackTrace()
-            app.createSingletonOf(LoggerCore::class).error { "Script error in [$context]: ${e.message}" }
+            println("=== ERROR REAL ===")
+            e.printStackTrace(System.out)  // ⬅️ Imprime en la consola
+            println("=== ROOT CAUSE ===")
+            var rootCause = e
+            while (rootCause.cause != null) {
+                rootCause = rootCause.cause!!
+            }
+            rootCause.printStackTrace(System.out)
+
             result("Script error: ${e.message}" as T)
         }
-    }
-
-    fun buildLibsClassLoader(): ClassLoader {
-        val libsDir = File(System.getProperty("user.home"), ".koupper/libs")
-        val jars = libsDir.listFiles { f -> f.isFile && f.extension == "jar" } ?: emptyArray()
-
-        val urls = jars.map { it.toURI().toURL() }.toTypedArray()
-        return URLClassLoader(urls, Octopus::class.java.classLoader)
     }
 
     override fun <T> call(callable: (params: Map<String, Any>) -> T, params: Map<String, Any>): T {
