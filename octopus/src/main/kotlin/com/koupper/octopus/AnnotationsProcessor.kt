@@ -3,6 +3,7 @@ package com.koupper.octopus
 import com.koupper.logging.LogSpec
 import com.koupper.logging.captureLogs
 import com.koupper.logging.withScriptLogger
+import com.koupper.octopus.annotations.JobsListenerCall
 import com.koupper.octopus.annotations.JobsListenerSetup
 import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.ModuleProcessor
@@ -53,7 +54,15 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
 
         val (result, _) = captureLogs<Any?>("Scripts.Dispatcher", spec) { logger ->
             withScriptLogger(logger, spec.mdc) {
-                JobsListenerSetup.run(diParams)
+                JobsListenerSetup.run(JobsListenerCall(
+                    diParams.functionName,
+                    diParams.sentence,
+                    diParams.annotations["JobsListener"].orEmpty(),
+                    diParams.params,
+                    diParams.scriptPath,
+                    diParams.scriptContext,
+                    diParams.backend.getSymbol(diParams.functionName)
+                ))
             }
         }
         @Suppress("UNCHECKED_CAST")
@@ -88,7 +97,7 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
 
         val paramsJson   = buildParamsJson(functionArgTypeNames, positionals, kvParams)
 
-        val (result, _) = captureLogs<Any?>("Scripts.Dispatcher", spec) { logger ->
+        val (result, _) = captureLogs("Scripts.Dispatcher", spec) { logger ->
             withScriptLogger(logger, spec.mdc) {
                 ScriptRunner.runScript(
                     ScriptCall(
@@ -96,9 +105,8 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                         functionName = diParams.functionName,
                         paramsJson   = paramsJson,
                         argTypes     = functionArgTypeNames,
-                        symbol = diParams.symbol
+                        symbol = diParams.backend.getSymbol(diParams.functionName)
                     ),
-                    diParams.backend
                 ) { typeName ->
                     when (typeName.normalizeType()) {
                         "JobRunner"          -> JobRunner

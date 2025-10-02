@@ -6,9 +6,8 @@ import kotlin.script.experimental.jvm.*
 import kotlin.script.experimental.jvmhost.BasicJvmScriptingHost
 
 class ScriptingHostBackend : ScriptBackend {
-
     private val host = BasicJvmScriptingHost()
-    private var lastInstance: Any? = null  // guarda la última instancia del script
+    private var lastInstance: Any? = null
 
     override fun eval(code: String): Any {
         val compilationConfig = ScriptCompilationConfiguration {
@@ -22,7 +21,6 @@ class ScriptingHostBackend : ScriptBackend {
         val result = host.eval(code.toScriptSource(), compilationConfig, evalConfig)
         val evalRes = result.valueOrThrow()
 
-        // 🔹 guardar la instancia del script evaluado
         lastInstance = evalRes.returnValue.scriptInstance
 
         return evalRes.returnValue
@@ -31,7 +29,7 @@ class ScriptingHostBackend : ScriptBackend {
     override val classLoader: ClassLoader
         get() = Thread.currentThread().contextClassLoader
 
-    fun getSymbol(symbol: String): Any? {
+    override fun getSymbol(symbol: String): Any? {
         val instance = lastInstance ?: error("⚠️ No se ha evaluado ningún script todavía")
         val clazz = instance.javaClass
 

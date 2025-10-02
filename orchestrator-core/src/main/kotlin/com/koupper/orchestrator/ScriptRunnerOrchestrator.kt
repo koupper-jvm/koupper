@@ -14,18 +14,19 @@ data class ScriptCall(
     val code: String,
     val argTypes: List<String>? = null,
     val paramsJson: Map<String, String> = emptyMap(),
-    val symbol: Any? = null // 👈 Nuevo
+    val symbol: Any? = null
 )
 
 fun serializeArgs(vararg args: Any?, mapper: com.fasterxml.jackson.databind.ObjectMapper): Map<String, String> =
     args.mapIndexed { i, v -> "arg$i" to mapper.writeValueAsString(v) }.toMap()
 
-fun ScriptCall(task: KouTask): ScriptCall = ScriptCall(
+fun ScriptCall(task: KouTask, symbol: Any? = null): ScriptCall = ScriptCall(
     code        = task.sourceSnapshot
         ?: error("sourceSnapshot nulo para script"),
     functionName = task.functionName,
     paramsJson   = task.params,
-    argTypes   = task.signature?.first
+    argTypes   = task.signature?.first,
+    symbol   = symbol
 )
 
 fun buildParamsJson(
@@ -47,7 +48,6 @@ fun buildParamsJson(
 object ScriptRunner {
     fun runScript(
         call: ScriptCall,
-        backend: ScriptBackend,
         injector: (String) -> Any? = { null }
     ): Any? {
         val anyRef = call.symbol
@@ -75,28 +75,21 @@ object ScriptRunner {
 
         fun argIndex(k: String) = k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE
 
-        fun resolveParamClass(pt: String): Class<*> {
-            val full = pt.trim().removeSuffix("?")
-            return when (pt.normalizeType()) {
-                "String"  -> String::class.java
-                "Int"     -> Int::class.java
-                "Long"    -> java.lang.Long::class.java
-                "Double"  -> java.lang.Double::class.java
-                "Boolean" -> java.lang.Boolean::class.java
-                "Float"   -> java.lang.Float::class.java
-                "Short"   -> java.lang.Short::class.java
-                "Byte"    -> java.lang.Byte::class.java
-                "Char"    -> Char::class.java
-                else      -> Class.forName(full, true, targetCL)
-            }
-        }
-
         val orderedParams = call.paramsJson.entries.sortedBy { argIndex(it.key) }
         val callArgs = ArrayList<Any?>(functionArgs.size)
         var userIdx = 0
 
         loop@ for (pt in functionArgs) {
+            println("CHINGAS A TU MADRE KOTLIN" + injector)
+
+            println("CHINGAS A TU MADRE KOTLIN 2" + injector("JobEvent"))
+
+            println("QUE MIERDA ESTA PASANDO CHINGADA MADRE " + pt)
+
             val inj = injector(pt)
+
+            println("QUE MIERDA ESTA PASANDO CHINGADA MADRE 2" + inj)
+
             if (inj != null) {
                 callArgs += inj
                 continue@loop
@@ -140,15 +133,13 @@ object ScriptRunner {
                         "Char"    -> mapper.readValue(unwrapped, String::class.java).single()
                         else      -> mapper.readValue(unwrapped, Any::class.java)
                     }
-                } else {
-                    val cls = resolveParamClass(pt)
-                    if (cls == Char::class.java)
-                        mapper.readValue(unwrapped, String::class.java).single()
-                    else
-                        mapper.readValue(unwrapped, cls)
-                }
+                } else null
 
-            callArgs += value
+            if (value != null) {
+                callArgs += value
+            }
+
+
             userIdx += 1
         }
 
@@ -183,9 +174,9 @@ object ScriptRunner {
 
     fun runScript(
         task: KouTask,
-        backend: ScriptBackend,
+        symbol: Any? = null,
         injector: (String) -> Any? = { null }
-    ): Any? = runScript(ScriptCall(task), backend, injector)
+    ): Any? = runScript(ScriptCall(task, symbol), injector)
 }
 
 

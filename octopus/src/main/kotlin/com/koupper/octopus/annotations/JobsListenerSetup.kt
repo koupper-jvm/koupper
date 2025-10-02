@@ -2,7 +2,7 @@ package com.koupper.octopus.annotations
 
 import com.koupper.container.app
 import com.koupper.logging.LogSpec
-import com.koupper.octopus.DispatcherInputParams
+import com.koupper.octopus.ParsedParams
 import com.koupper.octopus.process.JobEvent
 import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.ModuleProcessor
@@ -17,8 +17,18 @@ import com.koupper.shared.octopus.extractExportFunctionSignature
 import java.io.File
 import java.nio.file.Paths
 
+data class JobsListenerCall(
+    val functionName: String,
+    val code: String,
+    val annotationParams: Map<*, *>,
+    val params: ParsedParams?,
+    val scriptPath: String?,
+    val scriptContext: String,
+    val symbol: Any? = null
+)
+
 object JobsListenerSetup {
-    private lateinit var inp: DispatcherInputParams
+    private lateinit var jlc: JobsListenerCall
     private lateinit var jobListenerParams: Map<*, *>
     private lateinit var workerQueue: String
     private lateinit var workerDriver: String
@@ -99,12 +109,10 @@ object JobsListenerSetup {
         return rx.find(f.readText())?.groupValues?.get(1)
     }
 
-    fun run(inp: DispatcherInputParams): Any {
-        this.inp = inp
+    fun run(jlc: JobsListenerCall): Any {
+        this.jlc = jlc
 
-        val annotationParams = this.inp.annotations["JobsListener"].orEmpty()
-
-        this.jobListenerParams = annotationParams as? Map<*, *> ?: emptyMap<Any?, Any?>()
+        this.jobListenerParams = jlc.annotationParams as? Map<*, *> ?: emptyMap<Any?, Any?>()
 
         val creationWorkerJobResult = this.createWorkerListener()
 
@@ -113,6 +121,7 @@ object JobsListenerSetup {
 
     private fun createWorkerListener(): String {
         this.workerQueue = jobListenerParams["queue"] as? String ?: "job-callbacks"
+
         this.workerDriver = (jobListenerParams["driver"] as? String) ?: "file"
 
         val jobInfo = JobMetricsCollector.collect(workerQueue, workerDriver)
@@ -121,38 +130,31 @@ object JobsListenerSetup {
             return "A JobListener already exists"
         }
 
-        val finalScriptPath = Paths.get(this.inp.scriptContext, this.inp.scriptPath ?: "").normalize().toAbsolutePath().toString()
+        val finalScriptPath = Paths.get(this.jlc.scriptContext, this.jlc.scriptPath ?: "")
+            .normalize().toAbsolutePath().toString()
 
-        this.inp.backend.eval(this.inp.functionName) ?: return "Invalid JobListener structure."
-
-        val flags: Set<String> = this.inp.params?.flags ?: emptySet()
-        val params: Map<String, String> = this.inp.params?.params ?: emptyMap()
-        val positionals: List<String> = this.inp.params?.positionals ?: emptyList()
+        val flags: Set<String> = this.jlc.params?.flags ?: emptySet()
+        val params: Map<String, String> = this.jlc.params?.params ?: emptyMap()
+        val positionals: List<String> = this.jlc.params?.positionals ?: emptyList()
 
         val hasComposedFlag = flags.any { it == "-ci" || it == "--ci" }
         val composedFromFlag: String? = params["ci"]
-
         var composedConsumed = false
 
-        val baseEnv: Map<String, Any?> = mapOf(
-            "context" to this.inp.scriptContext
-        )
+        val baseEnv: Map<String, Any?> = mapOf("context" to this.jlc.scriptContext)
 
-        val functionSignature = extractExportFunctionSignature(this.inp.sentence)
-
-        val functionNameAndSignature = if (this.inp.functionName.isNotEmpty() && functionSignature != null) {
-            mapOf(this.inp.functionName to functionSignature)
+        val functionSignature = extractExportFunctionSignature(this.jlc.code)
+        val functionNameAndSignature = if (this.jlc.functionName.isNotEmpty() && functionSignature != null) {
+            mapOf(this.jlc.functionName to functionSignature)
         } else emptyMap()
 
-        val functionArgTypeNames: List<String> = functionNameAndSignature[this.inp.functionName]?.first ?: emptyList()
-
-        val functionReturnTypeName: String = functionNameAndSignature[this.inp.functionName]?.second ?: "kotlin.Any"
+        val functionArgTypeNames: List<String> = functionNameAndSignature[this.jlc.functionName]?.first ?: emptyList()
+        val functionReturnTypeName: String = functionNameAndSignature[this.jlc.functionName]?.second ?: "kotlin.Any"
 
         val finalParams = ArrayList<Any?>(functionArgTypeNames.size)
-
         var posIdx = 0
 
-        outer@for (argName in functionArgTypeNames) {
+        outer@ for (argName in functionArgTypeNames) {
             val isInjectable = tryInject(argName, baseEnv)
 
             if (isInjectable != null) {
@@ -170,16 +172,11 @@ object JobsListenerSetup {
 
             val jsonLiteral: String? = when {
                 hasComposedFlag && !composedConsumed && composedFromFlag != null -> {
-                    composedConsumed = true
-                    composedFromFlag
+                    composedConsumed = true; composedFromFlag
                 }
-
                 positionals.getOrNull(posIdx)?.let { looksLikeObjectLiteral(it) } == true -> {
-                    val rawObj = positionals[posIdx]
-                    posIdx += 1
-                    rawObj
+                    val rawObj = positionals[posIdx]; posIdx += 1; rawObj
                 }
-
                 else -> null
             }
 
@@ -190,7 +187,9 @@ object JobsListenerSetup {
             finalParams += normalizeObjectLiteralToJson(jsonLiteral)
         }
 
-        @Suppress("UNCHECKED_CAST") val jsonAny = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any?>
+        @Suppress("UNCHECKED_CAST")
+        val jsonAny = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any?>
+
         val paramsMap: Map<String, String> =
             finalParams.mapIndexed { i, arg -> "arg$i" to jsonAny.toJsonAny(arg) }.toMap()
 
@@ -199,13 +198,13 @@ object JobsListenerSetup {
         val workerTask = KouTask(
             id = java.util.UUID.randomUUID().toString(),
             fileName = fileName,
-            functionName = this.inp.functionName,
+            functionName = this.jlc.functionName,
             params = paramsMap,
             signature = functionArgTypeNames to functionReturnTypeName,
             scriptPath = finalScriptPath,
             packageName = null,
             origin = "koupper",
-            context = this.inp.scriptContext,
+            context = this.jlc.scriptContext,
             sourceType = "script",
             queue = workerQueue,
             driver = workerDriver,
@@ -234,18 +233,11 @@ object JobsListenerSetup {
         else       -> default
     }
 
-    private fun Any?.asLong(default: Long): Long = when (this) {
-        null       -> default
-        is Number  -> this.toLong()
-        is String  -> this.toLongOrNull() ?: default
-        else       -> default
-    }
-
     private fun listenByJobs(workerTask : KouTask): String {
-        val cfgQueue  = getJobQueueFromConfig(this.inp.scriptContext) ?: "default"
-        val cfgDriver = getJobDriverFromConfig(this.inp.scriptContext) ?: "file"
+        val cfgQueue  = getJobQueueFromConfig(this.jlc.scriptContext) ?: "default"
+        val cfgDriver = getJobDriverFromConfig(this.jlc.scriptContext) ?: "file"
         val sleepTime = (this.jobListenerParams["time"] as? Long) ?: 5000L
-        val key       = "${inp.scriptContext}::$cfgQueue"
+        val key       = "${this.jlc.scriptContext}::$cfgQueue"
 
         val debug = jobListenerParams["debug"].asBool(false)
 
@@ -255,7 +247,7 @@ object JobsListenerSetup {
             key = key,
             sleepTime = sleepTime,
             runOnce = { onJob ->
-                JobRunner.runPendingJobs(queue = cfgQueue, driver = cfgDriver) { job -> onJob(job) }
+                JobRunner.runPendingJobs(workerTask.context, queue = cfgQueue, driver = cfgDriver) { job -> onJob(job) }
             },
             onJob = { job ->
                 val event = JobEvent(
@@ -317,26 +309,28 @@ object JobsListenerSetup {
                 }
 
                 val mergedParams: Map<String, Any?> = argsParams
-
                 JobReplayer.replayJobsListenerScript(
-                    backend = inp.backend,
+                    context = workerTask.context,
                     queue = workerQueue,
                     driver = workerDriver,
                     newParams = mergedParams,
                     injector = { typeName ->
+                        println("CHINGAS A TU RECONTRA PUTA MADRE ----->" + typeName)
+
                         when (typeName.normalizeType()) {
                             "JobRunner"          -> JobRunner
                             "JobLister"          -> JobLister
                             "JobBuilder"         -> JobBuilder
                             "JobDisplayer"       -> JobDisplayer
-                            "RoutesRegistration" -> RoutesRegistration(inp.scriptContext)
-                            "ModuleAnalyzer"     -> ModuleAnalyzer(inp.scriptContext)
-                            "ModuleProcessor"    -> ModuleProcessor(inp.scriptContext)
+                            "RoutesRegistration" -> RoutesRegistration(this.jlc.scriptContext)
+                            "ModuleAnalyzer"     -> ModuleAnalyzer(this.jlc.scriptContext)
+                            "ModuleProcessor"    -> ModuleProcessor(this.jlc.scriptContext)
                             "JobEvent"           -> event
                             else -> null
                         }
                     },
-                    logSpec = replaySpec
+                    logSpec = replaySpec,
+                    symbol = this.jlc.symbol,
                 ) { updatedWorkerJob ->
                     updatedWorkerJob.dispatchToQueue(queue = workerQueue, driver = workerDriver)
                 }

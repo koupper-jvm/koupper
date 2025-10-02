@@ -2,7 +2,6 @@ package com.koupper.orchestrator
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.koupper.logging.*
-import com.koupper.shared.runtime.ScriptBackend
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.os.env
 import com.koupper.os.envOptional
@@ -97,8 +96,13 @@ object JobDispatcher {
     fun dispatch(task: KouTask, queue: String = "default", driver: String = "file") {
         when (driver) {
             "file" -> {
-                val baseDir = Paths.get("").toAbsolutePath().toString()
-                val jobsDir = File("$baseDir/jobs/$queue")
+                print("QUE CHINGADA MADRE PASA HIJO DE PUTA ------------> " + task.context)
+
+                val rootPath = if (task.context == "default") "" else  task.context + "/"
+
+                val jobsDir = File("${rootPath}jobs/$queue")
+
+                print("QUE CHINGADA MADRE PASA HIJO DE PUTA 2------------> " + jobsDir.path)
 
                 if (!jobsDir.exists()) {
                     val created = jobsDir.mkdirs()
@@ -152,6 +156,7 @@ object JobDispatcher {
 
 object JobRunner {
     fun runPendingJobs(
+        context: String,
         queue: String = "default",
         driver: String = "file",
         jobId: String? = null,
@@ -161,7 +166,11 @@ object JobRunner {
 
         println("\n🔧 Running jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}")
 
-        val results = d.forEachPending(queue, jobId)
+        val results = if (d is FileJobDriver) {
+            d.forEachPending(queue, jobId, context = context)
+        } else {
+            d.forEachPending(queue, jobId)
+        }
 
         results.forEach { res ->
             when (res) {
@@ -556,21 +565,33 @@ interface JobDriver {
     ): List<JobResult>
 }
 
-object FileJobDriver : JobDriver {
-    override fun forEachPending(queue: String, jobId: String?): List<JobResult> {
+interface ContextualJobDriver : JobDriver {
+    fun forEachPending(
+        queue: String,
+        jobId: String? = null,
+        context: String
+    ): List<JobResult>
+}
+
+object FileJobDriver : ContextualJobDriver {
+
+    override fun forEachPending(queue: String, jobId: String?, context: String): List<JobResult> {
         val results = mutableListOf<JobResult>()
-        val dir = File("jobs/$queue")
+
+        val dir = File("$context${File.separator}jobs/$queue")
 
         val files = when {
             !jobId.isNullOrBlank() -> {
                 val target = if (jobId.endsWith(".json", true)) jobId else "$jobId.json"
                 dir.listFiles { f -> f.isFile && f.name.equals(target, true) }?.toList().orEmpty()
             }
-            else -> dir.listFiles { f -> f.isFile && f.extension.equals("json", true) }?.sortedBy { it.name }.orEmpty()
+            else -> dir.listFiles { f -> f.isFile && f.extension.equals("json", true) }
+                ?.sortedBy { it.name }
+                .orEmpty()
         }
 
         if (files.isEmpty()) {
-            results.add(JobResult.Error("⚠️ No jobs to run."))
+            results.add(JobResult.Error("⚠️ No jobs to run. [context=$context] in " + dir.path))
             return results
         }
 
@@ -589,7 +610,12 @@ object FileJobDriver : JobDriver {
 
         return results
     }
+
+    override fun forEachPending(queue: String, jobId: String?): List<JobResult> {
+        TODO("Not yet implemented")
+    }
 }
+
 
 object RedisJobDriver : JobDriver {
     override fun forEachPending(queue: String, jobId: String?): List<JobResult> {
@@ -732,13 +758,14 @@ object JobDrivers {
 
 object JobReplayer {
     fun replayJobsListenerScript(
-        backend: ScriptBackend,             // ← antes era ScriptEngine
+        context: String,
         queue: String = "default",
         driver: String = "file",
         jobId: String? = null,
         newParams: Map<String, Any?>,
         injector: (String) -> Any? = { null },
         logSpec: LogSpec? = null,
+        symbol: Any? = null,
         onResult: (KouTask) -> Unit = {}
     ): List<JobResult> {
         val d = JobDrivers.resolve(driver)
@@ -747,7 +774,14 @@ object JobReplayer {
             "\n🔁 Replaying jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}\n"
         }
 
-        val results = d.forEachPending(queue, jobId)
+        val results = if (d is ContextualJobDriver) {
+            d.forEachPending(queue, jobId, context = context)
+        } else {
+            d.forEachPending(queue, jobId)
+        }
+
+        println("HIJO DE TODA TU PUTA VERGA DE MIERDA  .....................! " + injector)
+        println("HIJO DE TODA TU PUTA VERGA DE MIERDA ! " + injector("JobEvent"))
 
         results.forEach { res ->
             when (res) {
@@ -758,13 +792,15 @@ object JobReplayer {
 
                     if (logSpec != null) {
                         captureLogs<Any?>("Scripts.Dispatcher", logSpec) { logger ->
+                            println("HIJO DE TODA TU PUTA VERGA DE MIERDA  ..................... 1! " + injector)
                             withScriptLogger(logger, logSpec.mdc) {
-                                val result = ScriptRunner.runScript(updated, backend, injector) // ← backend
+                                val result = ScriptRunner.runScript(updated, symbol, injector)
                                 logger.info { result.toString() }
                             }
                         }
                     } else {
-                        ScriptRunner.runScript(updated, backend, injector) // ← backend
+                        println("HIJO DE TODA TU PUTA VERGA DE MIERDA  ..................... 2! " + injector)
+                        ScriptRunner.runScript(updated, symbol, injector)
                     }
 
                     onResult(updated)
@@ -781,7 +817,6 @@ object JobReplayer {
 }
 
 fun extractSignature(typeStr: String): Pair<List<String>, String> {
-    // 1. Buscar la flecha "->"
     val parts = typeStr.split("->").map { it.trim() }
     if (parts.size != 2) {
         error("Tipo inválido: $typeStr")
@@ -790,11 +825,10 @@ fun extractSignature(typeStr: String): Pair<List<String>, String> {
     val argsPart = parts[0]
     val returnPart = parts[1]
 
-    // 2. Limpiar paréntesis de los argumentos
     val args = argsPart.removePrefix("(").removeSuffix(")")
         .split(",")
         .map { it.trim() }
-        .filter { it.isNotEmpty() } // puede ser vacío si no tiene parámetros
+        .filter { it.isNotEmpty() }
 
     return args to returnPart
 }

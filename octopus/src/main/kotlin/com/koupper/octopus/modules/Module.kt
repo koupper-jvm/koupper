@@ -27,10 +27,9 @@ fun validateScript(scriptPath: String): Result<File> {
 
             if (exportedFunctionName != null) {
                 val backend = ScriptingHostBackend()
-                // 👇 evalúa el script completo y guarda la instancia
+
                 backend.eval(sentence)
 
-                // 👇 recuperar el símbolo ya guardado en lastInstance
                 val symbol = backend.getSymbol(exportedFunctionName)
                     ?: throw IllegalStateException("No se encontró el símbolo exportado: $exportedFunctionName")
 
