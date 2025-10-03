@@ -11,6 +11,7 @@ import com.koupper.octopus.process.RoutesRegistration
 import com.koupper.orchestrator.*
 import com.koupper.shared.normalizeType
 import com.koupper.shared.octopus.extractExportFunctionSignature
+import com.koupper.shared.runtime.ScriptingHostBackend
 
 fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
     var finalSpec: LogSpec? = null
@@ -19,6 +20,7 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         val annParams = diParams.annotations["Logger"].orEmpty()
 
         finalSpec = LogSpec(
+            context = diParams.scriptContext,
             level = (annParams["level"] as? String) ?: "DEBUG",
             destination = (annParams["destination"] as? String) ?: "console",
             mdc = mapOf(
@@ -37,12 +39,13 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
     put("JobsListener") { diParams, res ->
         if (finalSpec == null) {
             finalSpec = LogSpec(
+                context = diParams.scriptContext,
                 level       = "DEBUG",
                 destination = "console",
                 mdc         = mapOf(
                     "context"      to diParams.scriptContext,
                     "script"       to (diParams.scriptPath ?: "unknown"),
-                    "functionName" to diParams.functionName
+                    "export" to diParams.functionName
                 ),
                 async       = true
             )
@@ -61,7 +64,6 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                     diParams.params,
                     diParams.scriptPath,
                     diParams.scriptContext,
-                    diParams.backend.getSymbol(diParams.functionName)
                 ))
             }
         }
@@ -70,8 +72,13 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
     }
 
     put("Export") { diParams, res ->
+        val backend = ScriptingHostBackend()
+
+        backend.eval(diParams.sentence)
+
         if (finalSpec == null) {
             finalSpec = LogSpec(
+                context = diParams.scriptContext,
                 level       = "DEBUG",
                 destination = "console",
                 mdc         = mapOf(
@@ -105,7 +112,7 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                         functionName = diParams.functionName,
                         paramsJson   = paramsJson,
                         argTypes     = functionArgTypeNames,
-                        symbol = diParams.backend.getSymbol(diParams.functionName)
+                        symbol = backend.getSymbol(diParams.functionName)
                     ),
                 ) { typeName ->
                     when (typeName.normalizeType()) {

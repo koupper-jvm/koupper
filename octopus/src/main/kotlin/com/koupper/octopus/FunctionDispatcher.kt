@@ -18,8 +18,7 @@ data class DispatcherInputParams(
     val annotations: Map<String, Map<String, Any?>> = emptyMap(),
     val functionName: String,
     val params: ParsedParams?,
-    val sentence: String,
-    val backend: ScriptBackend,
+    val sentence: String
 )
 
 typealias UnifiedResolver<T> = (DispatcherInputParams, (T) -> Unit) -> Unit

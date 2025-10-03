@@ -62,30 +62,6 @@ private fun sqsCredsProvider(): AwsCredentialsProvider {
     }
 }
 
-object LoggerHolder {
-    lateinit var LOGGER: KLogger
-
-    init {
-        if (GlobalLogger.log.name.equals("GlobalLogger")) {
-            val logSpec = LogSpec(
-                level = "INFO",
-                destination = "console",
-                mdc = mapOf(
-                    "LOGGING_LOGS" to UUID.randomUUID().toString(),
-                ),
-                async = true
-            )
-
-            captureLogs("JobsOrchestrator.Dispatcher", logSpec) { log ->
-                LOGGER = log
-                "initialized"
-            }
-        } else {
-            LOGGER = GlobalLogger.log
-        }
-    }
-}
-
 object JobSerializer {
     val mapper = jacksonObjectMapper()
     fun serialize(task: KouTask): String = mapper.writeValueAsString(task)
@@ -761,27 +737,25 @@ object JobReplayer {
         context: String,
         queue: String = "default",
         driver: String = "file",
-        jobId: String? = null,
         newParams: Map<String, Any?>,
         injector: (String) -> Any? = { null },
         logSpec: LogSpec? = null,
         symbol: Any? = null,
         onResult: (KouTask) -> Unit = {}
     ): List<JobResult> {
+        LoggerHolder.initLogger(context)
+
         val d = JobDrivers.resolve(driver)
 
         LoggerHolder.LOGGER.info {
-            "\n🔁 Replaying jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}\n"
+            "\n🔁 Replaying jobs from [$queue] using [$driver]\n"
         }
 
         val results = if (d is ContextualJobDriver) {
-            d.forEachPending(queue, jobId, context = context)
+            d.forEachPending(queue = queue, context = context)
         } else {
-            d.forEachPending(queue, jobId)
+            d.forEachPending(queue = queue)
         }
-
-        println("HIJO DE TODA TU PUTA VERGA DE MIERDA  .....................! " + injector)
-        println("HIJO DE TODA TU PUTA VERGA DE MIERDA ! " + injector("JobEvent"))
 
         results.forEach { res ->
             when (res) {
@@ -792,14 +766,12 @@ object JobReplayer {
 
                     if (logSpec != null) {
                         captureLogs<Any?>("Scripts.Dispatcher", logSpec) { logger ->
-                            println("HIJO DE TODA TU PUTA VERGA DE MIERDA  ..................... 1! " + injector)
                             withScriptLogger(logger, logSpec.mdc) {
                                 val result = ScriptRunner.runScript(updated, symbol, injector)
                                 logger.info { result.toString() }
                             }
                         }
                     } else {
-                        println("HIJO DE TODA TU PUTA VERGA DE MIERDA  ..................... 2! " + injector)
                         ScriptRunner.runScript(updated, symbol, injector)
                     }
 

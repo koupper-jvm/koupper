@@ -6,8 +6,31 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.UUID
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
+
+object LoggerHolder {
+    lateinit var LOGGER: KLogger
+
+    fun initLogger(context: String) {
+        val logSpec = LogSpec(
+            context,
+            level = "INFO",
+            destination = "console",
+            mdc = mapOf(
+                "LOGGING_LOGS" to UUID.randomUUID().toString(),
+                "context" to context
+            ),
+            async = true
+        )
+
+        captureLogs("JobsOrchestrator.Dispatcher", logSpec) { log ->
+            LOGGER = log
+            "initialized"
+        }
+    }
+}
 
 /* --------- Nivel --------- */
 enum class LogLevel(val priority: Int) {
@@ -258,6 +281,7 @@ object LoggerFactory {
 }
 
 data class LogSpec(
+    val context: String,
     val level: String = "INFO",
     val destination: String = "console",
     val mdc: Map<String, String> = emptyMap(),
@@ -291,12 +315,12 @@ private fun configure(kLogger: KLogger, spec: LogSpec): () -> Unit {
             addNew(Appenders.consoleJson())
 
         spec.destination.equals("file", ignoreCase = true) ->
-            addNew(Appenders.rollingFile(baseName = kLogger.name)) // -> logs/app.YYYY-MM-DD.log
+            addNew(Appenders.rollingFile(dir = spec.context + File.separator + "logs/",baseName = kLogger.name)) // -> logs/app.YYYY-MM-DD.log
 
         spec.destination.lowercase().startsWith("file:") -> {
             val (base, datePat) = parseFileDestination(spec.destination)
 
-            val baseFile = File(base)
+            val baseFile = File(spec.context + File.separator + base)
             val dir = baseFile.parentFile ?: File(".")
             val baseName = baseFile.name
 
@@ -342,7 +366,6 @@ private fun parseFileDestination(dest: String): Pair<String, String> {
         .removePrefix(":")
         .trim()
 
-    // Verificar si hay patrón de fecha primero
     val hasPattern = rest.contains('[') && rest.contains(']')
 
     val rawPath = if (hasPattern) {

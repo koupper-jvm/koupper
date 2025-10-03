@@ -14,6 +14,7 @@ import com.koupper.providers.files.toJsonAny
 import com.koupper.shared.isSimpleType
 import com.koupper.shared.normalizeType
 import com.koupper.shared.octopus.extractExportFunctionSignature
+import com.koupper.shared.runtime.ScriptingHostBackend
 import java.io.File
 import java.nio.file.Paths
 
@@ -23,8 +24,7 @@ data class JobsListenerCall(
     val annotationParams: Map<*, *>,
     val params: ParsedParams?,
     val scriptPath: String?,
-    val scriptContext: String,
-    val symbol: Any? = null
+    val scriptContext: String
 )
 
 object JobsListenerSetup {
@@ -34,6 +34,7 @@ object JobsListenerSetup {
     private lateinit var workerDriver: String
     @Suppress("UNCHECKED_CAST")
     private val jsonHandler = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any?>
+    private lateinit var backend: ScriptingHostBackend
 
     private fun tryInject(typeName: String, env: Map<String, Any?>): Any? = when (typeName) {
         "JobEvent" -> JobEvent()
@@ -112,6 +113,10 @@ object JobsListenerSetup {
     fun run(jlc: JobsListenerCall): Any {
         this.jlc = jlc
 
+        this.backend = ScriptingHostBackend()
+
+        this.backend.eval(jlc.code)
+
         this.jobListenerParams = jlc.annotationParams as? Map<*, *> ?: emptyMap<Any?, Any?>()
 
         val creationWorkerJobResult = this.createWorkerListener()
@@ -132,9 +137,8 @@ object JobsListenerSetup {
 
         val finalScriptPath = Paths.get(this.jlc.scriptContext, this.jlc.scriptPath ?: "")
             .normalize().toAbsolutePath().toString()
-
         val flags: Set<String> = this.jlc.params?.flags ?: emptySet()
-        val params: Map<String, String> = this.jlc.params?.params ?: emptyMap()
+        val paramssw: Map<String, String> = this.jlc.params?.params ?: emptyMap()
         val positionals: List<String> = this.jlc.params?.positionals ?: emptyList()
 
         val hasComposedFlag = flags.any { it == "-ci" || it == "--ci" }
@@ -144,6 +148,7 @@ object JobsListenerSetup {
         val baseEnv: Map<String, Any?> = mapOf("context" to this.jlc.scriptContext)
 
         val functionSignature = extractExportFunctionSignature(this.jlc.code)
+
         val functionNameAndSignature = if (this.jlc.functionName.isNotEmpty() && functionSignature != null) {
             mapOf(this.jlc.functionName to functionSignature)
         } else emptyMap()
@@ -216,7 +221,7 @@ object JobsListenerSetup {
 
         JobDispatcher.dispatch(workerTask, queue = workerQueue, driver = workerDriver)
 
-        val listenByJobsResult = this.listenByJobs(workerTask)
+        val listenByJobsResult = this.listenByJobsTo(workerTask)
 
         return "Worker listener created. \n$listenByJobsResult"
     }
@@ -233,13 +238,13 @@ object JobsListenerSetup {
         else       -> default
     }
 
-    private fun listenByJobs(workerTask : KouTask): String {
+    private fun listenByJobsTo(workerTask : KouTask): String {
         val cfgQueue  = getJobQueueFromConfig(this.jlc.scriptContext) ?: "default"
         val cfgDriver = getJobDriverFromConfig(this.jlc.scriptContext) ?: "file"
         val sleepTime = (this.jobListenerParams["time"] as? Long) ?: 5000L
         val key       = "${this.jlc.scriptContext}::$cfgQueue"
 
-        val debug = jobListenerParams["debug"].asBool(false)
+        val debug = this.jobListenerParams["debug"].asBool(false)
 
         if (debug) enableDebugMode()
 
@@ -279,7 +284,7 @@ object JobsListenerSetup {
 
                 val workerFunctionArgs: List<String> = workerTask.signature?.first ?: emptyList()
 
-                val jeIdx = workerFunctionArgs.indexOfFirst { it.normalizeType() == "JobEvent" }
+                val jobEventIndex = workerFunctionArgs.indexOfFirst { it.normalizeType() == "JobEvent" }
 
                 val argsParams: MutableMap<String, Any?> = linkedMapOf()
 
@@ -288,7 +293,7 @@ object JobsListenerSetup {
                     .sortedBy { (k, _) -> k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE }
                     .forEach { (k, vJson) ->
                         val idx = k.removePrefix("arg").toIntOrNull() ?: return@forEach
-                        argsParams[k] = if (idx == jeIdx) {
+                        argsParams[k] = if (idx == jobEventIndex) {
                             event
                         } else {
                             jsonStringToKotlin(vJson)
@@ -309,14 +314,13 @@ object JobsListenerSetup {
                 }
 
                 val mergedParams: Map<String, Any?> = argsParams
+
                 JobReplayer.replayJobsListenerScript(
                     context = workerTask.context,
                     queue = workerQueue,
                     driver = workerDriver,
                     newParams = mergedParams,
                     injector = { typeName ->
-                        println("CHINGAS A TU RECONTRA PUTA MADRE ----->" + typeName)
-
                         when (typeName.normalizeType()) {
                             "JobRunner"          -> JobRunner
                             "JobLister"          -> JobLister
@@ -330,7 +334,7 @@ object JobsListenerSetup {
                         }
                     },
                     logSpec = replaySpec,
-                    symbol = this.jlc.symbol,
+                    symbol = this.backend.getSymbol(jlc.functionName),
                 ) { updatedWorkerJob ->
                     updatedWorkerJob.dispatchToQueue(queue = workerQueue, driver = workerDriver)
                 }

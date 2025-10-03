@@ -20,7 +20,7 @@ data class ScriptCall(
 fun serializeArgs(vararg args: Any?, mapper: com.fasterxml.jackson.databind.ObjectMapper): Map<String, String> =
     args.mapIndexed { i, v -> "arg$i" to mapper.writeValueAsString(v) }.toMap()
 
-fun ScriptCall(task: KouTask, symbol: Any? = null): ScriptCall = ScriptCall(
+fun buildScriptCall(task: KouTask, symbol: Any? = null): ScriptCall = ScriptCall(
     code        = task.sourceSnapshot
         ?: error("sourceSnapshot nulo para script"),
     functionName = task.functionName,
@@ -80,15 +80,7 @@ object ScriptRunner {
         var userIdx = 0
 
         loop@ for (pt in functionArgs) {
-            println("CHINGAS A TU MADRE KOTLIN" + injector)
-
-            println("CHINGAS A TU MADRE KOTLIN 2" + injector("JobEvent"))
-
-            println("QUE MIERDA ESTA PASANDO CHINGADA MADRE " + pt)
-
             val inj = injector(pt)
-
-            println("QUE MIERDA ESTA PASANDO CHINGADA MADRE 2" + inj)
 
             if (inj != null) {
                 callArgs += inj
@@ -176,7 +168,7 @@ object ScriptRunner {
         task: KouTask,
         symbol: Any? = null,
         injector: (String) -> Any? = { null }
-    ): Any? = runScript(ScriptCall(task, symbol), injector)
+    ): Any? = runScript(buildScriptCall(task, symbol), injector)
 }
 
 

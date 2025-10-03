@@ -101,18 +101,13 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
 
         try {
-            val backend = ScriptingHostBackend()
-
-            backend.eval(sentence)
-
             val dispatcherInputParams = DispatcherInputParams(
                 scriptContext = context,
                 scriptPath = scriptPath,
                 annotations = annotations,
                 functionName = exportedFunctionName,
                 params = params,
-                sentence = sentence,
-                backend = backend,
+                sentence = sentence
             )
 
             FunctionDispatcher.dispatch<T>(dispatcherInputParams) {
@@ -277,7 +272,7 @@ fun listenForExternalCommands(processManager: ScriptExecutor) {
                         inputData[1].endsWith(".kts") || inputData[1].endsWith(".kt") -> {
                             val scriptPath = inputData[1]
 
-                            val parameters = inputData[2]
+                            val parameters = inputData.drop(2).joinToString(" ")
 
                             app.createSingletonOf(LoggerCore::class).info { "📜 Executing script: $scriptPath with params: $parameters" }
 
