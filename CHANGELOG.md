@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - dependency injection by type and nullable handling
 - LogSpec propagation into job replay via `JobsListenerSetup.attachLogSpec(...)` + `JobReplayer.replayJobsListenerScript(...)`.
 - Added extractSignature method.
+- Added 'toType' to JSONFileHandler in JsonShortcuts.kt
+- **JSONFileHandler**: added `toType()` helper in `JsonShortcuts.kt` to convert JSON content directly to a target type.
 
 ### Notes
 - When parsing annotation text, compiler defaults don’t apply automatically; added safe coercion for `debug` and `time`.

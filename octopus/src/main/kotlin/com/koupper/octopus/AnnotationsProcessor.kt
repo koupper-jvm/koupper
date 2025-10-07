@@ -5,6 +5,7 @@ import com.koupper.logging.captureLogs
 import com.koupper.logging.withScriptLogger
 import com.koupper.octopus.annotations.JobsListenerCall
 import com.koupper.octopus.annotations.JobsListenerSetup
+import com.koupper.octopus.process.JobEvent
 import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.ModuleProcessor
 import com.koupper.octopus.process.RoutesRegistration
@@ -55,16 +56,42 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
 
         JobsListenerSetup.attachLogSpec(spec)
 
+        val functionSignature = extractExportFunctionSignature(diParams.sentence)
+
+        val functionNameAndSignature = if (diParams.functionName.isNotEmpty() && functionSignature != null) {
+            mapOf(diParams.functionName to functionSignature)
+        } else emptyMap()
+
+        val functionArgTypeNames: List<String> = functionNameAndSignature[diParams.functionName]?.first ?: emptyList()
+        val positionals  = diParams.params?.positionals ?: emptyList()
+        val params     = diParams.params?.params ?: emptyMap()
+        val flags     = diParams.params?.flags ?: emptySet()
+
+        val paramsJson : Map<String, String> = buildParamsJson(functionArgTypeNames, positionals, params, flags)
+
         val (result, _) = captureLogs<Any?>("Scripts.Dispatcher", spec) { logger ->
             withScriptLogger(logger, spec.mdc) {
                 JobsListenerSetup.run(JobsListenerCall(
-                    diParams.functionName,
-                    diParams.sentence,
-                    diParams.annotations["JobsListener"].orEmpty(),
-                    diParams.params,
-                    diParams.scriptPath,
-                    diParams.scriptContext,
-                ))
+                    scriptContext = diParams.scriptContext,
+                    scriptPath = diParams.scriptPath,
+                    code         = diParams.sentence,
+                    functionName = diParams.functionName,
+                    paramsJson   = paramsJson,
+                    argTypes     = functionArgTypeNames,
+                    annotationParams = diParams.annotations["JobsListener"].orEmpty()
+                )) { typeName ->
+                    when (typeName.normalizeType()) {
+                        "JobRunner"          -> JobRunner
+                        "JobEvent"          -> JobEvent()
+                        "JobLister"          -> JobLister
+                        "JobBuilder"         -> JobBuilder
+                        "JobDisplayer"       -> JobDisplayer
+                        "RoutesRegistration" -> RoutesRegistration(diParams.scriptContext)
+                        "ModuleAnalyzer"     -> ModuleAnalyzer(diParams.scriptContext)
+                        "ModuleProcessor"    -> ModuleProcessor(diParams.scriptContext)
+                        else -> null
+                    }
+                }
             }
         }
         @Suppress("UNCHECKED_CAST")
@@ -100,9 +127,10 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
 
         val functionArgTypeNames: List<String> = functionNameAndSignature[diParams.functionName]?.first ?: emptyList()
         val positionals  = diParams.params?.positionals ?: emptyList()
-        val kvParams     = diParams.params?.params ?: emptyMap()
+        val params     = diParams.params?.params ?: emptyMap()
+        val flags     = diParams.params?.flags ?: emptySet()
 
-        val paramsJson   = buildParamsJson(functionArgTypeNames, positionals, kvParams)
+        val paramsJson   = buildParamsJson(functionArgTypeNames, positionals, params, flags)
 
         val (result, _) = captureLogs("Scripts.Dispatcher", spec) { logger ->
             withScriptLogger(logger, spec.mdc) {
@@ -112,7 +140,8 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                         functionName = diParams.functionName,
                         paramsJson   = paramsJson,
                         argTypes     = functionArgTypeNames,
-                        symbol = backend.getSymbol(diParams.functionName)
+                        symbol = backend.getSymbol(diParams.functionName),
+                        annotationParams = diParams.annotations["JobsListener"].orEmpty()
                     ),
                 ) { typeName ->
                     when (typeName.normalizeType()) {

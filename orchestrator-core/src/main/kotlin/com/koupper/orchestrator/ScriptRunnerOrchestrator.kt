@@ -1,12 +1,11 @@
 package com.koupper.orchestrator
 
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import com.koupper.shared.runtime.ScriptBackend
 import com.koupper.shared.isSimpleType
 import com.koupper.shared.normalizeType
 import com.koupper.shared.octopus.extractExportFunctionSignature
-import com.koupper.shared.runtime.ScriptingHostBackend
-
 import kotlin.reflect.jvm.isAccessible
 
 data class ScriptCall(
@@ -14,7 +13,8 @@ data class ScriptCall(
     val code: String,
     val argTypes: List<String>? = null,
     val paramsJson: Map<String, String> = emptyMap(),
-    val symbol: Any? = null
+    val symbol: Any? = null,
+    val annotationParams: Map<String, Any?>
 )
 
 fun serializeArgs(vararg args: Any?, mapper: com.fasterxml.jackson.databind.ObjectMapper): Map<String, String> =
@@ -25,23 +25,31 @@ fun buildScriptCall(task: KouTask, symbol: Any? = null): ScriptCall = ScriptCall
         ?: error("sourceSnapshot nulo para script"),
     functionName = task.functionName,
     paramsJson   = task.params,
-    argTypes   = task.signature?.first,
-    symbol   = symbol
+    argTypes   = task.signature.first,
+    symbol   = symbol,
+    annotationParams = emptyMap()
 )
 
 fun buildParamsJson(
     types: List<String>,
     positionals: List<String>,
-    kv: Map<String, String>
+    params: Map<String, String>,
+    flags: Set<String>
 ): Map<String, String> {
     val out = LinkedHashMap<String, String>(types.size)
     var pos = 0
-    types.indices.forEach { i ->
+
+    types.forEachIndexed { i, _ ->
         val key = "arg$i"
-        val v = kv[key] ?: positionals.getOrNull(pos)?.also { pos++ }
-        ?: return@forEach // si falta y es nullable lo resolverá el runner, si no, fallará ahí
+
+        val v = params[key]
+            ?: positionals.getOrNull(pos)?.also { pos++ }
+            ?: flags.firstOrNull { it.equals(key, ignoreCase = true) }
+            ?: return@forEachIndexed
+
         out[key] = v
     }
+
     return out
 }
 
@@ -64,9 +72,9 @@ object ScriptRunner {
 
         val targetCL = target.javaClass.classLoader
 
-        val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
+        val mapper = jacksonObjectMapper()
             .registerKotlinModule()
-            .disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .also { it.setTypeFactory(it.typeFactory.withClassLoader(targetCL)) }
 
         val functionArgs: List<String> = call.argTypes
@@ -79,8 +87,8 @@ object ScriptRunner {
         val callArgs = ArrayList<Any?>(functionArgs.size)
         var userIdx = 0
 
-        loop@ for (pt in functionArgs) {
-            val inj = injector(pt)
+        loop@ for (argName in functionArgs) {
+            val inj = injector(argName)
 
             if (inj != null) {
                 callArgs += inj
@@ -89,14 +97,14 @@ object ScriptRunner {
 
             val key = "arg$userIdx"
             val raw = orderedParams.firstOrNull { it.key == key }?.value
-            val isNullable = pt.trim().endsWith("?")
+            val isNullable = argName.trim().endsWith("?")
 
             if (raw == null) {
                 if (isNullable) {
                     callArgs += null
                     userIdx += 1
                     continue
-                } else error("Falta '$key' en params para tipo '$pt'")
+                } else error("Falta '$key' en params para tipo '$argName'")
             }
 
             val token = raw.trim()
@@ -108,12 +116,12 @@ object ScriptRunner {
             } else token
 
             val value: Any? =
-                if (pt.isSimpleType()) {
-                    when (pt.normalizeType()) {
+                if (argName.isSimpleType()) {
+                    when (argName.normalizeType()) {
                         "String" -> {
-                            val s = unwrapped
-                            val isJsonString = s.length >= 2 && s.first() == '"' && s.last() == '"'
-                            if (isJsonString) mapper.readValue(s, String::class.java) else s
+                            val isJsonString =
+                                unwrapped.length >= 2 && unwrapped.first() == '"' && unwrapped.last() == '"'
+                            if (isJsonString) mapper.readValue(unwrapped, String::class.java) else unwrapped
                         }
                         "Int"     -> mapper.readValue(unwrapped, Int::class.java)
                         "Long"    -> mapper.readValue(unwrapped, java.lang.Long::class.java)
@@ -125,12 +133,13 @@ object ScriptRunner {
                         "Char"    -> mapper.readValue(unwrapped, String::class.java).single()
                         else      -> mapper.readValue(unwrapped, Any::class.java)
                     }
+                } else if (looksLikeObjectLiteral(unwrapped!!)) {
+                    normalizeObjectLiteralToJson(unwrapped)
                 } else null
 
             if (value != null) {
                 callArgs += value
             }
-
 
             userIdx += 1
         }
@@ -164,11 +173,30 @@ object ScriptRunner {
         }
     }
 
+    private fun looksLikeObjectLiteral(s: String): Boolean = s.trim().let { it.startsWith("{") && it.endsWith("}") }
+
+    private fun normalizeObjectLiteralToJson(src: String): String {
+        val s = src.trim()
+        require(s.startsWith("{") && s.endsWith("}")) { "Composed input debe verse como {k=v,...}" }
+        val body = s.substring(1, s.length - 1).trim()
+        if (body.isBlank()) return "{}"
+        return buildString {
+            append('{')
+            val parts = body.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            parts.forEachIndexed { i, kv ->
+                val (k, v) = kv.split('=', limit = 2).map { it.trim() }
+                if (i > 0) append(',')
+                append('"').append(k.replace("\"", "\\\"")).append('"').append(':')
+                val isJsonish = v.startsWith("{") || v.startsWith("[") || v.startsWith("\"")
+                if (isJsonish) append(v) else append('"').append(v.replace("\"", "\\\"")).append('"')
+            }
+            append('}')
+        }
+    }
+
     fun runScript(
         task: KouTask,
         symbol: Any? = null,
         injector: (String) -> Any? = { null }
     ): Any? = runScript(buildScriptCall(task, symbol), injector)
 }
-
-

@@ -35,7 +35,7 @@ data class KouTask(
     val fileName: String,
     val functionName: String,
     val params: Map<String, String>,
-    val signature: Pair<List<String>, String>?,
+    val signature: Pair<List<String>, String>,
     val scriptPath: String?,
     val packageName: String?,
     val origin: String = "koupper",
@@ -72,13 +72,9 @@ object JobDispatcher {
     fun dispatch(task: KouTask, queue: String = "default", driver: String = "file") {
         when (driver) {
             "file" -> {
-                print("QUE CHINGADA MADRE PASA HIJO DE PUTA ------------> " + task.context)
-
                 val rootPath = if (task.context == "default") "" else  task.context + "/"
 
                 val jobsDir = File("${rootPath}jobs/$queue")
-
-                print("QUE CHINGADA MADRE PASA HIJO DE PUTA 2------------> " + jobsDir.path)
 
                 if (!jobsDir.exists()) {
                     val created = jobsDir.mkdirs()
@@ -382,21 +378,22 @@ data class JobMetrics(
 )
 
 object JobMetricsCollector {
-    private val KEY_PENDING =
-        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES.toString()
-    private val KEY_NOT_VISIBLE =
-        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE.toString()
+    private lateinit var context: String
 
-    fun collect(queue: String, driver: String): JobMetrics = when (driver) {
-        "file" -> collectFile(queue)
-        "redis" -> collectRedis(queue)
-        "sqs" -> collectSqs()
-        "database" -> collectDb(queue)
-        else -> JobMetrics(0, 0)
+    fun collect(context: String = "", queue: String, driver: String): JobMetrics {
+        this.context = context
+
+        return when (driver) {
+            "file" -> collectFile(queue)
+            "redis" -> collectRedis(queue)
+            "sqs" -> collectSqs()
+            "database" -> collectDb(queue)
+            else -> JobMetrics(0, 0)
+        }
     }
 
     private fun collectFile(queue: String): JobMetrics {
-        val base = File("jobs/$queue")
+        val base = File("${context}/jobs${File.separator}$queue")
         val pending = base.listFiles { f -> f.isFile && f.extension.equals("json", true) }?.size ?: 0
         val failedDir = File(base, ".failed")
         val failed = failedDir.listFiles { f -> f.isFile && f.extension.equals("json", true) }?.size ?: 0
@@ -519,7 +516,7 @@ object JobRetry {
 
 object JobDisplayer {
     fun showStatus(queue: String, driver: String) {
-        val m = JobMetricsCollector.collect(queue, driver)
+        val m = JobMetricsCollector.collect(queue = queue, driver = driver)
 0
         when (driver) {
             "sqs" -> {
