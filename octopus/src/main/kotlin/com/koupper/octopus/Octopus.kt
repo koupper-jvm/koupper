@@ -16,14 +16,28 @@ import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
 import com.koupper.providers.http.HtppClient
 import com.koupper.shared.octopus.extractExportedAnnotations
+import com.koupper.shared.runtime.ScriptingHostBackend
 import kotlinx.coroutines.*
 import java.io.File
+import java.lang.reflect.Method
 import java.net.ServerSocket
 import java.net.URL
+import java.net.URLClassLoader
 import java.nio.file.Paths
 import javax.script.ScriptEngineManager
 import javax.script.ScriptException
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.reflect.KClass
+import kotlin.script.experimental.api.ResultWithDiagnostics
+import kotlin.script.experimental.api.ScriptCompilationConfiguration
+import kotlin.script.experimental.api.ScriptEvaluationConfiguration
+import kotlin.script.experimental.api.valueOrThrow
+import kotlin.script.experimental.host.toScriptSource
+import kotlin.script.experimental.jvm.baseClassLoader
+import kotlin.script.experimental.jvm.dependenciesFromCurrentContext
+import kotlin.script.experimental.jvm.jvm
+import kotlin.script.experimental.jvmhost.BasicJvmScriptingHost
 import kotlin.system.exitProcess
 
 fun String.toCamelCase(): String {
@@ -71,12 +85,9 @@ class Octopus(private var container: Container) : ScriptExecutor {
         params: ParsedParams?,
         result: (value: T) -> Unit
     ) {
-        System.setProperty("kotlin.script.classpath", currentClassPath)
+        System.setProperty("kotlin.script.classpath", System.getProperty("java.class.path"))
 
         System.setProperty("idea.use.native.fs.for.win", "false")
-
-        val engine = ScriptEngineManager().getEngineByExtension("kts")
-            ?: error("No script engine found for .kts extension")
 
         val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence)
             ?: run {
@@ -90,28 +101,27 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
 
         try {
-            engine.eval(sentence)
-
             val dispatcherInputParams = DispatcherInputParams(
-                context,
-                scriptPath,
-                annotations,
-                exportedFunctionName,
-                params,
-                sentence,
-                engine,
+                scriptContext = context,
+                scriptPath = scriptPath,
+                annotations = annotations,
+                functionName = exportedFunctionName,
+                params = params,
+                sentence = sentence
             )
 
             FunctionDispatcher.dispatch<T>(dispatcherInputParams) {
                 result(it)
             }
-        } catch (e: ScriptException) {
-            app.createSingletonOf(LoggerCore::class).error { "Script error in [$context]: ${e.message}" }
-            result("Script error: ${e.message}" as T)
         } catch (e: Throwable) {
-            e.printStackTrace()
-            app.createSingletonOf(LoggerCore::class).error { "Unexpected error in [$context]" }
-            result("Unexpected error: ${e.message}" as T)
+            e.printStackTrace(System.out)
+            var rootCause = e
+            while (rootCause.cause != null) {
+                rootCause = rootCause.cause!!
+            }
+            rootCause.printStackTrace(System.out)
+
+            result("Script error: ${e.message}" as T)
         }
     }
 
@@ -222,24 +232,6 @@ class Octopus(private var container: Container) : ScriptExecutor {
 fun main() = runBlocking {
     val processManager = createDefaultConfiguration()
 
-    /*val inputData = "C:\\Users\\dosek\\develop\\igly-comms .\\worker-listener.kts".split(" ").toTypedArray()
-
-    when {
-        inputData[1].endsWith(".kts") || inputData[1].endsWith(".kt") -> {
-            val scriptPath = inputData[1]
-
-            val parameters = inputData.drop(2).joinToString(" ")
-
-            app.createSingletonOf(LoggerCore::class).info { "📜 Executing script: $scriptPath with params: $parameters" }
-
-            context = inputData[0]
-
-            processManager.runFromScriptFile(context!!, scriptPath, parameters) { result: Any ->
-                app.createSingletonOf(LoggerCore::class).info { "✅ Result from script execution: $result" }
-            }
-        }
-    }*/
-
     launch {
         listenForExternalCommands(processManager)
     }
@@ -280,7 +272,7 @@ fun listenForExternalCommands(processManager: ScriptExecutor) {
                         inputData[1].endsWith(".kts") || inputData[1].endsWith(".kt") -> {
                             val scriptPath = inputData[1]
 
-                            val parameters = inputData[2]
+                            val parameters = inputData.drop(2).joinToString(" ")
 
                             app.createSingletonOf(LoggerCore::class).info { "📜 Executing script: $scriptPath with params: $parameters" }
 

@@ -4,11 +4,11 @@ import com.koupper.configurations.utilities.ANSIColors
 import com.koupper.octopus.process.getRealScriptNameFrom
 import com.koupper.shared.octopus.extractExportFunctionName
 import com.koupper.shared.octopus.extractExportFunctionSignature
+import com.koupper.shared.runtime.ScriptingHostBackend
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
-import javax.script.ScriptEngineManager
 
 const val EXTENSIONS_FOLDER_NAME = "scripts"
 
@@ -22,16 +22,20 @@ fun validateScript(scriptPath: String): Result<File> {
         val scriptFile = File(scriptPath)
         val sentence = scriptFile.readText(Charsets.UTF_8)
 
-        if (sentence.isNotEmpty()) {
-            val engine = ScriptEngineManager().getEngineByExtension("kts")
-                ?: throw IllegalStateException("No Kotlin Script Engine found for '.kts' extension.")
-
+        if (sentence.isNotBlank()) {
             val exportedFunctionName = extractExportFunctionName(sentence)
 
             if (exportedFunctionName != null) {
-                engine.eval(sentence)
+                val backend = ScriptingHostBackend()
+
+                backend.eval(sentence)
+
+                val symbol = backend.getSymbol(exportedFunctionName)
+                    ?: throw IllegalStateException("No se encontró el símbolo exportado: $exportedFunctionName")
+
+                println("✅ Script válido, exporta: $exportedFunctionName (${symbol::class.simpleName})")
             } else {
-                println("No function annotated with @Export was found.")
+                println("⚠️ No function annotated with @Export was found.")
             }
         }
 
@@ -40,7 +44,6 @@ fun validateScript(scriptPath: String): Result<File> {
         Result.failure(e)
     }
 }
-
 
 abstract class Module {
     protected val registeredScriptPackages: MutableMap<String, String> = mutableMapOf()

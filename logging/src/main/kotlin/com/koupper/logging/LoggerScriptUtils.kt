@@ -1,5 +1,6 @@
 package com.koupper.logging
 
+import com.koupper.shared.runtime.ScriptBackend
 import javax.script.ScriptEngine
 
 inline fun <T> withScriptLogger(
@@ -16,7 +17,7 @@ inline fun <T> withScriptLogger(
     }
 }
 
-inline fun <reified F> evalExport(engine: ScriptEngine, sentenceName: String): F {
+inline fun <reified F> evalExport(engine: ScriptBackend, sentenceName: String): F {
 
     @Suppress("UNCHECKED_CAST")
     return engine.eval(sentenceName) as F

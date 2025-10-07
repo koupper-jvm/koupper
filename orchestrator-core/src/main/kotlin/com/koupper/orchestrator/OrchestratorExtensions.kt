@@ -5,7 +5,6 @@ import com.koupper.logging.*
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.os.env
 import com.koupper.os.envOptional
-import com.koupper.shared.octopus.extractExportFunctionSignature
 import com.koupper.shared.octopus.readTextOrNull
 import com.koupper.shared.octopus.sha256Of
 import redis.clients.jedis.Jedis
@@ -25,7 +24,6 @@ import java.net.URLClassLoader
 import java.nio.file.Paths
 import java.sql.DriverManager
 import java.util.*
-import javax.script.ScriptEngine
 import kotlin.reflect.KProperty0
 
 private var enableDebugMode: Boolean = false
@@ -37,7 +35,7 @@ data class KouTask(
     val fileName: String,
     val functionName: String,
     val params: Map<String, String>,
-    val signature: Pair<List<String>, String>?,
+    val signature: Pair<List<String>, String>,
     val scriptPath: String?,
     val packageName: String?,
     val origin: String = "koupper",
@@ -64,30 +62,6 @@ private fun sqsCredsProvider(): AwsCredentialsProvider {
     }
 }
 
-object LoggerHolder {
-    lateinit var LOGGER: KLogger
-
-    init {
-        if (GlobalLogger.log.name.equals("GlobalLogger")) {
-            val logSpec = LogSpec(
-                level = "INFO",
-                destination = "console",
-                mdc = mapOf(
-                    "LOGGING_LOGS" to UUID.randomUUID().toString(),
-                ),
-                async = true
-            )
-
-            captureLogs("JobsOrchestrator.Dispatcher", logSpec) { log ->
-                LOGGER = log
-                "initialized"
-            }
-        } else {
-            LOGGER = GlobalLogger.log
-        }
-    }
-}
-
 object JobSerializer {
     val mapper = jacksonObjectMapper()
     fun serialize(task: KouTask): String = mapper.writeValueAsString(task)
@@ -98,8 +72,9 @@ object JobDispatcher {
     fun dispatch(task: KouTask, queue: String = "default", driver: String = "file") {
         when (driver) {
             "file" -> {
-                val baseDir = Paths.get("").toAbsolutePath().toString()
-                val jobsDir = File("$baseDir/jobs/$queue")
+                val rootPath = if (task.context == "default") "" else  task.context + "/"
+
+                val jobsDir = File("${rootPath}jobs/$queue")
 
                 if (!jobsDir.exists()) {
                     val created = jobsDir.mkdirs()
@@ -153,6 +128,7 @@ object JobDispatcher {
 
 object JobRunner {
     fun runPendingJobs(
+        context: String,
         queue: String = "default",
         driver: String = "file",
         jobId: String? = null,
@@ -162,7 +138,11 @@ object JobRunner {
 
         println("\n🔧 Running jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}")
 
-        val results = d.forEachPending(queue, jobId)
+        val results = if (d is FileJobDriver) {
+            d.forEachPending(queue, jobId, context = context)
+        } else {
+            d.forEachPending(queue, jobId)
+        }
 
         results.forEach { res ->
             when (res) {
@@ -398,21 +378,22 @@ data class JobMetrics(
 )
 
 object JobMetricsCollector {
-    private val KEY_PENDING =
-        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES.toString()
-    private val KEY_NOT_VISIBLE =
-        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE.toString()
+    private lateinit var context: String
 
-    fun collect(queue: String, driver: String): JobMetrics = when (driver) {
-        "file" -> collectFile(queue)
-        "redis" -> collectRedis(queue)
-        "sqs" -> collectSqs()
-        "database" -> collectDb(queue)
-        else -> JobMetrics(0, 0)
+    fun collect(context: String = "", queue: String, driver: String): JobMetrics {
+        this.context = context
+
+        return when (driver) {
+            "file" -> collectFile(queue)
+            "redis" -> collectRedis(queue)
+            "sqs" -> collectSqs()
+            "database" -> collectDb(queue)
+            else -> JobMetrics(0, 0)
+        }
     }
 
     private fun collectFile(queue: String): JobMetrics {
-        val base = File("jobs/$queue")
+        val base = File("${context}/jobs${File.separator}$queue")
         val pending = base.listFiles { f -> f.isFile && f.extension.equals("json", true) }?.size ?: 0
         val failedDir = File(base, ".failed")
         val failed = failedDir.listFiles { f -> f.isFile && f.extension.equals("json", true) }?.size ?: 0
@@ -535,7 +516,7 @@ object JobRetry {
 
 object JobDisplayer {
     fun showStatus(queue: String, driver: String) {
-        val m = JobMetricsCollector.collect(queue, driver)
+        val m = JobMetricsCollector.collect(queue = queue, driver = driver)
 0
         when (driver) {
             "sqs" -> {
@@ -557,21 +538,33 @@ interface JobDriver {
     ): List<JobResult>
 }
 
-object FileJobDriver : JobDriver {
-    override fun forEachPending(queue: String, jobId: String?): List<JobResult> {
+interface ContextualJobDriver : JobDriver {
+    fun forEachPending(
+        queue: String,
+        jobId: String? = null,
+        context: String
+    ): List<JobResult>
+}
+
+object FileJobDriver : ContextualJobDriver {
+
+    override fun forEachPending(queue: String, jobId: String?, context: String): List<JobResult> {
         val results = mutableListOf<JobResult>()
-        val dir = File("jobs/$queue")
+
+        val dir = File("$context${File.separator}jobs/$queue")
 
         val files = when {
             !jobId.isNullOrBlank() -> {
                 val target = if (jobId.endsWith(".json", true)) jobId else "$jobId.json"
                 dir.listFiles { f -> f.isFile && f.name.equals(target, true) }?.toList().orEmpty()
             }
-            else -> dir.listFiles { f -> f.isFile && f.extension.equals("json", true) }?.sortedBy { it.name }.orEmpty()
+            else -> dir.listFiles { f -> f.isFile && f.extension.equals("json", true) }
+                ?.sortedBy { it.name }
+                .orEmpty()
         }
 
         if (files.isEmpty()) {
-            results.add(JobResult.Error("⚠️ No jobs to run."))
+            results.add(JobResult.Error("⚠️ No jobs to run. [context=$context] in " + dir.path))
             return results
         }
 
@@ -590,7 +583,12 @@ object FileJobDriver : JobDriver {
 
         return results
     }
+
+    override fun forEachPending(queue: String, jobId: String?): List<JobResult> {
+        TODO("Not yet implemented")
+    }
 }
+
 
 object RedisJobDriver : JobDriver {
     override fun forEachPending(queue: String, jobId: String?): List<JobResult> {
@@ -733,22 +731,28 @@ object JobDrivers {
 
 object JobReplayer {
     fun replayJobsListenerScript(
-        engine: ScriptEngine,
+        context: String,
         queue: String = "default",
         driver: String = "file",
-        jobId: String? = null,
         newParams: Map<String, Any?>,
         injector: (String) -> Any? = { null },
         logSpec: LogSpec? = null,
+        symbol: Any? = null,
         onResult: (KouTask) -> Unit = {}
     ): List<JobResult> {
+        LoggerHolder.initLogger(context)
+
         val d = JobDrivers.resolve(driver)
 
         LoggerHolder.LOGGER.info {
-            "\n🔁 Replaying jobs from [$queue] using [$driver]${if (jobId != null) " (jobId=$jobId)" else ""}\n"
+            "\n🔁 Replaying jobs from [$queue] using [$driver]\n"
         }
 
-        val results = d.forEachPending(queue, jobId)
+        val results = if (d is ContextualJobDriver) {
+            d.forEachPending(queue = queue, context = context)
+        } else {
+            d.forEachPending(queue = queue)
+        }
 
         results.forEach { res ->
             when (res) {
@@ -760,12 +764,12 @@ object JobReplayer {
                     if (logSpec != null) {
                         captureLogs<Any?>("Scripts.Dispatcher", logSpec) { logger ->
                             withScriptLogger(logger, logSpec.mdc) {
-                                val result = ScriptRunner.runScript(updated, engine, injector)
+                                val result = ScriptRunner.runScript(updated, symbol, injector)
                                 logger.info { result.toString() }
                             }
                         }
                     } else {
-                        ScriptRunner.runScript(updated, engine, injector)
+                        ScriptRunner.runScript(updated, symbol, injector)
                     }
 
                     onResult(updated)
@@ -782,7 +786,6 @@ object JobReplayer {
 }
 
 fun extractSignature(typeStr: String): Pair<List<String>, String> {
-    // 1. Buscar la flecha "->"
     val parts = typeStr.split("->").map { it.trim() }
     if (parts.size != 2) {
         error("Tipo inválido: $typeStr")
@@ -791,11 +794,10 @@ fun extractSignature(typeStr: String): Pair<List<String>, String> {
     val argsPart = parts[0]
     val returnPart = parts[1]
 
-    // 2. Limpiar paréntesis de los argumentos
     val args = argsPart.removePrefix("(").removeSuffix(")")
         .split(",")
         .map { it.trim() }
-        .filter { it.isNotEmpty() } // puede ser vacío si no tiene parámetros
+        .filter { it.isNotEmpty() }
 
     return args to returnPart
 }

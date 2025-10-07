@@ -1,8 +1,5 @@
 package com.koupper.octopus
 
-import javax.script.ScriptEngine
-import java.util.LinkedHashMap
-
 private enum class Kind { TERMINAL, SIDE_EFFECT }
 private data class FamilyMeta(val kind: Kind, val priority: Int)
 
@@ -18,8 +15,7 @@ data class DispatcherInputParams(
     val annotations: Map<String, Map<String, Any?>> = emptyMap(),
     val functionName: String,
     val params: ParsedParams?,
-    val sentence: String,
-    val engine: ScriptEngine,
+    val sentence: String
 )
 
 typealias UnifiedResolver<T> = (DispatcherInputParams, (T) -> Unit) -> Unit

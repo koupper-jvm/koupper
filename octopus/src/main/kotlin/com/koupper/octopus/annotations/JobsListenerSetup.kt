@@ -2,69 +2,41 @@ package com.koupper.octopus.annotations
 
 import com.koupper.container.app
 import com.koupper.logging.LogSpec
-import com.koupper.octopus.DispatcherInputParams
+import com.koupper.octopus.ParsedParams
 import com.koupper.octopus.process.JobEvent
 import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.ModuleProcessor
 import com.koupper.octopus.process.RoutesRegistration
 import com.koupper.orchestrator.*
-import com.koupper.providers.files.JSONFileHandler
-import com.koupper.providers.files.readAs
-import com.koupper.providers.files.toJsonAny
+import com.koupper.providers.files.*
 import com.koupper.shared.isSimpleType
 import com.koupper.shared.normalizeType
 import com.koupper.shared.octopus.extractExportFunctionSignature
+import com.koupper.shared.octopus.readTextOrNull
+import com.koupper.shared.runtime.ScriptingHostBackend
 import java.io.File
 import java.nio.file.Paths
 
+data class JobsListenerCall(
+    val scriptContext: String,
+    val scriptPath: String?,
+    val functionName: String,
+    val code: String,
+    val argTypes: List<String>? = null,
+    val paramsJson: Map<String, String> = emptyMap(),
+    val symbol: Any? = null,
+    val annotationParams: Map<String, Any?>
+)
+
 object JobsListenerSetup {
-    private lateinit var inp: DispatcherInputParams
+    private lateinit var jlc: JobsListenerCall
     private lateinit var jobListenerParams: Map<*, *>
     private lateinit var workerQueue: String
     private lateinit var workerDriver: String
     @Suppress("UNCHECKED_CAST")
     private val jsonHandler = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any?>
-
-    private fun tryInject(typeName: String, env: Map<String, Any?>): Any? = when (typeName) {
-        "JobEvent" -> JobEvent()
-        "JobRunner" -> JobRunner
-        "JobLister" -> JobLister
-        "JobBuilder" -> JobBuilder
-        "JobDisplayer" -> JobDisplayer
-        "RoutesRegistration" -> RoutesRegistration(env["context"] as String)
-        "ModuleAnalyzer" -> ModuleAnalyzer(env["context"] as String, *(env["flags"] as? Array<String> ?: emptyArray()))
-        "ModuleProcessor" -> ModuleProcessor(
-            env["context"] as String, *(env["flags"] as? Array<String> ?: emptyArray())
-        )
-
-        else -> null
-    }
-
-    private fun parseArg(expected: String, raw: Any?): Any? = when (expected) {
-        "String" -> when (raw) {
-            null -> null; is String -> raw; else -> raw.toString()
-        }
-
-        "Int" -> when (raw) {
-            is Number -> raw.toInt(); is String -> raw.toInt(); else -> error("Arg no parseable a Int")
-        }
-
-        "Long" -> when (raw) {
-            is Number -> raw.toLong(); is String -> raw.toLong(); else -> error("Arg no parseable a Long")
-        }
-
-        "Double" -> when (raw) {
-            is Number -> raw.toDouble(); is String -> raw.toDouble(); else -> error("Arg no parseable a Double")
-        }
-
-        "Boolean" -> when (raw) {
-            is Boolean -> raw; is String -> raw.equals(
-                "true", true
-            ) || raw == "1"; else -> error("Arg no parseable a Boolean")
-        }
-
-        else -> raw
-    }
+    private lateinit var backend: ScriptingHostBackend
+    private lateinit var injector: (String) -> Any?
 
     private fun looksLikeObjectLiteral(s: String): Boolean = s.trim().let { it.startsWith("{") && it.endsWith("}") }
 
@@ -99,12 +71,16 @@ object JobsListenerSetup {
         return rx.find(f.readText())?.groupValues?.get(1)
     }
 
-    fun run(inp: DispatcherInputParams): Any {
-        this.inp = inp
+    fun run(jlc: JobsListenerCall, injector: (String) -> Any? = { null }): Any {
+        this.jlc = jlc
 
-        val annotationParams = this.inp.annotations["JobsListener"].orEmpty()
+        this.injector = injector
 
-        this.jobListenerParams = annotationParams as? Map<*, *> ?: emptyMap<Any?, Any?>()
+        this.backend = ScriptingHostBackend()
+
+        this.backend.eval(jlc.code)
+
+        this.jobListenerParams = jlc.annotationParams as? Map<*, *> ?: emptyMap<Any?, Any?>()
 
         val creationWorkerJobResult = this.createWorkerListener()
 
@@ -113,111 +89,125 @@ object JobsListenerSetup {
 
     private fun createWorkerListener(): String {
         this.workerQueue = jobListenerParams["queue"] as? String ?: "job-callbacks"
+
         this.workerDriver = (jobListenerParams["driver"] as? String) ?: "file"
 
-        val jobInfo = JobMetricsCollector.collect(workerQueue, workerDriver)
+        val jobInfo = JobMetricsCollector.collect(this.jlc.scriptContext, workerQueue, workerDriver)
 
         if (jobInfo.pending > 0) {
             return "A JobListener already exists"
         }
 
-        val finalScriptPath = Paths.get(this.inp.scriptContext, this.inp.scriptPath ?: "").normalize().toAbsolutePath().toString()
+        val finalScriptPath = Paths.get(this.jlc.scriptContext, this.jlc.scriptPath ?: "")
+            .normalize().toAbsolutePath().toString()
 
-        this.inp.engine.eval(this.inp.functionName) ?: return "Invalid JobListener structure."
+        val functionSignature = extractExportFunctionSignature(this.jlc.code)
 
-        val flags: Set<String> = this.inp.params?.flags ?: emptySet()
-        val params: Map<String, String> = this.inp.params?.params ?: emptyMap()
-        val positionals: List<String> = this.inp.params?.positionals ?: emptyList()
-
-        val hasComposedFlag = flags.any { it == "-ci" || it == "--ci" }
-        val composedFromFlag: String? = params["ci"]
-
-        var composedConsumed = false
-
-        val baseEnv: Map<String, Any?> = mapOf(
-            "context" to this.inp.scriptContext
-        )
-
-        val functionSignature = extractExportFunctionSignature(this.inp.sentence)
-
-        val functionNameAndSignature = if (this.inp.functionName.isNotEmpty() && functionSignature != null) {
-            mapOf(this.inp.functionName to functionSignature)
+        val functionNameAndSignature = if (this.jlc.functionName.isNotEmpty() && functionSignature != null) {
+            mapOf(this.jlc.functionName to functionSignature)
         } else emptyMap()
 
-        val functionArgTypeNames: List<String> = functionNameAndSignature[this.inp.functionName]?.first ?: emptyList()
+        val functionArgTypeNames: List<String> = functionNameAndSignature[this.jlc.functionName]?.first ?: emptyList()
 
-        val functionReturnTypeName: String = functionNameAndSignature[this.inp.functionName]?.second ?: "kotlin.Any"
+        fun argIndex(k: String) = k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE
 
+        val orderedParams = this.jlc.paramsJson.entries.sortedBy { argIndex(it.key) }
         val finalParams = ArrayList<Any?>(functionArgTypeNames.size)
-
         var posIdx = 0
 
-        outer@for (argName in functionArgTypeNames) {
-            val isInjectable = tryInject(argName, baseEnv)
+        outer@ for (argName in functionArgTypeNames) {
+            val isInjectable = this.injector(argName)
 
             if (isInjectable != null) {
                 finalParams += isInjectable
-                continue
+                continue@outer
             }
 
-            if (argName.isSimpleType()) {
-                val rawValue = positionals.getOrNull(posIdx) ?: params["arg$posIdx"]
-                ?: return "Missing positional arguments for simple parameter '$argName' at position $posIdx"
-                posIdx += 1
-                finalParams += parseArg(argName, rawValue)
-                continue
-            }
+            val key = "arg$posIdx"
+            val raw = orderedParams.firstOrNull { it.key == key }?.value
+            val isNullable = argName.trim().endsWith("?")
 
-            val jsonLiteral: String? = when {
-                hasComposedFlag && !composedConsumed && composedFromFlag != null -> {
-                    composedConsumed = true
-                    composedFromFlag
-                }
-
-                positionals.getOrNull(posIdx)?.let { looksLikeObjectLiteral(it) } == true -> {
-                    val rawObj = positionals[posIdx]
+            if (raw == null) {
+                if (isNullable) {
+                    finalParams += null
                     posIdx += 1
-                    rawObj
-                }
-
-                else -> null
+                    continue
+                } else error("Falta '$key' en params para tipo '$argName'")
             }
 
-            require(jsonLiteral != null) {
-                "Missing composed input for compound type '$argName' (use -ci {..} or provide a literal {..} at this position)"
+            val token = raw.trim()
+
+            val unwrapped = if (token.length >= 2 && token[0] == '"' &&
+                (token.getOrNull(1) == '{' || token.getOrNull(1) == '[')
+            ) {
+                jsonHandler.readTo<String>(token)
+            } else token
+
+            val value: Any? =
+                if (argName.isSimpleType()) {
+                    when (argName.normalizeType()) {
+                        "String" -> {
+                            if (unwrapped != null && unwrapped.length >= 2 &&
+                                unwrapped.first() == '"' && unwrapped.last() == '"'
+                            ) {
+                                jsonHandler.readTo<String>(unwrapped)
+                            } else {
+                                unwrapped
+                            }
+                        }
+                        "Int"     -> jsonHandler.readTo<Int>(unwrapped)
+                        "Long"    -> jsonHandler.readTo<Long>(unwrapped)
+                        "Double"  -> jsonHandler.readTo<Double>(unwrapped)
+                        "Boolean" -> jsonHandler.readTo<Boolean>(unwrapped)
+                        "Float"   -> jsonHandler.readTo<Float>(unwrapped)
+                        "Short"   -> jsonHandler.readTo<Short>(unwrapped)
+                        "Byte"    -> jsonHandler.readTo<Byte>(unwrapped)
+                        "Char"    -> jsonHandler.readTo<String>(unwrapped)?.single()
+                        else      -> jsonHandler.readTo<Any>(unwrapped)
+                    }
+                } else if (looksLikeObjectLiteral(unwrapped!!)) {
+                    normalizeObjectLiteralToJson(unwrapped)
+                } else null
+
+            if (value != null) {
+                finalParams += value
             }
 
-            finalParams += normalizeObjectLiteralToJson(jsonLiteral)
+            posIdx += 1
         }
 
-        @Suppress("UNCHECKED_CAST") val jsonAny = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any?>
-        val paramsMap: Map<String, String> =
+        @Suppress("UNCHECKED_CAST")
+        val jsonAny = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any?>
+
+        val paramValues: Map<String, String> =
             finalParams.mapIndexed { i, arg -> "arg$i" to jsonAny.toJsonAny(arg) }.toMap()
 
-        val fileName = File(finalScriptPath).name
+        val workerFileName = File(finalScriptPath).name
+
+        val functionReturnTypeName: String = functionNameAndSignature[this.jlc.functionName]?.second ?: "kotlin.Any"
 
         val workerTask = KouTask(
             id = java.util.UUID.randomUUID().toString(),
-            fileName = fileName,
-            functionName = this.inp.functionName,
-            params = paramsMap,
+            fileName = workerFileName,
+            functionName = this.jlc.functionName,
+            params = paramValues,
             signature = functionArgTypeNames to functionReturnTypeName,
             scriptPath = finalScriptPath,
             packageName = null,
-            origin = "koupper",
-            context = this.inp.scriptContext,
+            origin = "listenerSetup",
+            context = this.jlc.scriptContext,
             sourceType = "script",
             queue = workerQueue,
             driver = workerDriver,
             contextVersion = "unknown",
-            sourceSnapshot = com.koupper.shared.octopus.readTextOrNull(finalScriptPath),
+            sourceSnapshot = readTextOrNull(finalScriptPath),
             artifactUri = null,
             artifactSha256 = null
         )
 
         JobDispatcher.dispatch(workerTask, queue = workerQueue, driver = workerDriver)
 
-        val listenByJobsResult = this.listenByJobs(workerTask)
+        val listenByJobsResult = this.listenByJobsToThrow(workerTask)
 
         return "Worker listener created. \n$listenByJobsResult"
     }
@@ -234,20 +224,13 @@ object JobsListenerSetup {
         else       -> default
     }
 
-    private fun Any?.asLong(default: Long): Long = when (this) {
-        null       -> default
-        is Number  -> this.toLong()
-        is String  -> this.toLongOrNull() ?: default
-        else       -> default
-    }
-
-    private fun listenByJobs(workerTask : KouTask): String {
-        val cfgQueue  = getJobQueueFromConfig(this.inp.scriptContext) ?: "default"
-        val cfgDriver = getJobDriverFromConfig(this.inp.scriptContext) ?: "file"
+    private fun listenByJobsToThrow(workerTask : KouTask): String {
+        val cfgQueue  = getJobQueueFromConfig(this.jlc.scriptContext) ?: "default"
+        val cfgDriver = getJobDriverFromConfig(this.jlc.scriptContext) ?: "file"
         val sleepTime = (this.jobListenerParams["time"] as? Long) ?: 5000L
-        val key       = "${inp.scriptContext}::$cfgQueue"
+        val key       = "${this.jlc.scriptContext}::$cfgQueue"
 
-        val debug = jobListenerParams["debug"].asBool(false)
+        val debug = this.jobListenerParams["debug"].asBool(false)
 
         if (debug) enableDebugMode()
 
@@ -255,7 +238,7 @@ object JobsListenerSetup {
             key = key,
             sleepTime = sleepTime,
             runOnce = { onJob ->
-                JobRunner.runPendingJobs(queue = cfgQueue, driver = cfgDriver) { job -> onJob(job) }
+                JobRunner.runPendingJobs(workerTask.context, queue = cfgQueue, driver = cfgDriver) { job -> onJob(job) }
             },
             onJob = { job ->
                 val event = JobEvent(
@@ -271,55 +254,97 @@ object JobsListenerSetup {
                     finishedAt     = System.currentTimeMillis()
                 )
 
-                fun jsonStringToKotlin(valueJson: String): Any? {
-                    val t = valueJson.trim()
-                    return when {
-                        t.startsWith("{") -> jsonHandler.readAs<Map<String, Any?>>(t)
-                        t.startsWith("[") -> jsonHandler.readAs<List<Any?>>(t)
-                        t.startsWith("\"")-> jsonHandler.readAs<String>(t)
-                        t.equals("true", true) || t.equals("false", true) -> jsonHandler.readAs<Boolean>(t)
-                        t.matches(Regex("-?\\d+"))        -> jsonHandler.readAs<Long>(t)
-                        t.matches(Regex("-?\\d+\\.\\d+")) -> jsonHandler.readAs<Double>(t)
-                        t.equals("null", true)            -> null
-                        else -> t
+                fun jsonStringToKotlin(className: String, valueJson: String): Any? {
+                    val clazz = try {
+                        Class.forName(className)
+                    } catch (e: ClassNotFoundException) {
+                        throw IllegalArgumentException("Class not found for name: $className", e)
+                    }
+
+                    return try {
+                        jsonHandler.read(valueJson).toType(clazz)
+                    } catch (e: Exception) {
+                        throw IllegalStateException("Failed to parse JSON into class $className: ${e.message}", e)
                     }
                 }
 
-                val workerFunctionArgs: List<String> = workerTask.signature?.first ?: emptyList()
-
-                val jeIdx = workerFunctionArgs.indexOfFirst { it.normalizeType() == "JobEvent" }
+                val workerFunctionArgs: List<String> = workerTask.signature.first
 
                 val argsParams: MutableMap<String, Any?> = linkedMapOf()
 
-                workerTask.params.entries
-                    .filter { (k, _) -> k.startsWith("arg") }
-                    .sortedBy { (k, _) -> k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE }
-                    .forEach { (k, vJson) ->
-                        val idx = k.removePrefix("arg").toIntOrNull() ?: return@forEach
-                        argsParams[k] = if (idx == jeIdx) {
-                            event
-                        } else {
-                            jsonStringToKotlin(vJson)
-                        }
+                fun argIndex(k: String) = k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE
+
+                val orderedParams = this.jlc.paramsJson.entries.sortedBy { argIndex(it.key) }
+                var userIdx = 0
+
+                loop@ for (argName in workerFunctionArgs) {
+                    val inj = this.injector(argName)
+
+                    if (inj != null) {
+                        argsParams[argName] = inj
+                        userIdx += 1
+                        continue@loop
                     }
 
-                workerFunctionArgs.forEachIndexed { index, arg ->
-                    val k = "arg$index"
-                    val v = argsParams[k] ?: return@forEachIndexed
-                    when (arg.normalizeType()) {
-                        "Int"     -> if (v is Number) argsParams[k] = v.toInt()
-                        "Long"    -> if (v is Number) argsParams[k] = v.toLong()
-                        "Double"  -> if (v is Number) argsParams[k] = v.toDouble()
-                        "Float"   -> if (v is Number) argsParams[k] = v.toFloat()
-                        "Short"   -> if (v is Number) argsParams[k] = v.toShort()
-                        "Byte"    -> if (v is Number) argsParams[k] = v.toByte()
+                    val argKey = "arg$userIdx"
+                    val raw = orderedParams.firstOrNull { it.key == argKey }?.value
+                    val isNullable = argName.trim().endsWith("?")
+
+                    if (raw == null) {
+                        if (isNullable) {
+                            argsParams[argName] = null
+                            userIdx += 1
+                            continue@loop
+                        } else error("Falta '$key' en params para tipo '$argName'")
                     }
+
+                    val token = raw.trim()
+
+                    val unwrapped = if (token.length >= 2 && token[0] == '"' &&
+                        (token.getOrNull(1) == '{' || token.getOrNull(1) == '[')
+                    ) {
+                        jsonHandler.readTo<String>(token)
+                    } else token
+
+                    val value: Any? =
+                        if (argName.isSimpleType()) {
+                            when (argName.normalizeType()) {
+                                "String" -> {
+                                    if (unwrapped != null && unwrapped.length >= 2 &&
+                                        unwrapped.first() == '"' && unwrapped.last() == '"'
+                                    ) {
+                                        jsonHandler.readTo<String>(unwrapped)
+                                    } else {
+                                        unwrapped
+                                    }
+                                }
+                                "Int"     -> jsonHandler.readTo<Int>(unwrapped)
+                                "Long"    -> jsonHandler.readTo<Long>(unwrapped)
+                                "Double"  -> jsonHandler.readTo<Double>(unwrapped)
+                                "Boolean" -> jsonHandler.readTo<Boolean>(unwrapped)
+                                "Float"   -> jsonHandler.readTo<Float>(unwrapped)
+                                "Short"   -> jsonHandler.readTo<Short>(unwrapped)
+                                "Byte"    -> jsonHandler.readTo<Byte>(unwrapped)
+                                "Char"    -> jsonHandler.readTo<String>(unwrapped)?.single()
+                                else      -> jsonHandler.readTo<Any>(unwrapped)
+                            }
+                        } else if (looksLikeObjectLiteral(unwrapped!!)) {
+                            val normalizedObject = normalizeObjectLiteralToJson(unwrapped)
+
+                            jsonStringToKotlin(argName, normalizedObject)
+                        } else null
+
+                    if (value != null) {
+                        argsParams[argName] = value
+                    }
+
+                    userIdx += 1
                 }
 
                 val mergedParams: Map<String, Any?> = argsParams
 
                 JobReplayer.replayJobsListenerScript(
-                    engine = inp.engine,
+                    context = workerTask.context,
                     queue = workerQueue,
                     driver = workerDriver,
                     newParams = mergedParams,
@@ -329,14 +354,15 @@ object JobsListenerSetup {
                             "JobLister"          -> JobLister
                             "JobBuilder"         -> JobBuilder
                             "JobDisplayer"       -> JobDisplayer
-                            "RoutesRegistration" -> RoutesRegistration(inp.scriptContext)
-                            "ModuleAnalyzer"     -> ModuleAnalyzer(inp.scriptContext)
-                            "ModuleProcessor"    -> ModuleProcessor(inp.scriptContext)
+                            "RoutesRegistration" -> RoutesRegistration(this.jlc.scriptContext)
+                            "ModuleAnalyzer"     -> ModuleAnalyzer(this.jlc.scriptContext)
+                            "ModuleProcessor"    -> ModuleProcessor(this.jlc.scriptContext)
                             "JobEvent"           -> event
                             else -> null
                         }
                     },
-                    logSpec = replaySpec
+                    logSpec = replaySpec,
+                    symbol = this.backend.getSymbol(jlc.functionName),
                 ) { updatedWorkerJob ->
                     updatedWorkerJob.dispatchToQueue(queue = workerQueue, driver = workerDriver)
                 }

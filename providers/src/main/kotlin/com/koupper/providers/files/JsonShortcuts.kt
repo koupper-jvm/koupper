@@ -26,3 +26,11 @@ inline fun <reified T> JSONFileHandler<*>.tryReadTo(body: String?): JsonParseRes
         JsonParseResult.Err("invalid_json")
     }
 }
+
+fun JSONFileHandler<*>.toType(clazz: Class<*>): Any? {
+    return try {
+        com.fasterxml.jackson.module.kotlin.jacksonObjectMapper().readValue(getText(), clazz)
+    } catch (e: Exception) {
+        throw JsonParseException("Failed to parse JSON to ${clazz.name}: ${e.message}", e)
+    }
+}

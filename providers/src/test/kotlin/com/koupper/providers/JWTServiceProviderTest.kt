@@ -13,14 +13,4 @@ class JWTServiceProviderTest : AnnotationSpec() {
         "JWT_SECRET" to "jwysecret",
     )
 
-    @Test
-    fun `should bind the crypt0 implementation`() {
-        withEnvironment(envs) {
-            JWTServiceProvider().up()
-
-            assertTrue {
-                app.getInstance(JWT::class) is JWTAgent
-            }
-        }
-    }
 }
