@@ -34,14 +34,6 @@ if %ERRORLEVEL% neq 0 (
     timeout /t 5 >nul
 )
 
-:: ==============================
-:: Enviar comando a Koupper CLI
-:: ==============================
-
-:: Dar tiempo para que los servicios estén listos
-timeout /t 3 >nul
-
-
 :: Enviar el comando exactamente como estaba antes
 powershell -Command ^
     "$socket = New-Object System.Net.Sockets.TcpClient; " ^
