@@ -1,12 +1,9 @@
 package com.koupper.providers.http
 
-import io.github.rybalkinsd.kohttp.dsl.*
-import io.github.rybalkinsd.kohttp.dsl.context.BodyContext
-import io.github.rybalkinsd.kohttp.dsl.context.MultipartBodyContext
-import io.github.rybalkinsd.kohttp.ext.url
-import io.github.rybalkinsd.kohttp.util.Form
-import io.github.rybalkinsd.kohttp.util.Json
 import okhttp3.*
+import okhttp3.Headers.Companion.toHeaders
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import java.io.File
 
 sealed class HttpClient {
@@ -17,7 +14,7 @@ sealed class HttpClient {
     val params: MutableMap<String, String> = mutableMapOf()
     val headers: MutableMap<String, String> = mutableMapOf()
 
-    open fun makeBody(): RequestBody = throw UnsupportedOperationException("Request body is not supported for [$method] Method.")
+    open fun makeBody(): RequestBody = throw UnsupportedOperationException("Request body is not supported for [$method] method.")
 }
 
 class Post : HttpClient() {
@@ -28,140 +25,108 @@ class Post : HttpClient() {
     }
 
     fun multipartBody(contentType: String? = null, init: MultipartBodyRequest.() -> Unit) {
-        body = MultipartBodyRequest(contentType).apply { init() }.build()
+        body = MultipartBodyRequest(contentType).apply(init).build()
     }
 
     override fun makeBody(): RequestBody = body
 }
 
 class BodyRequest(type: String?) {
-    private val bodyContext = BodyContext(type)
+    private val mediaType = type?.toMediaTypeOrNull()
 
-    fun string(content: String): RequestBody = bodyContext.string(content)
-    fun file(content: File): RequestBody = bodyContext.file(content)
-    fun bytes(content: ByteArray): RequestBody = bodyContext.bytes(content)
-
-    fun json(content: String): RequestBody = bodyContext.json(content)
-    fun form(content: String): RequestBody = bodyContext.form(content)
-
-    fun json(init: Json.() -> Unit): RequestBody = bodyContext.json(init)
-    fun form(init: Form.() -> Unit): RequestBody = bodyContext.form(init)
+    fun string(content: String): RequestBody = RequestBody.create(mediaType, content)
+    fun file(content: File): RequestBody = RequestBody.create(mediaType, content)
+    fun bytes(content: ByteArray): RequestBody = RequestBody.create(mediaType, content)
+    fun json(content: String): RequestBody = RequestBody.create("application/json".toMediaTypeOrNull(), content)
+    fun form(content: String): RequestBody = RequestBody.create("application/x-www-form-urlencoded".toMediaTypeOrNull(), content)
 }
 
 class MultipartBodyRequest(type: String?) {
-    private val multipartBodyContext = MultipartBodyContext(type)
+    private val builder = MultipartBody.Builder().setType(
+        type?.toMediaTypeOrNull() ?: MultipartBody.FORM
+    )
 
-    fun part(name: String, filename: String? = null, init: BodyContext.() -> RequestBody): MultipartBody.Part =
-            multipartBodyContext.part(name, filename, init)
+    fun part(name: String, filename: String? = null, init: BodyRequest.() -> RequestBody) {
+        val body = BodyRequest(null).init()
+        if (filename != null)
+            builder.addFormDataPart(name, filename, body)
+        else
+            builder.addFormDataPart(name, "", body)
+    }
 
-    fun build(): MultipartBody = multipartBodyContext.build()
+    fun build(): MultipartBody = builder.build()
 }
 
 class Get : HttpClient()
-
 class Put : HttpClient()
-
 class Patch : HttpClient()
-
 class Delete : HttpClient()
 
 class HttpInvoker : HttpClient(), HtppClient {
-    private lateinit var response: Response
+    private val client = OkHttpClient()
+
+    private fun buildRequest(
+        method: String,
+        url: String,
+        headers: Map<String, String>,
+        body: RequestBody? = null
+    ): Request {
+        val builder = Request.Builder().url(url)
+        headers.forEach { (k, v) -> builder.addHeader(k, v) }
+
+        when (method.uppercase()) {
+            "POST" -> builder.post(body ?: RequestBody.create(null, ByteArray(0)))
+            "PUT" -> builder.put(body ?: RequestBody.create(null, ByteArray(0)))
+            "PATCH" -> builder.patch(body ?: RequestBody.create(null, ByteArray(0)))
+            "DELETE" -> {
+                if (body != null) builder.delete(body) else builder.delete()
+            }
+        }
+
+        return builder.build()
+    }
 
     override fun post(init: Post.() -> Unit): HttpResponse {
-        this.method = "POST"
-
         val post = Post().apply(init)
-
-        require(!post.url.isNullOrBlank()) { "URL must be provided for POST request." }
-        require(Regex("^https?://.+").matches(post.url!!)) {
-            "Invalid URL format: '${post.url}'"
-        }
-
-        val response = httpPost {
-            url(post.url!!)
-            param {
-                post.params
-            }
-            header {
-                post.headers
-            }
-            body {
-                post.makeBody()
-            }
-        }
-
-        return HttpResponse(response)
+        val req = buildRequest("POST", post.url!!, post.headers, post.makeBody())
+        val resp = client.newCall(req).execute()
+        return HttpResponse(resp)
     }
 
     override fun get(init: Get.() -> Unit): HttpResponse? {
-        this.method = "GET"
-
         val get = Get().apply(init)
 
-        val response = httpGet {
-            url(get.url!!)
-            param {
-                get.params.forEach { (key, value) ->
-                    key to value
-                }
-            }
-        }
+        val httpUrlBuilder = get.url!!.toHttpUrlOrNull()?.newBuilder() ?: return null
+        get.params.forEach { (k, v) -> httpUrlBuilder.addQueryParameter(k, v) }
 
-        return HttpResponse(response)
+        val req = Request.Builder()
+            .url(httpUrlBuilder.build())
+            .headers(get.headers.toHeaders())
+            .get()
+            .build()
+
+        val resp = client.newCall(req).execute()
+        return HttpResponse(resp)
     }
 
     override fun put(init: Put.() -> Unit): HttpResponse {
-        this.method = "PUT"
-
         val put = Put().apply(init)
-
-        val response = httpPut {
-            url = put.url
-            param {
-                put.params
-            }
-            header {
-                put.headers
-            }
-        }
-
-        return HttpResponse(response)
+        val req = buildRequest("PUT", put.url!!, put.headers, put.makeBody())
+        val resp = client.newCall(req).execute()
+        return HttpResponse(resp)
     }
 
     override fun patch(init: Patch.() -> Unit): HttpResponse {
-        this.method = "PATCH"
-
         val patch = Patch().apply(init)
-
-        val response = httpPatch {
-            url = patch.url
-            param {
-                patch.params
-            }
-            header {
-                patch.headers
-            }
-        }
-
-        return HttpResponse(response)
+        val req = buildRequest("PATCH", patch.url!!, patch.headers, patch.makeBody())
+        val resp = client.newCall(req).execute()
+        return HttpResponse(resp)
     }
 
     override fun delete(init: Delete.() -> Unit): HttpResponse {
-        this.method = "DELETE"
-
         val delete = Delete().apply(init)
-
-        val response = httpDelete {
-            url = delete.url
-            param {
-                delete.params
-            }
-            header {
-                delete.headers
-            }
-        }
-
-        return HttpResponse(response)
+        val req = buildRequest("DELETE", delete.url!!, delete.headers, null)
+        val resp = client.newCall(req).execute()
+        return HttpResponse(resp)
     }
 }
