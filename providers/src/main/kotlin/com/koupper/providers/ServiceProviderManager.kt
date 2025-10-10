@@ -1,5 +1,6 @@
 package com.koupper.providers
 
+import com.koupper.providers.ai.AIServiceProvider
 import com.koupper.providers.aws.dynamo.AwsServiceProvider
 import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBServiceProvider
@@ -50,7 +51,8 @@ class ServiceProviderManager {
             JWTServiceProvider::class,
             CryptoServiceProvider::class,
             AwsServiceProvider::class,
-            HasherServiceProvider::class
+            HasherServiceProvider::class,
+            AIServiceProvider::class
         )
     }
 }
