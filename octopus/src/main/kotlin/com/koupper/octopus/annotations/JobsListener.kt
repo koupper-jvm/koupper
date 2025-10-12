@@ -4,7 +4,6 @@ package com.koupper.octopus.annotations
 @Retention(AnnotationRetention.SOURCE)
 annotation class JobsListener(
     val time: Long = 5000,
-    val queue: String = "job-callbacks",
-    val driver: String = "default",
-    val debug: Boolean = false
+    val debug: Boolean = false,
+    val configId: String = "DEFAULT"
 )

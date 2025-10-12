@@ -124,7 +124,7 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
                 file.name == "init.kts" -> tags.add("[init]")
                 file.name == "jobs.json" -> {
                     try {
-                        val config = JobConfig.loadOrFail()
+                        val config = JobConfig.loadOrFail(context = baseDir.path)
                         tags.add("[cfg][driver:${config.driver}]|[queue:${config.queue}]")
                     } catch (e: Exception) {
                         // Silenciar el error y no agregar tags
