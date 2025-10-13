@@ -9,7 +9,10 @@ import com.koupper.octopus.process.RoutesRegistration
 import com.koupper.orchestrator.*
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.orchestrator.config.JobConfiguration
-import com.koupper.providers.files.*
+import com.koupper.providers.files.JSONFileHandler
+import com.koupper.providers.files.readTo
+import com.koupper.providers.files.toJsonAny
+import com.koupper.providers.files.toType
 import com.koupper.shared.isSimpleType
 import com.koupper.shared.normalizeType
 import com.koupper.shared.octopus.extractExportFunctionSignature
@@ -82,7 +85,7 @@ object JobsListenerSetup {
         val configs = JobConfig.loadOrFail(this.jlc.scriptContext, this.workerConfigId).configurations
 
         if (configs.isNullOrEmpty()) {
-            throw IllegalStateException("❌ No job configurations found in context: ${this.jlc.scriptContext}")
+            throw IllegalStateException("❌ No job configurations with id ${this.workerConfigId} found in context: ${this.jlc.scriptContext}")
         }
 
         if (configs.size > 1 && this.workerConfigId.isNullOrEmpty()) {
@@ -106,7 +109,7 @@ object JobsListenerSetup {
         val jobInfo = JobMetricsCollector.collect(this.jlc.scriptContext, finalConfig)
 
         if (jobInfo.pending > 0) {
-            return "A JobListener already exists for this configuration."
+            return "A JobListener already exists for this configuration driver[${finalConfig.driver}], queue[${finalConfig.queue}]."
         }
 
         val finalScriptPath = Paths.get(this.jlc.scriptContext, this.jlc.scriptPath ?: "")
@@ -245,7 +248,7 @@ object JobsListenerSetup {
             key = key,
             sleepTime = sleepTime,
             runOnce = { onJob ->
-                JobRunner.runPendingJobs(workerTask.context, null , config.id) { jobs -> onJob(jobs) }
+                JobRunner.runPendingJobs(workerTask.context, jobId = null, configId = null) { jobs -> onJob(jobs) }
             },
             onJob = { results ->
                 results.forEach { result ->

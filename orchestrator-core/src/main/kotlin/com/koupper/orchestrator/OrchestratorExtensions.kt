@@ -364,40 +364,34 @@ object JobLister {
         onResult: (List<Any>) -> Unit = {}
     ) {
         val jobConfiguration = JobConfig.loadOrFail(context, configId)
-        val allResults = mutableListOf<JobResult>()
+        val results = mutableListOf<JobResult>()
 
         jobConfiguration.configurations?.forEach { config ->
-            val results = when (val driver = JobDrivers.resolve(config.driver)) {
-                is ContextualJobDriver -> driver.forEachPending(context, config, jobId)
-                else -> driver.forEachPending(config, jobId)
-            }
-            allResults += results
+            val driver = JobDrivers.resolve(config.driver)
+            results += driver.listPending(context, config, jobId)
         }
 
-        if (allResults.isEmpty()) {
+        if (results.isEmpty()) {
             return onResult(listOf(JobResult.Error("⚠️ No jobs found")))
         }
 
-        val result = allResults.map { res ->
-            when (res) {
-                is JobResult.Ok -> {
-                    val t = res.task
-                    JobInfo(
-                        configId = res.configName,
-                        id = t.id,
-                        function = t.functionName,
-                        params = t.params,
-                        source = t.scriptPath,
-                        context = t.context,
-                        version = t.contextVersion,
-                        origin = t.origin
-                    )
-                }
-                is JobResult.Error -> res
+        val infos = results.map {
+            when (it) {
+                is JobResult.Ok -> JobInfo(
+                    configId = it.configName,
+                    id = it.task.id,
+                    function = it.task.functionName,
+                    params = it.task.params,
+                    source = it.task.scriptPath,
+                    context = it.task.context,
+                    version = it.task.contextVersion,
+                    origin = it.task.origin
+                )
+                is JobResult.Error -> it
             }
         }
 
-        onResult(result)
+        onResult(infos)
     }
 }
 
@@ -561,12 +555,11 @@ object JobDisplayer {
 
 interface JobDriver {
     fun forEachPending(config: JobConfiguration, jobId: String?): List<JobResult>
+    fun listPending(context: String, config: JobConfiguration, jobId: String?): List<JobResult>
 }
 
 interface ContextualJobDriver : JobDriver {
     fun forEachPending(context: String, config: JobConfiguration, jobId: String?): List<JobResult>
-
-    override fun forEachPending(config: JobConfiguration, jobId: String?): List<JobResult>
 }
 
 object FileJobDriver : ContextualJobDriver {
@@ -585,7 +578,7 @@ object FileJobDriver : ContextualJobDriver {
         }
 
         if (files.isEmpty()) {
-            results.add(JobResult.Error("⚠️ No jobs to run. [context=$context]"))
+            results.add(JobResult.Error("⚠️ No File jobs found: [context=$context]"))
             return results
         }
 
@@ -607,6 +600,24 @@ object FileJobDriver : ContextualJobDriver {
 
     override fun forEachPending(config: JobConfiguration, jobId: String?): List<JobResult> {
         TODO("Not yet implemented")
+    }
+
+    override fun listPending(context: String, config: JobConfiguration, jobId: String?): List<JobResult> {
+        val dir = File("$context${File.separator}jobs/${config.queue}")
+        val files = dir.listFiles { f -> f.isFile && f.extension.equals("json", true) } ?: return emptyList()
+
+        if (files.isEmpty()) {
+            return listOf(JobResult.Error("⚠️ No files found in [${dir.absoluteFile}]"))
+        }
+
+        return files.mapNotNull { file ->
+            try {
+                val task = JobSerializer.deserialize(file.readText())
+                JobResult.Ok(config.id, task)
+            } catch (e: Exception) {
+                JobResult.Error("❌ Failed to read job '${file.name}': ${e.message}", e)
+            }
+        }
     }
 }
 
@@ -653,6 +664,10 @@ object RedisJobDriver : JobDriver {
 
         return results
     }
+
+    override fun listPending(context: String, config: JobConfiguration, jobId: String?): List<JobResult> {
+        TODO("Not yet implemented")
+    }
 }
 
 object SqsJobDriver : JobDriver {
@@ -677,7 +692,7 @@ object SqsJobDriver : JobDriver {
             ).messages()
 
             if (msgs.isEmpty()) {
-                results.add(JobResult.Error("⚠️ No SQS messages found."))
+                results.add(JobResult.Error("⚠️ No SQS messages found: ${config.id}"))
                 return results
             }
 
@@ -698,6 +713,52 @@ object SqsJobDriver : JobDriver {
         }
         return results
     }
+
+    override fun listPending(context: String, config: JobConfiguration, jobId: String?): List<JobResult> {
+        val results = mutableListOf<JobResult>()
+        val region = Region.of(config.sqsRegion)
+
+        val sqs = SqsClient.builder()
+            .region(region)
+            .credentialsProvider(sqsCredsProvider(config))
+            .build()
+
+        sqs.use {
+            val queueUrl = config.sqsQueueUrl
+            val attrs = it.getQueueAttributes { b ->
+                b.queueUrl(queueUrl)
+                    .attributeNames(
+                        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES,
+                        QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE
+                    )
+            }.attributes()
+
+            val pendingCount = attrs[QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES]?.toIntOrNull() ?: 0
+            val inFlightCount = attrs[QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE]?.toIntOrNull() ?: 0
+
+            if (pendingCount == 0 && inFlightCount == 0) {
+                results += JobResult.Error("⚠️ No SQS messages found in [$queueUrl]")
+            } else {
+                val pseudoTask = KouTask(
+                    id = UUID.randomUUID().toString(),
+                    fileName = "SqsQueueStatus",
+                    functionName = "listPending",
+                    params = mapOf(
+                        "pending" to pendingCount.toString(),
+                        "inFlight" to inFlightCount.toString()
+                    ),
+                    signature = Pair(emptyList(), "Unit"),
+                    scriptPath = null,
+                    packageName = null,
+                    contextVersion = System.currentTimeMillis().toString()
+                )
+                results += JobResult.Ok(config.id, pseudoTask)
+            }
+        }
+
+        return results
+    }
+
 }
 
 object DbJobDriver : JobDriver {
@@ -765,6 +826,10 @@ object DbJobDriver : JobDriver {
         }
 
         return results
+    }
+
+    override fun listPending(context: String, config: JobConfiguration, jobId: String?): List<JobResult> {
+        TODO("Not yet implemented")
     }
 }
 
@@ -941,10 +1006,12 @@ inline fun <reified T, reified R> ((T) -> R).asJob(
 }
 
 fun KouTask.dispatchToQueue(configId: String? = null) {
-    val config = JobConfig.loadOrFail(context, configId)
+    val currentContext = File("${Paths.get("").toAbsolutePath()}")
+
+    val config = JobConfig.loadOrFail(currentContext.absolutePath, configId)
 
     if (config.configurations.isNullOrEmpty()) {
-        throw IllegalStateException("❌ No job configurations found in context: $context")
+        throw IllegalStateException("❌ No job configurations found in context: ${currentContext.absolutePath}")
     }
 
     if (config.configurations.size > 1 && configId.isNullOrEmpty()) {
@@ -954,6 +1021,6 @@ fun KouTask.dispatchToQueue(configId: String? = null) {
         )
     }
 
-    JobDispatcher.dispatch(this, config)
+    JobDispatcher.dispatch(this, config.configurations.first())
 }
 
