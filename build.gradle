@@ -145,6 +145,7 @@ project(':providers') {
         implementation "software.amazon.awssdk:sqs:2.28.9"
         implementation "org.yaml:snakeyaml:2.3"
         implementation "com.sun.activation:jakarta.activation:2.0.1"
+        implementation "io.pebbletemplates:pebble:3.2.1"
     }
 }
 

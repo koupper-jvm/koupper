@@ -9,8 +9,8 @@ object ListenersRegistry {
     fun start(
         key: String,
         sleepTime: Long,
-        runOnce: (onJob: (KouTask) -> Unit) -> Unit,
-        onJob: (KouTask) -> Unit
+        runOnce: (onJob: (List<Any?>) -> Unit) -> Unit,
+        onJob: (List<Any?>) -> Unit
     ) {
         if (listeners[key]?.isRunning() == true) return
 
@@ -64,8 +64,8 @@ object ListenersRegistry {
     fun restart(
         key: String,
         sleepTime: Long,
-        runOnce: (onJob: (KouTask) -> Unit) -> Unit,
-        onJob: (KouTask) -> Unit
+        runOnce: (onJob: (List<Any?>) -> Unit) -> Unit,
+        onJob: (List<Any?>) -> Unit
     ) {
         stop(key)
         start(key, sleepTime, runOnce, onJob)

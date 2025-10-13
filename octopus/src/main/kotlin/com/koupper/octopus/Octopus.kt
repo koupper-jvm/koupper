@@ -281,10 +281,12 @@ fun listenForExternalCommands(processManager: ScriptExecutor) {
                             processManager.runFromScriptFile(context!!, scriptPath, parameters) { result: Any ->
                                 app.createSingletonOf(LoggerCore::class).info { "✅ Result from script execution: $result" }
 
-                                if (result !is Unit && (result as String).isNotEmpty()) {
-                                    writer.write(result.toString())
-                                } else {
-                                    writer.write("")
+                                when (result) {
+                                    is Unit -> writer.write("")
+                                    is String -> writer.write(result)
+                                    is Number -> writer.write(result.toString())
+                                    is Boolean -> writer.write(result.toString())
+                                    else -> writer.write(result.toString())
                                 }
 
                                 writer.flush()
