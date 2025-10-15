@@ -13,7 +13,6 @@ import java.nio.charset.StandardCharsets
 class PebbleTemplateProvider : TemplateProvider {
 
     override fun load(path: String, values: Map<String, Any?>, fromFile: Boolean): String {
-        // 🔹 1️⃣ Cargar el HTML con tu mismo mecanismo actual
         val htmlText: String = if (fromFile) {
             println("📂 [TemplateProvider] Reading from filesystem: $path")
             File(path).readText(StandardCharsets.UTF_8)
@@ -40,7 +39,6 @@ class PebbleTemplateProvider : TemplateProvider {
             }
         }
 
-        // 🔹 2️⃣ Renderizar el contenido con Pebble (desde StringLoader)
         return try {
             println("🧩 [TemplateProvider] Rendering with Pebble (StringLoader)")
             val engine = PebbleEngine.Builder()

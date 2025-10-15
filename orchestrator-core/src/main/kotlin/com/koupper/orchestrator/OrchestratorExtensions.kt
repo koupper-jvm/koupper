@@ -139,6 +139,10 @@ object JobRunner {
         val allResults = mutableListOf<JobResult>()
 
         configs.configurations?.forEach { config ->
+            if (config.ignoreOnProcessing) {
+                return@forEach
+            }
+
             val results = when (val driver = JobDrivers.resolve(config.driver)) {
                 is ContextualJobDriver -> driver.forEachPending(context, config, jobId)
                 else -> driver.forEachPending(config, jobId)
@@ -154,7 +158,18 @@ object JobRunner {
             when (res) {
                 is JobResult.Ok -> {
                     val task = res.task
-                    runCompiled(context, task)
+                    val result = runCompiled(context, task)
+                    JobInfo(
+                        configId = res.configName,
+                        id = res.task.id,
+                        function = res.task.functionName,
+                        params = res.task.params,
+                        source = res.task.scriptPath,
+                        context = res.task.context,
+                        version = res.task.contextVersion,
+                        origin = res.task.origin,
+                        resultOfExecution = result
+                    )
                 }
                 is JobResult.Error -> res
             }
@@ -163,74 +178,86 @@ object JobRunner {
         onResult(result)
     }
 
+    private fun buildLocalClassLoader(context: String, base: ClassLoader): ClassLoader {
+        println("🔍 Buscando build local (classes/jar) en $context")
+
+        val currentContext = File(context)
+        val urls = mutableListOf(currentContext.toURI().toURL())
+
+        val mainCodeDir = File("${currentContext.absolutePath}/build/classes/kotlin/main")
+        val libFolder = File("${currentContext.absolutePath}/build/libs")
+
+        var foundSomething = false
+
+        if (mainCodeDir.exists() && mainCodeDir.isDirectory) {
+            println("📦 Incluyendo código principal en classloader: ${mainCodeDir.absolutePath}")
+            urls += mainCodeDir.toURI().toURL()
+            foundSomething = true
+        } else {
+            println("⚠️ No se encontró build/classes/kotlin/main.")
+        }
+
+        if (libFolder.exists() && libFolder.isDirectory) {
+            println("📦 Incluyendo jar(s) en classloader: ${libFolder.absolutePath}")
+
+            libFolder.listFiles { f -> f.extension == "jar" }?.forEach { jar ->
+                urls += jar.toURI().toURL()
+                println("   ➕ Agregado: ${jar.name}")
+            }
+
+            foundSomething = true
+        } else {
+            println("⚠️ No se encontró build/libs.")
+        }
+
+        fun fallbackLocalLoader(base: ClassLoader): ClassLoader {
+            val urls = mutableListOf<java.net.URL>()
+            val projectRoot = Paths.get("").toAbsolutePath().toFile()
+
+            val classesDir = File(context, "build/classes/kotlin/main")
+            if (classesDir.exists() && classesDir.isDirectory) {
+                println("📦 Usando clases locales: ${classesDir.absolutePath}")
+                urls += classesDir.toURI().toURL()
+            }
+
+            val libsDir = File(projectRoot, "libs")
+            if (libsDir.exists() && libsDir.isDirectory) {
+                val latestJar = libsDir.listFiles { f -> f.isFile && f.name.endsWith(".jar") }
+                    ?.maxByOrNull { it.lastModified() }
+                if (latestJar != null) {
+                    println("📦 Usando jar local: ${latestJar.absolutePath}")
+                    urls += latestJar.toURI().toURL()
+                }
+            }
+
+            val buildLibsDir = File(projectRoot, "build/libs")
+            if (buildLibsDir.exists() && buildLibsDir.isDirectory) {
+                val latestJar = buildLibsDir.listFiles { f -> f.isFile && f.name.endsWith(".jar") }
+                    ?.maxByOrNull { it.lastModified() }
+                if (latestJar != null) {
+                    println("📦 Usando jar local: ${latestJar.absolutePath}")
+                    urls += latestJar.toURI().toURL()
+                }
+            }
+            return if (urls.isNotEmpty()) URLClassLoader(urls.toTypedArray(), base) else base
+        }
+
+        return if (foundSomething) {
+            println("✅ ClassLoader armado con ${urls.size} URLs.")
+            URLClassLoader(urls.toTypedArray(), base)
+        } else {
+            println("⚠️ No se encontró ningún directorio válido, usando fallback.")
+            fallbackLocalLoader(base)
+        }
+    }
+
     private fun runCompiled(context: String, task: KouTask): Any? {
         try {
             println("\n🔍 Buscando clase para ejecutar: ${task.functionName}")
 
-            fun fallbackLocalLoader(base: ClassLoader): ClassLoader {
-                val urls = mutableListOf<java.net.URL>()
-                val projectRoot = Paths.get("").toAbsolutePath().toFile()
-
-                val classesDir = File(context, "build/classes/kotlin/main")
-                if (classesDir.exists() && classesDir.isDirectory) {
-                    println("📦 Usando clases locales: ${classesDir.absolutePath}")
-                    urls += classesDir.toURI().toURL()
-                }
-
-                val libsDir = File(projectRoot, "libs")
-                if (libsDir.exists() && libsDir.isDirectory) {
-                    val latestJar = libsDir.listFiles { f -> f.isFile && f.name.endsWith(".jar") }
-                        ?.maxByOrNull { it.lastModified() }
-                    if (latestJar != null) {
-                        println("📦 Usando jar local: ${latestJar.absolutePath}")
-                        urls += latestJar.toURI().toURL()
-                    }
-                }
-
-                val buildLibsDir = File(projectRoot, "build/libs")
-                if (buildLibsDir.exists() && buildLibsDir.isDirectory) {
-                    val latestJar = buildLibsDir.listFiles { f -> f.isFile && f.name.endsWith(".jar") }
-                        ?.maxByOrNull { it.lastModified() }
-                    if (latestJar != null) {
-                        println("📦 Usando jar local: ${latestJar.absolutePath}")
-                        urls += latestJar.toURI().toURL()
-                    }
-                }
-                return if (urls.isNotEmpty()) URLClassLoader(urls.toTypedArray(), base) else base
-            }
-
             val base = Thread.currentThread().contextClassLoader ?: ClassLoader.getSystemClassLoader()
-            val loader: ClassLoader = when {
-                !task.scriptPath.isNullOrBlank() && task.scriptPath.endsWith(".jar") -> {
-                    val jar = File(task.scriptPath)
-                    require(jar.exists()) { "❌ No existe jar: ${task.scriptPath}" }
-                    URLClassLoader(arrayOf(jar.toURI().toURL()), base)
-                }
-                !task.scriptPath.isNullOrBlank() &&
-                        (task.scriptPath.contains("/kotlin/main") || task.scriptPath.contains("\\kotlin\\main")) -> {
 
-                    val dir = File(task.scriptPath)
-                    require(dir.exists() && dir.isDirectory) { "❌ Ruta inválida: ${task.scriptPath}" }
-
-                    // 🔹 Agregar también la carpeta de recursos
-                    val resourcesDir = File(task.scriptPath.replace("classes/kotlin/main", "resources/main"))
-                    val urls = mutableListOf(dir.toURI().toURL())
-
-                    if (resourcesDir.exists() && resourcesDir.isDirectory) {
-                        println("📦 Incluyendo recursos en classloader: ${resourcesDir.absolutePath}")
-                        urls += resourcesDir.toURI().toURL()
-                    } else {
-                        println("⚠️ No se encontró build/resources/main (solo clases).")
-                    }
-
-                    URLClassLoader(urls.toTypedArray(), base)
-                }
-
-                else -> {
-                    println("🔍 scriptPath ausente/no usable; buscando build local (classes/jar) en " + base)
-                    fallbackLocalLoader(base)
-                }
-            }
+            val loader: ClassLoader = buildLocalClassLoader(context, base)
 
             (loader as? URLClassLoader)?.let { cl ->
                 val urls = cl.urLs ?: cl.urLs
@@ -353,7 +380,8 @@ data class JobInfo(
     val source: String?,
     val context: String?,
     val version: String?,
-    val origin: String?
+    val origin: String?,
+    val resultOfExecution: Any? = null
 )
 
 object JobLister {
@@ -578,7 +606,7 @@ object FileJobDriver : ContextualJobDriver {
         }
 
         if (files.isEmpty()) {
-            results.add(JobResult.Error("⚠️ No File jobs found: [context=$context]"))
+            results.add(JobResult.Error("⚠️ No jobs found in [$context]"))
             return results
         }
 
@@ -607,7 +635,7 @@ object FileJobDriver : ContextualJobDriver {
         val files = dir.listFiles { f -> f.isFile && f.extension.equals("json", true) } ?: return emptyList()
 
         if (files.isEmpty()) {
-            return listOf(JobResult.Error("⚠️ No files found in [${dir.absoluteFile}]"))
+            return listOf(JobResult.Error("⚠️ No File messages found in [${dir.absoluteFile}]"))
         }
 
         return files.mapNotNull { file ->
@@ -672,8 +700,8 @@ object RedisJobDriver : JobDriver {
 
 object SqsJobDriver : JobDriver {
     override fun forEachPending(config: JobConfiguration, jobId: String?): List<JobResult> {
-        val region   = Region.of(config.sqsRegion)
-        val results  = mutableListOf<JobResult>()
+        val region = Region.of(config.sqsRegion)
+        val results = mutableListOf<JobResult>()
 
         val sqsClient = SqsClient.builder()
             .region(region)
@@ -682,35 +710,43 @@ object SqsJobDriver : JobDriver {
 
         sqsClient.use {
             val queueUrl = config.sqsQueueUrl
-            val msgs = it.receiveMessage(
-                ReceiveMessageRequest.builder()
-                    .queueUrl(queueUrl)
-                    .maxNumberOfMessages(10)
-                    .waitTimeSeconds(20)
-                    .messageAttributeNames("All")
-                    .build()
-            ).messages()
+            while (true) {
+                val msgs = it.receiveMessage(
+                    ReceiveMessageRequest.builder()
+                        .queueUrl(queueUrl)
+                        .maxNumberOfMessages(10)
+                        .waitTimeSeconds(5)
+                        .messageAttributeNames("All")
+                        .build()
+                ).messages()
 
-            if (msgs.isEmpty()) {
-                results.add(JobResult.Error("⚠️ No SQS messages found: ${config.id}"))
-                return results
-            }
-
-            msgs.forEach { msg ->
-                try {
-                    val task = JobSerializer.deserialize(msg.body())
-                    results.add(JobResult.Ok(config.id, task))
-                    it.deleteMessage(
-                        DeleteMessageRequest.builder()
-                            .queueUrl(queueUrl)
-                            .receiptHandle(msg.receiptHandle())
-                            .build()
-                    )
-                } catch (e: Exception) {
-                    results.add(JobResult.Error("❌ Failed SQS job: ${e.message}", e))
+                if (msgs.isEmpty()) {
+                    if (results.isEmpty()) {
+                        results.add(JobResult.Error("⚠️ No SQS messages found in [${config.id}] configuration."))
+                    }
+                    break
                 }
+
+                msgs.forEach { msg ->
+                    try {
+                        val task = JobSerializer.deserialize(msg.body())
+                        results.add(JobResult.Ok(config.id, task))
+
+                        it.deleteMessage(
+                            DeleteMessageRequest.builder()
+                                .queueUrl(queueUrl)
+                                .receiptHandle(msg.receiptHandle())
+                                .build()
+                        )
+                    } catch (e: Exception) {
+                        results.add(JobResult.Error("❌ Failed SQS job: ${e.message}", e))
+                    }
+                }
+
+                Thread.sleep(200)
             }
         }
+
         return results
     }
 
@@ -737,7 +773,7 @@ object SqsJobDriver : JobDriver {
             val inFlightCount = attrs[QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES_NOT_VISIBLE]?.toIntOrNull() ?: 0
 
             if (pendingCount == 0 && inFlightCount == 0) {
-                results += JobResult.Error("⚠️ No SQS messages found in [$queueUrl]")
+                results += JobResult.Error("⚠️ No SQS messages found in [${config.id}] configuration.")
             } else {
                 val pseudoTask = KouTask(
                     id = UUID.randomUUID().toString(),
@@ -758,7 +794,6 @@ object SqsJobDriver : JobDriver {
 
         return results
     }
-
 }
 
 object DbJobDriver : JobDriver {
@@ -1014,13 +1049,26 @@ fun KouTask.dispatchToQueue(configId: String? = null) {
         throw IllegalStateException("❌ No job configurations found in context: ${currentContext.absolutePath}")
     }
 
+    var hasGlobalConfig = false
+
+    config.configurations.forEach {
+        if (it.forAllProjects) {
+            hasGlobalConfig = true
+            JobDispatcher.dispatch(this, it)
+        }
+    }
+
+    if (hasGlobalConfig) {
+        return
+    }
+
     if (config.configurations.size > 1 && configId.isNullOrEmpty()) {
         throw IllegalArgumentException(
             "⚠️ Multiple job configurations detected. " +
-                    "You must specify a configId to dispatch this task correctly."
+                    "You must specify a configId to dispatch this task correctly or set a for-all-projects property for a preferred configuration."
         )
+    } else {
+        JobDispatcher.dispatch(this, config.configurations.first())
     }
-
-    JobDispatcher.dispatch(this, config.configurations.first())
 }
 

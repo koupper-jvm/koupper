@@ -46,6 +46,12 @@ data class JobConfiguration(
     @field:JsonProperty("database-password")
     val databasePassword: String? = null,
 
+    @field:JsonProperty("for-all-projects")
+    val forAllProjects: Boolean = false,
+
+    @field:JsonProperty("ignore-on-processing")
+    val ignoreOnProcessing: Boolean = false,
+
     val configurations: List<JobConfiguration>? = null
 )
 

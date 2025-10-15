@@ -22,8 +22,16 @@ class SenderHtmlEmail : Sender, Setup() {
     private val attachments: MutableList<File> = mutableListOf()
     private var content: String = ""
     private var contentType: String = "text/html"
+    private var customUsername: String? = null
+    private var customPassword: String? = null
 
     init { this.configMailProperties() }
+
+    override fun withCredentials(username: String?, password: String?): SenderHtmlEmail {
+        this.customUsername = username
+        this.customPassword = password
+        return this
+    }
 
     override fun from(address: String?, personal: String?): Sender {
         this.fromAddress = address ?: env("MAIL_USERNAME")
@@ -71,13 +79,17 @@ class SenderHtmlEmail : Sender, Setup() {
     }
 
     private fun createSession() {
+        val username = customUsername ?: env("MAIL_USERNAME")
+        val password = customPassword ?: env("MAIL_PASSWORD")
+
         val authenticator = object : Authenticator() {
             override fun getPasswordAuthentication(): PasswordAuthentication {
-                return PasswordAuthentication(env("MAIL_USERNAME"), env("MAIL_PASSWORD"))
+                return PasswordAuthentication(username, password)
             }
         }
         this.session = Session.getInstance(this.properties, authenticator)
     }
+
 
     private fun buildMessage(): MimeMessage {
         val message = MimeMessage(this.session)

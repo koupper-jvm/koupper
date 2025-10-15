@@ -39,7 +39,7 @@ object JobConfig {
         }
 
         return if (configId.isNullOrBlank()) {
-            configs.filter { !it["ignore-on-running"]?.toString().toBoolean() }
+            configs
         } else {
             configs.filter { it["id"]?.toString() == configId }
         }
