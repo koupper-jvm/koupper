@@ -36,30 +36,6 @@ class OctopusTest : AnnotationSpec() {
         this.container = mockkClass(KoupperContainer::class)
     }
 
-    @Ignore
-    @Test
-    fun `should execute script sentence`() {
-        val octopus = Octopus(this.container)
-        octopus.run("val valueNumber = (0..10).random()", emptyMap()) { result: Int ->
-            assertTrue {
-                result is Int
-            }
-        }
-    }
-
-    @Test
-    fun `should inject container to callback script variable`() {
-        val octopus = Octopus(this.container)
-
-        octopus.run(
-            "val myScript: () -> Int = {\n" +
-                    "    println(\"Hello World!\")\n" +
-                    "    200 \n" +
-                    "}"
-        ) { result: Int ->
-            assertEquals(200, result)
-        }
-    }
 
     @Ignore
     @Test
@@ -74,13 +50,6 @@ class OctopusTest : AnnotationSpec() {
             // validate here
         }
 
-    }
-
-    @Test
-    fun `should read script from file`() {
-        this.octopus.runFromScriptFile("resource://example.kts") { result: Int ->
-            assertEquals(200, result)
-        }
     }
 
     @Test

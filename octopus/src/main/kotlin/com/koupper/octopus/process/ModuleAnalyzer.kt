@@ -1,8 +1,6 @@
 package com.koupper.octopus.process
 
 import com.koupper.container.app
-import com.koupper.octopus.Octopus
-import com.koupper.octopus.modifiers.ControllersAnalyzer
 import com.koupper.octopus.modules.validateScript
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.providers.files.JSONFileHandler
@@ -23,20 +21,19 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
     override fun run() {
         val baseDir = File(target)
 
-        if (flags.contains("-l")) {
-            val folders = analyzeFolders(baseDir)
-            val files = analyzeFiles(baseDir)
+        val folders = analyzeFolders(baseDir)
 
-            val data = mapOf(
-                "folders" to folders,
-                "files" to files
-            )
+        val files = analyzeFiles(baseDir)
 
-            val outputFile = File(System.getProperty("user.home"), ".koupper/helpers/module-analysis.json")
-            outputFile.parentFile.mkdirs()
-            val textJsonParser = app.getInstance(JSONFileHandler::class) as JSONFileHandlerImpl<Map<String, Any?>>
-            outputFile.writeText(textJsonParser.toJsonString(data))
-        }
+        val data = mapOf(
+            "folders" to folders,
+            "files" to files
+        )
+
+        val outputFile = File(System.getProperty("user.home"), ".koupper/helpers/module-analysis.json")
+        outputFile.parentFile.mkdirs()
+        val textJsonParser = app.getInstance(JSONFileHandler::class) as JSONFileHandlerImpl<Map<String, Any?>>
+        outputFile.writeText(textJsonParser.toJsonString(data))
     }
 
     private fun analyzeFolders(baseDir: File): List<Map<String, Any?>> {
@@ -49,17 +46,20 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
 
         for (dir in dirs) {
             val tags = mutableSetOf<String>()
-            val files = dir.walkTopDown().filter { it.isFile && (it.extension == "kt" || it.extension == "kts") }.toList()
+
+            val allFiles = dir.walkTopDown().filter { it.isFile }.toList()
+            val kotlinFiles = allFiles.filter { it.extension == "kt" || it.extension == "kts" }
 
             if (File(dir, "build.gradle").exists() || File(dir, "build.gradle.kts").exists()) {
                 tags.add("[proj]")
             }
 
-            val onlyKts = files.isNotEmpty() && files.all { it.extension == "kts" }
-            val hasInitKts = files.isNotEmpty() && files.all { it.name == "init.kts" }
-            val hasConfig = files.any { it.extension == "yml" }
-            val hasKt = files.any { it.extension == "kt" }
-            val hasKts = files.any { it.extension == "kts" }
+            val onlyKts = kotlinFiles.isNotEmpty() && kotlinFiles.all { it.extension == "kts" }
+            val hasInitKts = kotlinFiles.isNotEmpty() && kotlinFiles.all { it.name == "init.kts" }
+            val hasKt = kotlinFiles.any { it.extension == "kt" }
+            val hasKts = kotlinFiles.any { it.extension == "kts" }
+
+            val hasConfig = allFiles.any { it.extension == "yml" || it.extension == "yaml" }
 
             if (onlyKts) {
                 tags.add("[kts folder]")
@@ -74,15 +74,16 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
             } else {
                 if (hasKt) tags.add("[kt]")
                 if (hasKts) tags.add("[kts]")
+                if (hasConfig) tags.add("[cfg]")
             }
 
-            val hasHandler = files.any { file ->
+            val hasHandler = kotlinFiles.any { file ->
                 val content = file.readText()
                 handlerRegex.containsMatchIn(content)
             }
             if (hasHandler) tags.add("[hndlrs]")
 
-            val hasController = files.any { file ->
+            val hasController = kotlinFiles.any { file ->
                 val content = file.readText()
                 controllerRegex.containsMatchIn(content)
             }
@@ -111,9 +112,8 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
         } == true
 
         if (hasGradleFile) {
-            val port = extractServerPort(baseDir)?.toIntOrNull() ?: 8080
-            val analyzer = ControllersAnalyzer()
-            analyzer.analyzeControllers(baseDir, port, "project-controllers.json")
+            val mca = ModuleControllerAnalyzer()
+            mca.analyzeControllers(baseDir)
         }
 
         for (file in baseDir.listFiles() ?: emptyArray()) {
@@ -122,7 +122,16 @@ class ModuleAnalyzer(private val context: String, private vararg val flags: Stri
 
             when {
                 file.name == "init.kts" -> tags.add("[init]")
-                file.name == "jobs.json" -> tags.add("[cfg][driver:${JobConfig.loadOrFail().driver}]|[queue:${JobConfig.loadOrFail().queue}]")
+                file.name == "jobs.json" -> {
+                    try {
+                        val config = JobConfig.loadOrFail(context = baseDir.path)
+                        tags.add("[cfg][driver:${config.driver}]|[queue:${config.queue}]")
+                    } catch (e: Exception) {
+                        // Silenciar el error y no agregar tags
+                        // Opcional: logging.debug("No se pudo cargar JobConfig: ${e.message}")
+                    }
+                }
+                file.name == "$name.http.json" || file.name == "$name.http.yml" || file.name == "$name.http.yaml" -> tags.add("[http config]")
                 file.extension in listOf("yml", "yaml", "json") -> tags.add("[cfg]")
                 file.extension == "env" -> tags.add("[envs]")
                 file.extension == "kt" -> tags.add("[kt]")

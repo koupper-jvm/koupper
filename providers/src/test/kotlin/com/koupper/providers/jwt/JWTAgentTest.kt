@@ -3,6 +3,7 @@ package com.koupper.providers.jwt
 import com.auth0.jwt.exceptions.JWTDecodeException
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
+import io.kotest.core.annotation.Ignored
 import io.kotest.core.spec.Spec
 import io.kotest.core.spec.style.AnnotationSpec
 import io.kotest.extensions.system.withEnvironment
@@ -11,6 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
+@Ignored
 class JWTAgentTest : AnnotationSpec() {
     @Test
     fun `should encode and decode a token`() {

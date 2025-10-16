@@ -23,7 +23,7 @@ interface ScriptExecutor {
      * @param params the script params
      * @param result a callback
      */
-    fun <T> runFromUrl(context: String, scriptUrl: String, params: String = "", result: (value: T) -> Unit)
+    fun <T> runFromUrl(context: String, scriptUrl: String = "undefined", params: String = "", result: (value: T) -> Unit)
 
     /**
      * Loads a script files from paths, running it under ScriptEngineManager implementation and
@@ -44,11 +44,12 @@ interface ScriptExecutor {
      * callback the resulting execution.
      *
      * @param context where script-based operations will happen
+     * @param scriptPath the script path
      * @param sentence the script sentence
      * @param params the script params
      * @param result a callback
      */
-    fun <T> run(context: String, sentence: String, params: Map<String, Any> = emptyMap(), result: (value: T) -> Unit)
+    fun <T> run(context: String, scriptPath: String? = null, sentence: String, params: ParsedParams?, result: (value: T) -> Unit)
 
     /**
      * call a  function

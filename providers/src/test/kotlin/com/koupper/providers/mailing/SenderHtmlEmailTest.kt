@@ -13,10 +13,6 @@ import java.net.URL
 class SenderHtmlEmailTest : AnnotationSpec() {
     private lateinit var container: Container
 
-    override fun beforeSpec(spec: Spec) {
-        super.beforeSpec(spec)
-    }
-
     private var envs: Map<String, String> = mapOf(
         "MAIL_DRIVER" to "smtp",
         "MAIL_HOST" to "smtpout.secureserver.net",

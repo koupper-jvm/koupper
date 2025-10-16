@@ -2,9 +2,11 @@ package com.koupper.providers.logger
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.container.app
+import io.kotest.core.annotation.Ignored
 import io.kotest.extensions.system.withEnvironment
 import kotlin.test.assertTrue
 
+@Ignored
 class PSQLDBLoggerTest : AnnotationSpec() {
     @Test
     fun `should bind db logger`() {

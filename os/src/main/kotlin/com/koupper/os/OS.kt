@@ -33,7 +33,7 @@ fun env(
         if (required) {
             throw Exception("The $variableName should be present in environment or .env")
         } else {
-            value = default // por defecto "", útil para DYNAMO_URL
+            value = default
         }
     }
 
@@ -53,6 +53,12 @@ fun env(
 
     return value
 }
+
+fun envOptional(name: String, default: String = ""): String =
+    env(name, required = false, default = default)
+
+fun envBool(name: String, default: Boolean = false): Boolean =
+    env(name, required = false, default = default.toString()).equals("true", ignoreCase = true)
 
 fun setGlobalConfig(path: String) {
     System.setProperty("GLOBAL_ENV_FILE", path)
