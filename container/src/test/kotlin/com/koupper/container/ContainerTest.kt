@@ -1,189 +1,29 @@
 package com.koupper.container
 
 import com.koupper.container.exceptions.BindingException
-import io.kotest.core.spec.style.AnnotationSpec
-import com.koupper.container.scope.*
 import com.koupper.container.exceptions.MultipleAbstractImplementationsException
-import com.koupper.container.extensions.get
-import io.kotest.matchers.types.shouldBeInstanceOf
+import com.koupper.container.scope.*
+import io.kotest.core.spec.style.AnnotationSpec
 import kotlin.test.*
 
 class ContainerTest : AnnotationSpec() {
     @Test
-    fun `should bind a concrete class and return new one instances for multiple creations`() {
-        val container = KoupperContainer()
-
-        data class Versioning(val statusCode: String, val body: String)
-
-        container.bind(AbstractClass::class, {
-            ConcreteClass()
-        })
-
-        val concreteClassOfContainer = container.getInstance(AbstractClass::class)
-
-        assertTrue {
-            concreteClassOfContainer is ConcreteClass
-        }
-
-        val concreteClassOfContainer2 = container.getInstance(AbstractClass::class)
-
-        assertNotEquals(concreteClassOfContainer, concreteClassOfContainer2)
-    }
-
-    @Test
-    fun `should bind a concrete class using the alternative bind method`() {
-        val container = KoupperContainer()
-
-        container.bind(AbstractClass::class, ConcreteClass::class)
-
-        val concreteClassOfContainer = container.getInstance(AbstractClass::class)
-
-        assertTrue {
-            concreteClassOfContainer is ConcreteClass
-        }
-
-        val concreteClassOfContainer2 = container.getInstance(AbstractClass::class)
-
-        assertNotEquals(concreteClassOfContainer, concreteClassOfContainer2)
-    }
-
-    @Test
-    fun `should bind a singleton class and return the same one instance over and over`() {
-        val container = KoupperContainer()
-
-        container.singleton(AbstractClass::class) {
-            ConcreteClass()
-        }
-
-        val concreteClassOfContainer = container.get().createSingletonOf(AbstractClass::class)
-
-        val concreteClassOfContainer2 = container.get().createSingletonOf(AbstractClass::class)
-
-        assertEquals(concreteClassOfContainer, concreteClassOfContainer2)
-    }
-
-    @Test
-    fun `should bind a singleton class using the alternative singleton method`() {
-        val container = KoupperContainer()
-
-        container.singleton(AbstractClass::class, ConcreteClass::class)
-
-        val concreteClassOfContainer = container.get().createSingletonOf(AbstractClass::class)
-
-        val concreteClassOfContainer2 = container.get().createSingletonOf(AbstractClass::class)
-
-        assertEquals(concreteClassOfContainer, concreteClassOfContainer2)
-    }
-
-    @Test
-    fun `should listen for a resolved instance using bind method`() {
-        val container = KoupperContainer()
-
-        container.bind(AbstractClass::class, ConcreteClass::class)
-
-        container.listenFor(AbstractClass::class, {
-            assertTrue {
-                it is ConcreteClass
-            }
-        })
-
-        container.getInstance(AbstractClass::class)
-    }
-
-    @Test
-    fun `should listen for a resolved instance using singleton method`() {
-        val container = KoupperContainer()
-
-        container.singleton(AbstractClass::class, ConcreteClass::class)
-
-        container.listenFor(AbstractClass::class, {
-            assertTrue {
-                it is ConcreteClass
-            }
-        })
-
-        container.createSingletonOf(AbstractClass::class)
-    }
-
-    @Test
-    fun `should create a new instance from a full namespace`() {
-        val container = KoupperContainer()
-
-        container.bind(AbstractClass::class, ConcreteClass::class)
-
-        val concreteClass = container.getInstance("com.koupper.container.AbstractClass") as AbstractClass
-
-        assertTrue {
-            concreteClass is ConcreteClass
-        }
-    }
-
-    @Test
-    fun `should create a new instance using its simple class name`() {
-        val container = KoupperContainer()
-
-        container.bind(AbstractClass::class, ConcreteClass::class)
-
-        val concreteClass = container.getInstance("AbstractClass") as AbstractClass
-
-        assertTrue {
-            concreteClass is ConcreteClass
-        }
-    }
-
-    @Test
-    fun `should auto bind an abstract class to existing concrete classes in the specified scope`() {
-        val container = KoupperContainer("com.koupper.container.scope")
-
-        val concreteClass = container.getInstance(SingleAbstract::class)
-
-        assertTrue {
-            concreteClass is SingleConcrete
-        }
-    }
-
-    @Test
-    fun `should throw exception if try create a instance of an abstract class with multiple concrete classes`() {
+    fun `should throw an exception when trying to create an instance of an abstract class with multiple concrete implementations`() {
         val exception = assertFailsWith<MultipleAbstractImplementationsException> {
-            KoupperContainer("com.koupper.container.scope").getInstance(com.koupper.container.scope.AbstractClass::class)
+            val container = KoupperContainer("com.koupper.container.scope")
+            container.bind(com.koupper.container.scope.AbstractClass::class, {
+                ConcreteClass()
+            })
         }
 
         assertTrue {
             exception.cause is MultipleAbstractImplementationsException
-            "Type[AbstractClass] has multiple instances" == exception.message
+            "Type[${(AbstractClass::class).simpleName}] exist in the container." == exception.message
         }
     }
 
     @Test
-    fun `should solve a instance with its dependencies resolved automatically`() {
-        val parentConcreteClass = KoupperContainer("com.koupper.container.scope").getInstance(ParentAbstractClass::class)
-
-        assertTrue {
-            parentConcreteClass is ParentConcreteClass
-            (parentConcreteClass as ParentConcreteClass).firstAbstractClass is FirstConcreteClass
-            ((parentConcreteClass).firstAbstractClass as FirstConcreteClass).thirdAbstractClass is ThirdConcreteClass
-        }
-    }
-
-    @Test
-    fun `should bind a concrete class resolving their nested dependencies using the container`() {
-        val container = KoupperContainer("com.koupper.container.scope")
-
-        val parentConcreteClass = ParentConcreteClass::class
-
-        container.bind(ParentAbstractClass::class, parentConcreteClass)
-
-        val resolvedParentConcreteClass = container.getInstance(ParentAbstractClass::class)
-
-        assertTrue {
-            resolvedParentConcreteClass is ParentConcreteClass
-            (resolvedParentConcreteClass as ParentConcreteClass).firstAbstractClass is FirstConcreteClass
-            ((resolvedParentConcreteClass).firstAbstractClass as FirstConcreteClass).thirdAbstractClass is ThirdConcreteClass
-        }
-    }
-
-    @Test
-    fun `should throw exception if multiple instances try to be binding to same abstract class`() {
+    fun `should throw an exception when multiple implementations are bound to the same abstract class`() {
         val container = KoupperContainer()
 
         container.bind(AbstractClass::class, {
@@ -198,12 +38,157 @@ class ContainerTest : AnnotationSpec() {
 
         assertTrue {
             exception.cause is MultipleAbstractImplementationsException
-            "Type[AbstractClass] has multiple instances, use tag for exclude the instance." == exception.message
+            "Type[${(AbstractClass::class).simpleName}] exist in the container." == exception.message
         }
     }
 
     @Test
-    fun `should bind multiple instances to same abstract class`() {
+    fun `should listen for a resolved instance created using the singleton method`() {
+        val container = KoupperContainer()
+
+        container.singleton2(AbstractClass::class, ConcreteClass::class)
+
+        container.listenFor(AbstractClass::class, {
+            assertTrue {
+                it is ConcreteClass
+            }
+        })
+
+        container.createSingleton(AbstractClass::class)
+    }
+
+    @Test
+    fun `should create a new instance using its full namespace`() {
+        val container = KoupperContainer()
+
+        container.bind2(AbstractClass::class, ConcreteClass::class)
+
+        val concreteClass = container.getInstance("com.koupper.container.AbstractClass") as AbstractClass
+
+        assertTrue {
+            concreteClass is ConcreteClass
+        }
+    }
+
+    @Test
+    fun `should bind a singleton class using an alternative singleton method`() {
+        val container = KoupperContainer()
+
+        container.singleton2(AbstractClass::class, ConcreteClass::class)
+
+        val concreteClassOfContainer = container.get().createSingleton(AbstractClass::class)
+
+        val concreteClassOfContainer2 = container.get().createSingleton(AbstractClass::class)
+
+        assertEquals(concreteClassOfContainer, concreteClassOfContainer2)
+    }
+
+    @Test
+    fun `should bind a singleton class and return the same instance on every creation`() {
+        val container = KoupperContainer()
+
+        container.singleton(AbstractClass::class, {
+            ConcreteClass()
+        })
+
+        val concreteClassOfContainer = container.get().createSingleton(AbstractClass::class)
+
+        val concreteClassOfContainer2 = container.get().createSingleton(AbstractClass::class)
+
+        assertEquals(concreteClassOfContainer, concreteClassOfContainer2)
+    }
+
+    @Test
+    fun `should automatically bind an abstract class to its existent concrete class in the specified scope`() {
+        val container = KoupperContainer("com.koupper.container.scope")
+
+        val concreteClass = container.getInstance(SingleAbstract::class)
+
+        assertTrue {
+            concreteClass is SingleConcrete
+        }
+    }
+
+    @Test
+    fun `should bind a concrete class and return a new instance on every creation`() {
+        val container = KoupperContainer()
+
+        container.bind(AbstractClass::class, {
+            ConcreteClass()
+        })
+
+        val concreteClassOfContainer = container.getInstance(AbstractClass::class)
+
+        assertTrue {
+            concreteClassOfContainer is ConcreteClass
+        }
+
+        val concreteClassOfContainer2 = container.getInstance(AbstractClass::class)
+
+        assertNotEquals(concreteClassOfContainer, concreteClassOfContainer2)
+    }
+
+    @Test
+    fun `should bind a concrete class using an alternative bind method`() {
+        val container = KoupperContainer()
+
+        container.bind2(AbstractClass::class, ConcreteClass::class)
+
+        val concreteClassOfContainer = container.getInstance(AbstractClass::class)
+
+        assertTrue {
+            concreteClassOfContainer is ConcreteClass
+        }
+
+        val concreteClassOfContainer2 = container.getInstance(AbstractClass::class)
+
+        assertNotEquals(concreteClassOfContainer, concreteClassOfContainer2)
+    }
+
+    @Test
+    fun `should throw an exception when trying to bind a preloaded class`() {
+        val exception = assertFailsWith<MultipleAbstractImplementationsException> {
+            val container = KoupperContainer("com.koupper.container.scope")
+
+            val parentConcreteClass = ParentConcreteClass::class
+
+            container.bind2(ParentAbstractClass::class, parentConcreteClass)
+        }
+
+        assertTrue {
+            exception.cause is MultipleAbstractImplementationsException
+            "Type[ParentAbstractClass] exist in the container." == exception.message
+        }
+    }
+
+    @Test
+    fun `should listen for a resolved instance created using the bind method`() {
+        val container = KoupperContainer()
+
+        container.bind2(AbstractClass::class, ConcreteClass::class)
+
+        container.listenFor(AbstractClass::class, {
+            assertTrue {
+                it is ConcreteClass
+            }
+        })
+
+        container.getInstance(AbstractClass::class)
+    }
+
+    @Test
+    fun `should create an instance with its dependencies automatically resolved`() {
+        val parentConcreteClass = KoupperContainer("com.koupper.container.scope").getInstance(ParentAbstractClass::class)
+
+        assertTrue {
+            parentConcreteClass is ParentConcreteClass
+            (parentConcreteClass as ParentConcreteClass).firstAbstractClass is FirstConcreteClass
+            ((parentConcreteClass).firstAbstractClass as FirstConcreteClass).thirdAbstractClass is ThirdConcreteClass
+        }
+    }
+
+    @Test
+    fun `should bind multiple instances to the same abstract class`() {
         val container = KoupperContainer()
 
         container.bind(AbstractClass::class, {
@@ -221,7 +206,7 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should throw exception if try create a instance of an unbinding class`() {
+    fun `should throw an exception when trying to create an instance of unbound class`() {
         val exception = assertFailsWith<BindingException> {
             KoupperContainer().getInstance(AbstractClass::class)
         }
@@ -233,20 +218,23 @@ class ContainerTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should bind a generic interface with a generic type`() {
+    fun `should bind a generic interface to a generic type`() {
         val container = KoupperContainer()
 
-        class Example {}
+        abstract class GenericAbstractClass<T>
+        class GenericConcreteClass<T> : GenericAbstractClass<T>()
+
+        class Example
 
         container.bind(GenericAbstractClass::class, {
-            GenericConcreteClass<Any>()
+            GenericConcreteClass<Example>()
         })
 
-        val concreteClassOfContainer = container.getInstance(GenericAbstractClass::class)
+        val instance = container.getInstance(GenericAbstractClass::class)
 
-        // this assert is unnecessary but it's used to identify the "toType" usage
-        assertTrue {
-            (concreteClassOfContainer as GenericConcreteClass<*>).toType<Example>() is Example
-        }
+        assertIs<GenericConcreteClass<Example>>(instance)
+
+        assertTrue(instance is GenericConcreteClass<*>)
+        assertTrue(instance is GenericAbstractClass<*>)
     }
 }
