@@ -1,6 +1,5 @@
 package com.koupper.orchestrator
 
-import com.koupper.logging.GlobalLogger
 import java.util.concurrent.atomic.AtomicBoolean
 
 object ListenersRegistry {
@@ -16,24 +15,12 @@ object ListenersRegistry {
 
         val running = AtomicBoolean(true)
 
-        // 1) Captura el logger y (opcional) el MDC/CL del hilo padre
-        val capturedLogger = GlobalLogger.log
-        // val parentMdc = MDC.getCopyOfContextMap()
-        val parentCl = Thread.currentThread().contextClassLoader
+        //val parentCl = Thread.currentThread().contextClassLoader
 
         val thread = Thread {
-            // 2) Adopta el classloader del padre (opcional pero recomendado)
-            Thread.currentThread().contextClassLoader = parentCl
+            //Thread.currentThread().contextClassLoader = parentCl
 
-            // 3) Instala el logger capturado dentro del hilo
-            val prev = GlobalLogger.log
-            GlobalLogger.setLogger(capturedLogger)
-
-            // 4) Si usas MDC de SLF4J, propágalo también
-            // val prevMdc = MDC.getCopyOfContextMap()
             try {
-                // if (parentMdc != null) MDC.setContextMap(parentMdc) else MDC.clear()
-
                 while (running.get()) {
                     runOnce(onJob)
 
@@ -47,9 +34,6 @@ object ListenersRegistry {
             } catch (_: InterruptedException) {
                 // noop
             } finally {
-                // 5) Restaura MDC y logger del hilo (por limpieza)
-                // if (prevMdc != null) MDC.setContextMap(prevMdc) else MDC.clear()
-                GlobalLogger.setLogger(prev)
                 running.set(false)
             }
         }.apply { isDaemon = true; start() }

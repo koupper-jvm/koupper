@@ -274,12 +274,12 @@ fun listenForExternalCommands(processManager: ScriptExecutor) {
 
                             val parameters = inputData.drop(2).joinToString(" ")
 
-                            app.createSingletonOf(LoggerCore::class).info { "📜 Executing script: $scriptPath with params: $parameters" }
+                            app.createSingleton(LoggerCore::class).info { "📜 Executing script: $scriptPath with params: $parameters" }
 
                             context = inputData[0]
 
                             processManager.runFromScriptFile(context!!, scriptPath, parameters) { result: Any ->
-                                app.createSingletonOf(LoggerCore::class).info { "✅ Result from script execution: $result" }
+                                app.createSingleton(LoggerCore::class).info { "✅ Result from script execution: $result" }
 
                                 when (result) {
                                     is Unit -> writer.write("")
@@ -384,9 +384,9 @@ fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
         )
     )
 
-    app.singleton(LoggerCore::class) {
+    app.singleton(LoggerCore::class, {
         appLogger
-    }
+    })
 
     return octopus
 }

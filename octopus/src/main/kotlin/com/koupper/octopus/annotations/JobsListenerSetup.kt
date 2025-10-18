@@ -1,7 +1,9 @@
 package com.koupper.octopus.annotations
 
 import com.koupper.container.app
+import com.koupper.logging.GlobalLogger
 import com.koupper.logging.LogSpec
+import com.koupper.logging.LoggerCore
 import com.koupper.octopus.process.JobEvent
 import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.ModuleProcessor
@@ -74,12 +76,12 @@ object JobsListenerSetup {
 
         this.jobListenerParams = jlc.annotationParams as? Map<*, *> ?: emptyMap<Any?, Any?>()
 
-        val creationWorkerJobResult = this.createWorkerListener()
+        val creationWorkerJobResult = this.createJobsListener()
 
         return creationWorkerJobResult
     }
 
-    private fun createWorkerListener(): String {
+    private fun createJobsListener(): String {
         this.workerConfigId = jobListenerParams["configId"] as? String
 
         val configs = JobConfig.loadOrFail(this.jlc.scriptContext, this.workerConfigId).configurations
@@ -219,7 +221,7 @@ object JobsListenerSetup {
 
         JobDispatcher.dispatch(workerTask, finalConfig)
 
-        val listenByJobsResult = this.listenByJobsToThrow(workerTask, finalConfig)
+        val listenByJobsResult = this.listenForJobsToNotifyWorker(workerTask, finalConfig)
 
         return "Worker listener created. \n$listenByJobsResult"
     }
@@ -236,7 +238,7 @@ object JobsListenerSetup {
         else       -> default
     }
 
-    private fun listenByJobsToThrow(workerTask : KouTask, config: JobConfiguration): String {
+    private fun listenForJobsToNotifyWorker(workerTask : KouTask, config: JobConfiguration): String {
         val sleepTime = (this.jobListenerParams["time"] as? Long) ?: 5000L
         val key       = "${this.jlc.scriptContext}::${config.id}"
 
@@ -244,26 +246,28 @@ object JobsListenerSetup {
 
         if (debug) enableDebugMode()
 
+        app.singleton(LoggerCore::class, { GlobalLogger.log }, tag = "file")
+
         ListenersRegistry.start(
             key = key,
             sleepTime = sleepTime,
             runOnce = { onJob ->
-                JobRunner.runPendingJobs(workerTask.context, jobId = null, configId = null) { jobs -> onJob(jobs) }
+                JobRunner.runPendingJobs(workerTask.context, jobId = null, configId = null) { results -> onJob(results) }
             },
             onJob = { results ->
+                val logger = app.createSingleton(LoggerCore::class, "file")
+
                 results.forEach { result ->
                     when (result) {
-                        is JobResult.Ok -> {
-                            val t = result.task
-
+                        is JobInfo -> {
                             val event = JobEvent(
-                                jobId          = t.id,
-                                function       = t.functionName,
-                                context        = t.context,
-                                contextVersion = t.contextVersion,
-                                origin         = t.origin,
-                                packageName    = t.packageName,
-                                scriptPath     = t.scriptPath,
+                                jobId          = result.id,
+                                function       = result.function,
+                                context        = result.context,
+                                contextVersion = result.version,
+                                origin         = result.origin,
+                                packageName    = result.packg,
+                                scriptPath     = result.source,
                                 finishedAt     = System.currentTimeMillis()
                             )
 
@@ -290,8 +294,15 @@ object JobsListenerSetup {
                             val orderedParams = this.jlc.paramsJson.entries.sortedBy { argIndex(it.key) }
                             var userIdx = 0
 
+                            var inj: Any?
+
                             loop@ for (argName in workerFunctionArgs) {
-                                val inj = this.injector(argName)
+                                inj = if (argName == "JobEvent") {
+                                    event
+                                } else {
+                                    this.injector(argName)
+                                }
+
 
                                 if (inj != null) {
                                     argsParams[argName] = inj
@@ -376,7 +387,7 @@ object JobsListenerSetup {
                                 logSpec = replaySpec,
                                 symbol = this.backend.getSymbol(jlc.functionName),
                             ) { updatedWorkerJob ->
-                                updatedWorkerJob.dispatchToQueue(config.id)
+                                updatedWorkerJob.dispatchToQueue(workerTask.context, config.id)
                             }
                         }
                     }

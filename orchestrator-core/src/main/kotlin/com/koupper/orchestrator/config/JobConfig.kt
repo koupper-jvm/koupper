@@ -18,7 +18,7 @@ object JobConfig {
     }
 
     private fun loadConfigs(context: String, configId: String? = null): List<Map<String, Any?>> {
-        val jobsJson = File("$context/jobs.json")
+        val jobsJson = File("$context${File.separator}jobs.json")
         if (!jobsJson.exists()) return emptyList()
 
         val text = jobsJson.readText().trim()

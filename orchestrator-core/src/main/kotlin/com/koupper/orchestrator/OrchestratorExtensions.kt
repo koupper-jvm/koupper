@@ -1,10 +1,7 @@
 package com.koupper.orchestrator
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.koupper.logging.LogSpec
-import com.koupper.logging.LoggerHolder
-import com.koupper.logging.captureLogs
-import com.koupper.logging.withScriptLogger
+import com.koupper.logging.*
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.orchestrator.config.JobConfiguration
 import com.koupper.os.env
@@ -168,6 +165,7 @@ object JobRunner {
                         context = res.task.context,
                         version = res.task.contextVersion,
                         origin = res.task.origin,
+                        packg = res.task.packageName,
                         resultOfExecution = result
                     )
                 }
@@ -381,6 +379,7 @@ data class JobInfo(
     val context: String?,
     val version: String?,
     val origin: String?,
+    val packg: String? = null,
     val resultOfExecution: Any? = null
 )
 
@@ -897,13 +896,13 @@ object JobReplayer {
             val driver = cfg.driver
             val d = JobDrivers.resolve(driver)
 
-            LoggerHolder.LOGGER.info {
+            GlobalLogger.log.info {
                 "\n🔁 Replaying jobs using [$driver]\n"
             }
 
             val results = when (d) {
-                is ContextualJobDriver -> d.forEachPending(config, jobId = null)
-                else -> d.forEachPending(jobId = null, config = cfg)
+                is ContextualJobDriver -> d.forEachPending(context, config, null)
+                else -> d.forEachPending(config, null)
             }
 
             results.forEach { res ->
@@ -1040,13 +1039,13 @@ inline fun <reified T, reified R> ((T) -> R).asJob(
     )
 }
 
-fun KouTask.dispatchToQueue(configId: String? = null) {
-    val currentContext = File("${Paths.get("").toAbsolutePath()}")
+fun KouTask.dispatchToQueue(context: String? = null, configId: String? = null) {
+    val currentContext = context ?: File("${Paths.get("").toAbsolutePath()}").absolutePath
 
-    val config = JobConfig.loadOrFail(currentContext.absolutePath, configId)
+    val config = JobConfig.loadOrFail(currentContext, configId)
 
     if (config.configurations.isNullOrEmpty()) {
-        throw IllegalStateException("❌ No job configurations found in context: ${currentContext.absolutePath}")
+        throw IllegalStateException("❌ No job configurations found in context: $currentContext")
     }
 
     var hasGlobalConfig = false

@@ -25,7 +25,7 @@ object LoggerHolder {
             async = true
         )
 
-        captureLogs("JobsOrchestrator.Dispatcher", logSpec) { log ->
+        captureLogs("LoggerHolder.Dispatcher", logSpec) { log ->
             LOGGER = log
             "initialized"
         }
