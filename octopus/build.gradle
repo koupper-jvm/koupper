@@ -81,3 +81,34 @@ tasks.register('optimized', Jar) {
     preserveFileTimestamps = false
     reproducibleFileOrder = true
 }
+
+tasks.register('fatJar', Jar) {
+    archiveBaseName = 'octopus'
+    archiveVersion = project.version.toString()
+
+    manifest {
+        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+    }
+
+    from sourceSets.main.output
+    from {
+        configurations.runtimeClasspath.collect { dep ->
+            if (dep.isDirectory()) {
+                dep
+            } else {
+                zipTree(dep).matching {
+                    // QUITA TODOS LOS EXCLUDE - esto es importante
+                    // Solo excluye archivos de firma, nada más
+                    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
+                }
+            }
+        }
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
+    doLast {
+        println "✅ JAR generado: ${archiveFile.get()}"
+        println "📦 Tamaño: ${archiveFile.get().asFile.length() / (1024 * 1024)} MB"
+    }
+}

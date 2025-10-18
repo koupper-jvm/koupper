@@ -883,12 +883,9 @@ object JobReplayer {
         config: JobConfiguration,
         newParams: Map<String, Any?>,
         injector: (String) -> Any? = { null },
-        logSpec: LogSpec? = null,
         symbol: Any? = null,
         onResult: (KouTask) -> Unit = {}
     ): List<JobResult> {
-        LoggerHolder.initLogger(context)
-
         val configs = config.configurations ?: listOf(config)
         val allResults = mutableListOf<JobResult>()
 
@@ -912,22 +909,15 @@ object JobReplayer {
                             params = newParams.mapValues { JobSerializer.mapper.writeValueAsString(it.value) }
                         )
 
-                        if (logSpec != null) {
-                            captureLogs<Any?>("Scripts.Dispatcher", logSpec) { logger ->
-                                withScriptLogger(logger, logSpec.mdc) {
-                                    val result = ScriptRunner.runScript(updated, symbol, injector)
-                                    logger.info { result.toString() }
-                                }
-                            }
-                        } else {
-                            ScriptRunner.runScript(updated, symbol, injector)
-                        }
+                        val result = ScriptRunner.runScript(updated, symbol, injector)
+
+                        GlobalLogger.log.info { result.toString() }
 
                         onResult(updated)
                     }
 
                     is JobResult.Error -> {
-                        LoggerHolder.LOGGER.warn { res.message }
+                        GlobalLogger.log.warn { res.message }
                         res.exception?.printStackTrace()
                     }
                 }

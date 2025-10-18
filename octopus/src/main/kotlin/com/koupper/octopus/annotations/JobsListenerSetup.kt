@@ -1,9 +1,7 @@
 package com.koupper.octopus.annotations
 
 import com.koupper.container.app
-import com.koupper.logging.GlobalLogger
-import com.koupper.logging.LogSpec
-import com.koupper.logging.LoggerCore
+import com.koupper.logging.*
 import com.koupper.octopus.process.JobEvent
 import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.ModuleProcessor
@@ -246,17 +244,17 @@ object JobsListenerSetup {
 
         if (debug) enableDebugMode()
 
-        app.singleton(LoggerCore::class, { GlobalLogger.log }, tag = "file")
-
         ListenersRegistry.start(
             key = key,
             sleepTime = sleepTime,
             runOnce = { onJob ->
-                JobRunner.runPendingJobs(workerTask.context, jobId = null, configId = null) { results -> onJob(results) }
+                captureLogs<Any?>("Thread.Listener", replaySpec!!) { logger ->
+                    withScriptLogger(logger, replaySpec?.mdc!!) {
+                        JobRunner.runPendingJobs(workerTask.context, jobId = null, configId = null) { results -> onJob(results) }
+                    }
+                }
             },
             onJob = { results ->
-                val logger = app.createSingleton(LoggerCore::class, "file")
-
                 results.forEach { result ->
                     when (result) {
                         is JobInfo -> {
@@ -384,7 +382,6 @@ object JobsListenerSetup {
                                         else -> null
                                     }
                                 },
-                                logSpec = replaySpec,
                                 symbol = this.backend.getSymbol(jlc.functionName),
                             ) { updatedWorkerJob ->
                                 updatedWorkerJob.dispatchToQueue(workerTask.context, config.id)
