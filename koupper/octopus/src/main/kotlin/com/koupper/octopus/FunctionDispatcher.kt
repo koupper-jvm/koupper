@@ -71,7 +71,7 @@ object FunctionDispatcher {
 
         if (hasEmitted) {
             @Suppress("UNCHECKED_CAST")
-            result(emitted as T)
+            result((emitted ?: Unit) as T)
         } else {
             error("No function annotated with @Export was found.")
         }
