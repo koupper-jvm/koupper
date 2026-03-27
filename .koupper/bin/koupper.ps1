@@ -1,16 +1,11 @@
-# Forzar encoding en la sesión actual de PowerShell
+# Forced UTF-8 encoding
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-$koupperJar = "$env:USERPROFILE\.koupper\libs\koupper-cli-4.5.0.jar"
-$logDir = "$env:USERPROFILE\.koupper\logs"
+$octopusJar = "$env:USERPROFILE\.koupper\libs\octopus.jar"
+$cliJar     = "$env:USERPROFILE\.koupper\libs\koupper-cli.jar"
 
-# Crear directorio de logs si no existe
-if (-not (Test-Path $logDir)) { 
-    New-Item -ItemType Directory -Path $logDir | Out-Null 
-}
-
-# Verificar si Octopus (puerto 9998) ya está corriendo
+# 1. Daemon check - DO NOT USE Test-NetConnection (causes terminal cursor corruption via progress bars)
 $octopusRunning = $false
 try {
     $client = New-Object System.Net.Sockets.TcpClient
@@ -21,14 +16,12 @@ try {
     $octopusRunning = $false
 }
 
-# Si no corre, lo iniciamos usando el script start-octopus.ps1
 if (-not $octopusRunning) {
-    Write-Host "Iniciando Octopus..." -ForegroundColor Cyan
-    Start-Process -NoNewWindow -FilePath "powershell" -ArgumentList "-File `"$env:USERPROFILE\.koupper\bin\start-octopus.ps1`""
+    Write-Host "🐙 Octopus Engine is offline. Booting background daemon..." -ForegroundColor Magenta
+    # Use javaw and Hidden window to ensure it's fully detached
+    Start-Process -FilePath "javaw" -ArgumentList "-jar `"$octopusJar`"" -WindowStyle Hidden
     Start-Sleep -Seconds 2
 }
 
-# EJECUCIÓN MAESTRA: 
-# Usamos cmd /c chcp 65001 para que la consola de Windows entienda UTF-8 
-# y Java no convierta los emojis en signos de interrogación.
-cmd /c "chcp 65001 >nul && java -Dfile.encoding=UTF-8 -jar `"$koupperJar`" $args"
+# 2. CLI Execution (Synchronous)
+& java "-Dfile.encoding=UTF-8" -jar "$cliJar" $args
