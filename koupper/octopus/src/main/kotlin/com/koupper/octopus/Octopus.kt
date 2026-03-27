@@ -511,13 +511,23 @@ fun listenForExternalCommands(
 
                                 override fun write(b: Int) {
                                     if (b == '\n'.code) {
+                                        flushBuffer()
+                                    } else {
+                                        buffer.write(b)
+                                    }
+                                }
+
+                                override fun flush() {
+                                    flushBuffer()
+                                }
+
+                                private fun flushBuffer() {
+                                    if (buffer.size() > 0) {
                                         val text = buffer.toString("UTF-8").removeSuffix("\r")
                                         writer.write("PRINT::$text")
                                         writer.newLine()
                                         writer.flush()
                                         buffer.reset()
-                                    } else {
-                                        buffer.write(b)
                                     }
                                 }
                             }, true, "UTF-8")
@@ -528,11 +538,10 @@ fun listenForExternalCommands(
                                     .info { "📜 Executing script: $scriptPath with params: $parameters" }
 
                                 processManager.runFromScriptFile(scriptContext, scriptPath, parameters) { result: Any ->
+                                    customOut.flush() // Force flush any remaining log buffer
+
                                     val out = when (result) {
                                         is Unit -> ""
-                                        is String -> result
-                                        is Number -> result.toString()
-                                        is Boolean -> result.toString()
                                         else -> result.toString()
                                     }
 
@@ -540,10 +549,11 @@ fun listenForExternalCommands(
                                     writer.write("${out}\n")
                                     writer.write("RESULT_END\n")
                                     writer.flush()
-                                    it.shutdownOutput()
                                 }
                             } finally {
+                                customOut.flush()
                                 System.setOut(originalOut)
+                                it.shutdownOutput()
                             }
                         }
 
