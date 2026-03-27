@@ -64,12 +64,11 @@ java -jar "$userPath/.koupper/libs/koupper-cli.jar" "${'$'}@"
 """.trimIndent()
 
 val ps1Shim = """
-@echo off
-java -jar "$userPath\.koupper\libs\koupper-cli.jar" %*
+java -jar "$userPath\.koupper\libs\koupper-cli.jar" ${'$'}args
 """.trimIndent()
 
 val bashFile = File(binDirectory, "koupper")
-val ps1File = File(binDirectory, "koupper.bat")
+val ps1File = File(binDirectory, "koupper.ps1")
 
 bashFile.writeText(bashShim)
 bashFile.setExecutable(true)
@@ -83,17 +82,16 @@ val bashInvoker = """
 java -jar "$userPath/.koupper/libs/octopus.jar" "${'$'}@"
 """.trimIndent()
 
-val batInvoker = """
-@echo off
-java -jar "$userPath\.koupper\libs\octopus.jar" %*
+val ps1Invoker = """
+java -jar "$userPath\.koupper\libs\octopus.jar" ${'$'}args
 """.trimIndent()
 
 val bashInvokerFile = File(helpersDirectory, "octopusInvoker.sh")
-val batInvokerFile = File(helpersDirectory, "octopusInvoker.bat")
+val ps1InvokerFile = File(helpersDirectory, "octopusInvoker.ps1")
 
 bashInvokerFile.writeText(bashInvoker)
 bashInvokerFile.setExecutable(true)
-batInvokerFile.writeText(batInvoker)
+ps1InvokerFile.writeText(ps1Invoker)
 
 println("\n✅ \u001B[38;5;155mKoupper Framework successfully installed on your machine!\u001B[0m")
 println("\n\u001B[33m[IMPORTANT]\u001B[0m Make sure to add the following directory to your system PATH:")
