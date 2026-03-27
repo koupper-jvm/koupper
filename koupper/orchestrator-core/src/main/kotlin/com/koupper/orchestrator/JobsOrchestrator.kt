@@ -146,6 +146,23 @@ object JobDispatcher {
 }
 
 object JobRunner {
+    private fun resolveTaskScriptPath(task: KouTask): String? {
+        val directPath = task.scriptPath?.takeIf { it.isNotBlank() }
+        if (directPath != null) return directPath
+
+        val pkg = task.packageName?.takeIf { it.isNotBlank() } ?: return null
+
+        val fileBase = task.fileName
+            .removeSuffix(".class")
+            .removeSuffix(".kt")
+            .removeSuffix("Kt")
+            .takeIf { it.isNotBlank() }
+            ?: return null
+
+        val scriptName = fileBase.lowercase() + ".kt"
+        return "src/main/kotlin/${pkg.replace(".", "/")}/$scriptName"
+    }
+
     fun runPendingJobs(
         runScriptContent: (String, String, String) -> Any?,
         context: String,
@@ -176,7 +193,17 @@ object JobRunner {
             when (res) {
                 is JobResult.Ok -> {
                     val task = res.task
-                    val result = runScriptContent(task.context!!, "src/main/kotlin/${task.packageName!!.replace(".", "/")}/" + task.fileName.lowercase().substring(0, task.fileName.indexOf("Kt")) + ".kt", task.params.toCliArgs())
+
+                    val taskContext = task.context?.takeIf { it.isNotBlank() } ?: context
+                    val scriptPath = resolveTaskScriptPath(task)
+
+                    if (scriptPath == null) {
+                        return@map JobResult.Error(
+                            "❌ Missing script metadata for job '${task.id}'. packageName/scriptPath is required."
+                        )
+                    }
+
+                    val result = runScriptContent(taskContext, scriptPath, task.params.toCliArgs())
                     JobInfo(
                         configId = res.configName,
                         id = res.task.id,
@@ -672,7 +699,8 @@ object FileJobDriver : ContextualJobDriver {
     }
 
     override fun forEachPending(config: JobConfiguration, jobId: String?, jobsDirectory: String?): List<JobResult> {
-        TODO("Not yet implemented")
+        val context = Paths.get("").toAbsolutePath().toString()
+        return forEachPending(context, config, jobId, jobsDirectory)
     }
 
     override fun listPending(
@@ -760,7 +788,43 @@ object RedisJobDriver : JobDriver {
     }
 
     override fun listPending(context: String, config: JobConfiguration, jobId: String?, jobsDirectory: String?): List<JobResult> {
-        TODO("Not yet implemented")
+        val results = mutableListOf<JobResult>()
+        val host = config.redisHost ?: "127.0.0.1"
+        val port = config.redisPort?.toIntOrNull() ?: 6379
+        val password = config.redisPassword
+
+        try {
+            Jedis(host, port).use { jedis ->
+                if (!password.isNullOrBlank()) jedis.auth(password)
+
+                val queueName = config.queue ?: "default"
+                val jobs = jedis.lrange(queueName, 0, -1)
+
+                if (jobs.isEmpty()) {
+                    results += JobResult.Error("⚠️ No Redis jobs found in [$queueName]")
+                    return@use
+                }
+
+                jobs.forEachIndexed { idx, jobJson ->
+                    try {
+                        val task = JobSerializer.deserialize(jobJson)
+                        if (!jobId.isNullOrBlank() && task.id != jobId) return@forEachIndexed
+                        results += JobResult.Ok(config.id, task)
+                    } catch (e: Exception) {
+                        results += JobResult.Error("❌ Failed to deserialize Redis job at index $idx: ${e.message}", e)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            results += JobResult.Error("❌ Redis connection error: ${e.message}", e)
+            return results
+        }
+
+        if (results.isEmpty()) {
+            results += JobResult.Error("⚠️ No Redis jobs found in [${config.queue ?: "default"}]")
+        }
+
+        return results
     }
 }
 
@@ -929,7 +993,56 @@ object DbJobDriver : JobDriver {
     }
 
     override fun listPending(context: String, config: JobConfiguration, jobId: String?, jobsDirectory: String?): List<JobResult> {
-        TODO("Not yet implemented")
+        val results = mutableListOf<JobResult>()
+
+        val dbUrl  = config.databaseUrl ?: "jdbc:sqlite:jobs.db"
+        val dbUser = config.databaseUser
+        val dbPass = config.databasePassword
+
+        val conn = try {
+            if (dbUser != null && dbPass != null)
+                DriverManager.getConnection(dbUrl, dbUser, dbPass)
+            else
+                DriverManager.getConnection(dbUrl)
+        } catch (e: Exception) {
+            results += JobResult.Error("❌ Cannot connect to database: ${e.message}", e)
+            return results
+        }
+
+        val sql = if (!jobId.isNullOrBlank()) {
+            "SELECT id, payload FROM jobs WHERE queue = ? AND status = 'pending' AND id = ?"
+        } else {
+            "SELECT id, payload FROM jobs WHERE queue = ? AND status = 'pending'"
+        }
+
+        conn.use { c ->
+            c.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, config.queue ?: "default")
+                if (!jobId.isNullOrBlank()) stmt.setString(2, jobId)
+
+                val rs = stmt.executeQuery()
+                var found = false
+
+                while (rs.next()) {
+                    found = true
+                    val jobIdDb = rs.getString("id")
+                    val jobJson = rs.getString("payload")
+
+                    try {
+                        val task = JobSerializer.deserialize(jobJson)
+                        results += JobResult.Ok(config.id, task)
+                    } catch (e: Exception) {
+                        results += JobResult.Error("❌ Failed to deserialize DB job [$jobIdDb]: ${e.message}", e)
+                    }
+                }
+
+                if (!found) {
+                    results += JobResult.Error("⚠️ No pending DB jobs found in queue [${config.queue ?: "default"}].")
+                }
+            }
+        }
+
+        return results
     }
 }
 
