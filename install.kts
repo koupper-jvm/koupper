@@ -4,17 +4,25 @@ import java.util.Locale
 println("🐙 \u001B[38;5;141mBootstrapping Koupper Monorepo Environment...\u001B[0m")
 println("🔨 Compiling absolute latest sources via Gradle...")
 
-// 1. Compile the Monorepo locally
+// 1. Compile the Monorepo sub-modules locally
 val isWindows = System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")
 val gradleCmd = if (isWindows) "gradlew.bat" else "./gradlew"
 
-val process = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "$gradleCmd build -x test")
+val cliCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "cd koupper-cli && $gradleCmd build -x test")
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
     .start()
 
-process.waitFor()
-if (process.exitValue() != 0) {
+cliCompilation.waitFor()
+
+val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "cd koupper && $gradleCmd build -x test")
+    .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+    .redirectError(ProcessBuilder.Redirect.INHERIT)
+    .start()
+
+octopusCompilation.waitFor()
+
+if (cliCompilation.exitValue() != 0 || octopusCompilation.exitValue() != 0) {
     println("\u001B[31m❌ Compilation failed. Aborting installation.\u001B[0m")
     System.exit(1)
 }
