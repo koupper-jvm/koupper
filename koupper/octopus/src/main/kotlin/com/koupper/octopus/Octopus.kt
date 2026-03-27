@@ -26,7 +26,9 @@ import kotlinx.coroutines.*
 import java.io.File
 import java.io.OutputStream
 import java.io.PrintStream
+import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.URI
 import java.net.URL
 import java.nio.file.Paths
 import java.util.concurrent.CompletableFuture
@@ -48,6 +50,80 @@ data class ParsedParams(
     val params: Map<String, String>,
     val positionals: List<String> = emptyList()
 )
+
+private const val OCTOPUS_HOST = "127.0.0.1"
+private const val OCTOPUS_PORT = 9998
+private const val OCTOPUS_AUTH_PROPERTY = "koupper.octopus.token"
+private const val OCTOPUS_AUTH_ENV = "KOUPPER_OCTOPUS_TOKEN"
+private const val OCTOPUS_ENABLE_URL_PROPERTY = "koupper.octopus.enableRunFromUrl"
+private const val OCTOPUS_ENABLE_URL_ENV = "KOUPPER_ENABLE_RUN_FROM_URL"
+private const val OCTOPUS_ALLOW_INSECURE_URL_PROPERTY = "koupper.octopus.allowInsecureRunFromUrl"
+private const val OCTOPUS_ALLOW_INSECURE_URL_ENV = "KOUPPER_ALLOW_INSECURE_RUN_FROM_URL"
+
+private fun optionalRuntimeSetting(propertyName: String, envName: String): String? {
+    val fromProperty = System.getProperty(propertyName)?.trim()
+    if (!fromProperty.isNullOrBlank()) return fromProperty
+
+    val fromEnv = System.getenv(envName)?.trim()
+    if (!fromEnv.isNullOrBlank()) return fromEnv
+
+    return null
+}
+
+private fun runtimeFlag(propertyName: String, envName: String, default: Boolean): Boolean {
+    val raw = optionalRuntimeSetting(propertyName, envName) ?: return default
+    return raw.equals("true", ignoreCase = true) || raw == "1" || raw.equals("yes", ignoreCase = true)
+}
+
+private fun runtimeOctopusToken(): String? = optionalRuntimeSetting(OCTOPUS_AUTH_PROPERTY, OCTOPUS_AUTH_ENV)
+
+private fun isRunFromUrlEnabled(): Boolean =
+    runtimeFlag(OCTOPUS_ENABLE_URL_PROPERTY, OCTOPUS_ENABLE_URL_ENV, default = false)
+
+private fun isInsecureRunFromUrlAllowed(): Boolean =
+    runtimeFlag(OCTOPUS_ALLOW_INSECURE_URL_PROPERTY, OCTOPUS_ALLOW_INSECURE_URL_ENV, default = false)
+
+private fun isAllowedScriptUrl(scriptUrl: String): Boolean {
+    val uri = runCatching { URI(scriptUrl) }.getOrNull() ?: return false
+    val scheme = uri.scheme?.lowercase() ?: return false
+
+    if (scheme == "https") return true
+
+    if (!isInsecureRunFromUrlAllowed()) return false
+
+    if (scheme != "http") return false
+
+    val host = uri.host?.lowercase() ?: return false
+    return host == "127.0.0.1" || host == "localhost"
+}
+
+private fun parseAuthenticatedCommand(
+    firstLine: String,
+    reader: java.io.BufferedReader,
+    requiredToken: String?
+): Pair<Boolean, String?> {
+    val trimmed = firstLine.trim()
+    val tokenIsRequired = !requiredToken.isNullOrBlank()
+
+    if (trimmed.startsWith("AUTH::")) {
+        val providedToken = trimmed.removePrefix("AUTH::").trim()
+        if (!tokenIsRequired) {
+            return true to reader.readLine()?.trim()
+        }
+
+        if (providedToken == requiredToken) {
+            return true to reader.readLine()?.trim()
+        }
+
+        return false to null
+    }
+
+    if (tokenIsRequired) {
+        return false to null
+    }
+
+    return true to trimmed
+}
 
 class Octopus(private var container: Container) : ScriptExecutor {
     private var registeredServiceProviders: List<KClass<*>> = ServiceProviderManager().listProviders()
@@ -107,6 +183,22 @@ class Octopus(private var container: Container) : ScriptExecutor {
     }
 
     override fun <T> runFromUrl(context: String, scriptUrl: String, params: String, result: (value: T) -> Unit) {
+        if (!isRunFromUrlEnabled()) {
+            app.createSingleton(LoggerCore::class).warn {
+                "⚠️ Blocked runFromUrl. Enable with -D$OCTOPUS_ENABLE_URL_PROPERTY=true or $OCTOPUS_ENABLE_URL_ENV=true"
+            }
+            result("Script URL execution is disabled by default. Enable it explicitly to use runFromUrl." as T)
+            return
+        }
+
+        if (!isAllowedScriptUrl(scriptUrl)) {
+            app.createSingleton(LoggerCore::class).warn {
+                "⚠️ Rejected script URL: $scriptUrl"
+            }
+            result("Rejected script URL. Allowed: https, or http://localhost when insecure mode is enabled." as T)
+            return
+        }
+
         val content = URL(scriptUrl).readText()
 
         this.run(context, sentence = content, params = this.parseArgs(params)) { process: T ->
@@ -568,9 +660,10 @@ fun listenForExternalCommands(
     processManager: ScriptExecutor,
     scope: CoroutineScope
 ) {
-    val serverSocket = ServerSocket(9998)
+    val serverSocket = ServerSocket(OCTOPUS_PORT, 50, InetAddress.getByName(OCTOPUS_HOST))
+    val authEnabled = !runtimeOctopusToken().isNullOrBlank()
     app.createSingleton(LoggerCore::class)
-        .info { "🔄 Octopus listening on port 9998..." }
+        .info { "🔄 Octopus listening on $OCTOPUS_HOST:$OCTOPUS_PORT (auth=${if (authEnabled) "enabled" else "disabled"})" }
 
     while (true) {
         val clientSocket = serverSocket.accept()
@@ -587,7 +680,18 @@ fun listenForExternalCommands(
                     val sessionLogger = LoggerFactory.get("Octopus.Session.$sessionId")
                     TerminalContext.set(TerminalIO(reader, writer))
                     SessionStdoutBridge.bind(sessionOutput)
-                    val command = reader.readLine()?.trim()
+                    val firstLine = reader.readLine()?.trim()
+
+                    if (firstLine.isNullOrBlank() || firstLine == "null") return@launch
+
+                    val requiredToken = runtimeOctopusToken()
+                    val (authenticated, command) = parseAuthenticatedCommand(firstLine, reader, requiredToken)
+
+                    if (!authenticated) {
+                        sessionLogger.warn { "⚠️ [session=$sessionId] Unauthorized command rejected." }
+                        sessionOutput.error("Unauthorized: invalid or missing token")
+                        return@launch
+                    }
 
                     if (command.isNullOrBlank() || command == "null") return@launch
 
