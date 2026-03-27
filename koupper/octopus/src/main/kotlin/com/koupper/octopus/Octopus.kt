@@ -448,6 +448,12 @@ fun tokenize(input: String): List<String> {
 }
 
 fun main() = runBlocking {
+    // 1. SILENCE THE DAEMON (Essential for preventing terminal ghosting)
+    // We redirect System.out and System.err to dummy streams so background logs never touch the console.
+    val nullStream = java.io.PrintStream(object : java.io.OutputStream() { override fun write(b: Int) {} })
+    System.setOut(nullStream)
+    System.setErr(nullStream)
+
     val processManager = createDefaultConfiguration()
 
     val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

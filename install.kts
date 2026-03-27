@@ -89,13 +89,13 @@ try {
 
 if (-not ${'$'}octopusRunning) {
     Write-Host "🐙 Octopus Engine is offline. Booting background daemon..." -ForegroundColor Magenta
-    Start-Process -FilePath "javaw" -ArgumentList "-jar `"${'$'}userPath\.koupper\libs\octopus.jar`"" -WindowStyle Hidden
+    Start-Process -FilePath "javaw" -ArgumentList "-jar `"${'$'}env:USERPROFILE\.koupper\libs\octopus.jar`"" -WindowStyle Hidden
     Start-Sleep -Seconds 2
 }
 
 # 2. CLI Execution
 # We pipe to Out-Default to force PowerShell's PSReadLine to track the output lines natively.
-& java "-Dfile.encoding=UTF-8" -jar "${'$'}userPath\.koupper\libs\koupper-cli.jar" ${'$'}args | Out-Default
+& java "-Dfile.encoding=UTF-8" -jar "${'$'}env:USERPROFILE\.koupper\libs\koupper-cli.jar" ${'$'}args | Out-Default
 """.trimIndent()
 
 val bashFile = File(binDirectory, "koupper")
