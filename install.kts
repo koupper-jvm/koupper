@@ -69,6 +69,12 @@ java -jar "$userPath/.koupper/libs/koupper-cli.jar" "${'$'}@"
 """.trimIndent()
 
 val ps1Shim = """
+${'$'}connection = Test-NetConnection -ComputerName localhost -Port 9998 -WarningAction SilentlyContinue
+if (-not ${'$'}connection.TcpTestSucceeded) {
+    Write-Host "🐙 Octopus Engine is offline. Booting background daemon..." -ForegroundColor Magenta
+    Start-Process -FilePath "java" -ArgumentList "-jar `"$userPath\.koupper\libs\octopus.jar`"" -WindowStyle Hidden
+    Start-Sleep -Seconds 2
+}
 java -jar "$userPath\.koupper\libs\koupper-cli.jar" ${'$'}args
 """.trimIndent()
 
