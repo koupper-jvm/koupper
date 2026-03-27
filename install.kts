@@ -52,8 +52,8 @@ if (cliJarSource == null || octopusJarSource == null) {
 val cliTarget = File(libsDirectory, "koupper-cli.jar")
 val octopusTarget = File(libsDirectory, "octopus.jar")
 
-cliJarSource.copyTo(cliTarget, overwrite = true)
-octopusJarSource.copyTo(octopusTarget, overwrite = true)
+cliJarSource!!.copyTo(cliTarget, overwrite = true)
+octopusJarSource!!.copyTo(octopusTarget, overwrite = true)
 
 // 4. Generate Bin Shims for Windows and Unix
 println("⚙️ Generating CLI shims...")
