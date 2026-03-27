@@ -64,6 +64,8 @@ class ScriptingHostBackend(
                     updateClasspath(extraClasspath)
                 }
             }
+            // Explicitly force K1 compiler for scripts to bypass K2 FIR Fat-Jar module accessibility bugs
+            compilerOptions("-language-version", "1.9")
         }
     }
 
