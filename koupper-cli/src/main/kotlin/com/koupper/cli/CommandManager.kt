@@ -129,6 +129,8 @@ fun main(args: Array<String>) = runBlocking {
     }
 
     print(response)
+
+    kotlin.system.exitProcess(0)
 }
 
 fun startSocketServer(commandManager: CommandManager, scope: CoroutineScope) {
