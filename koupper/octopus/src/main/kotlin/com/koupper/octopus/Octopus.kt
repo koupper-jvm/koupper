@@ -24,10 +24,13 @@ import com.koupper.shared.octopus.extractExportedAnnotations
 import com.koupper.shared.octopus.toCliArgs
 import kotlinx.coroutines.*
 import java.io.File
+import java.io.OutputStream
+import java.io.PrintStream
 import java.net.ServerSocket
 import java.net.URL
 import java.nio.file.Paths
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.reflect.KClass
 import kotlin.reflect.KProperty0
 import kotlin.system.exitProcess
@@ -447,12 +450,107 @@ fun tokenize(input: String): List<String> {
     return tokens
 }
 
+private class SessionOutput(private val writer: java.io.BufferedWriter) {
+    private val lock = Any()
+
+    fun printLine(text: String) {
+        synchronized(lock) {
+            writer.write("PRINT::$text")
+            writer.newLine()
+            writer.flush()
+        }
+    }
+
+    fun result(out: String) {
+        synchronized(lock) {
+            writer.write("RESULT_BEGIN")
+            writer.newLine()
+            writer.write(out)
+            writer.newLine()
+            writer.write("RESULT_END")
+            writer.newLine()
+            writer.flush()
+        }
+    }
+
+    fun error(message: String) {
+        synchronized(lock) {
+            writer.write("ERROR::$message")
+            writer.newLine()
+            writer.flush()
+        }
+    }
+}
+
+private object SessionStdoutBridge {
+    private val installed = AtomicBoolean(false)
+    private val sessionOutput = InheritableThreadLocal<SessionOutput?>()
+    private val threadBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
+    private val fallback = PrintStream(object : OutputStream() {
+        override fun write(b: Int) {}
+    })
+
+    fun installOnce() {
+        if (!installed.compareAndSet(false, true)) return
+
+        val routingOut = PrintStream(RoutingOutputStream(), true, Charsets.UTF_8.name())
+        System.setOut(routingOut)
+        System.setErr(routingOut)
+    }
+
+    fun bind(output: SessionOutput) {
+        sessionOutput.set(output)
+    }
+
+    fun clear() {
+        flushCurrentThreadBuffer()
+        sessionOutput.remove()
+        threadBuffer.remove()
+    }
+
+    private fun flushCurrentThreadBuffer() {
+        val buffer = threadBuffer.get()
+        if (buffer.size() <= 0) return
+        val text = buffer.toString(Charsets.UTF_8.name())
+        buffer.reset()
+        emit(text)
+    }
+
+    private fun emit(text: String) {
+        val output = sessionOutput.get()
+        if (output != null) {
+            output.printLine(text)
+        } else {
+            fallback.print(text)
+        }
+    }
+
+    private class RoutingOutputStream : OutputStream() {
+        override fun write(b: Int) {
+            if (b == '\r'.code) return
+
+            val buffer = threadBuffer.get()
+
+            if (b == '\n'.code) {
+                if (buffer.size() > 0) {
+                    val text = buffer.toString(Charsets.UTF_8.name())
+                    buffer.reset()
+                    emit(text)
+                }
+                return
+            }
+
+            buffer.write(b)
+        }
+
+        override fun flush() {
+            flushCurrentThreadBuffer()
+        }
+    }
+}
+
 fun main() = runBlocking {
-    // 1. SILENCE THE DAEMON (Essential for preventing terminal ghosting)
-    // We redirect System.out and System.err to dummy streams so background logs never touch the console.
-    val nullStream = java.io.PrintStream(object : java.io.OutputStream() { override fun write(b: Int) {} })
-    System.setOut(nullStream)
-    System.setErr(nullStream)
+    SessionStdoutBridge.installOnce()
 
     val processManager = createDefaultConfiguration()
 
@@ -484,13 +582,16 @@ fun listenForExternalCommands(
                 try {
                     val reader = it.getInputStream().bufferedReader(Charsets.UTF_8)
                     val writer = it.getOutputStream().bufferedWriter(Charsets.UTF_8)
+                    val sessionOutput = SessionOutput(writer)
+                    val sessionId = java.util.UUID.randomUUID().toString().take(8)
+                    val sessionLogger = LoggerFactory.get("Octopus.Session.$sessionId")
                     TerminalContext.set(TerminalIO(reader, writer))
+                    SessionStdoutBridge.bind(sessionOutput)
                     val command = reader.readLine()?.trim()
 
                     if (command.isNullOrBlank() || command == "null") return@launch
 
-                    app.createSingleton(LoggerCore::class)
-                        .info { "📥 Command received in Octopus: $command" }
+                    sessionLogger.info { "📥 [session=$sessionId] Command received in Octopus: $command" }
 
                     val inputData = tokenize(command)
 
@@ -511,55 +612,23 @@ fun listenForExternalCommands(
                                 "EMPTY_PARAMS"
                             }
 
-                            val originalOut = System.out
-                            val customOut = java.io.PrintStream(object : java.io.OutputStream() {
-                                private val buffer = java.io.ByteArrayOutputStream()
-
-                                override fun write(b: Int) {
-                                    if (b == '\r'.code) return // Strip \r
-                                    if (b == '\n'.code) {
-                                        flushBuffer()
-                                    } else {
-                                        buffer.write(b)
-                                    }
-                                }
-
-                                override fun flush() {
-                                    flushBuffer()
-                                }
-
-                                private fun flushBuffer() {
-                                    if (buffer.size() > 0) {
-                                        val text = buffer.toString("UTF-8")
-                                        writer.write("PRINT::$text")
-                                        writer.newLine()
-                                        writer.flush()
-                                        buffer.reset()
-                                    }
-                                }
-                            }, true, "UTF-8")
-                            System.setOut(customOut)
-
                             try {
-                                app.createSingleton(LoggerCore::class)
-                                    .info { "📜 Executing script: $scriptPath with params: $parameters" }
+                                sessionLogger.info {
+                                    "📜 [session=$sessionId] Executing script: $scriptPath with params: $parameters"
+                                }
 
                                 processManager.runFromScriptFile(scriptContext, scriptPath, parameters) { result: Any ->
-                                    customOut.flush() // Force flush any remaining log buffer
+                                    System.out.flush()
 
                                     val out = when (result) {
                                         is Unit -> ""
                                         else -> result.toString()
                                     }
 
-                                    writer.write("RESULT_BEGIN\n")
-                                    writer.write("${out}\n")
-                                    writer.write("RESULT_END\n")
-                                    writer.flush()
+                                    sessionOutput.result(out)
                                 }
                             } finally {
-                                customOut.flush()
-                                System.setOut(originalOut)
+                                System.out.flush()
                                 it.shutdownOutput()
                             }
                         }
@@ -571,14 +640,14 @@ fun listenForExternalCommands(
                     }
                 } catch (e: Exception) {
                     val traceMessage = e.message ?: e.toString()
-                    app.createSingleton(LoggerCore::class)
+                    LoggerFactory.get("Octopus.Session.Error")
                         .error { "⚠️ Error: $traceMessage" }
                     try {
-                        val writer = it.getOutputStream().bufferedWriter()
-                        writer.write("ERROR::$traceMessage\n")
-                        writer.flush()
+                        val writer = it.getOutputStream().bufferedWriter(Charsets.UTF_8)
+                        SessionOutput(writer).error(traceMessage)
                     } catch (_: Exception) {}
                 } finally {
+                    SessionStdoutBridge.clear()
                     TerminalContext.clear()
                 }
             }

@@ -111,5 +111,5 @@ koupper run examples/integration-tests.kts
 ---
 
 ## 📜 License
-Built with 🩵 by [Your Name / Organization].  
+Built with 🩵 by Jacob Guzman Acosta / Igly technologies.
 Available under the MIT License.
