@@ -1,0 +1,14 @@
+version: '1.0'
+description: >
+  %DESCRIPTION%
+
+server:
+  port: %PORT%
+  contextPath: %CONTEXT_PATH%
+
+apis:
+  - name: %API_NAME%
+    path: %API_PATH%
+    method: %API_METHOD%
+    handler: %API_HANDLER%
+    description: %API_DESCRIPTION%

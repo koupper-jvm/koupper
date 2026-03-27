@@ -1,0 +1,7 @@
+import com.koupper.octopus.annotations.Export
+import com.koupper.octopus.process.ModuleAnalyzer
+
+@Export
+val setup: (ModuleAnalyzer) -> Unit = { analyzer ->
+    analyzer.target("%TARGET%").run()
+}
