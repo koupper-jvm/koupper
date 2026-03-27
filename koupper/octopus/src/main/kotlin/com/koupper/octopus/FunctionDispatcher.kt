@@ -54,18 +54,26 @@ object FunctionDispatcher {
             getAnnotationsByHierarchy(inputParams.annotations)
 
         var emitted: T? = null
+        var hasEmitted = false
 
         for ((ann, resolver) in orderedByHierarchy) {
             resolver(inputParams) { value ->
-                if (emitted == null) emitted = value
+                if (!hasEmitted) {
+                    emitted = value
+                    hasEmitted = true
+                }
             }
 
-            if (emitted != null && annotationsPriority[ann]?.kind == Kind.TERMINAL) {
+            if (hasEmitted && annotationsPriority[ann]?.kind == Kind.TERMINAL) {
                 break
             }
         }
 
-        emitted?.let { result(it) }
-            ?: error("No function annotated with @Export was found.")
+        if (hasEmitted) {
+            @Suppress("UNCHECKED_CAST")
+            result(emitted as T)
+        } else {
+            error("No function annotated with @Export was found.")
+        }
     }
 }
