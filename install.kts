@@ -1,5 +1,18 @@
 import java.io.File
+import java.io.FileDescriptor
+import java.io.FileOutputStream
+import java.io.PrintStream
 import java.util.Locale
+
+fun forceUtf8Output() {
+    System.setProperty("file.encoding", "UTF-8")
+    runCatching {
+        System.setOut(PrintStream(FileOutputStream(FileDescriptor.out), true, Charsets.UTF_8.name()))
+        System.setErr(PrintStream(FileOutputStream(FileDescriptor.err), true, Charsets.UTF_8.name()))
+    }
+}
+
+forceUtf8Output()
 
 println("🐙 \u001B[38;5;141mBootstrapping Koupper Monorepo Environment...\u001B[0m")
 println("🔨 Compiling absolute latest sources via Gradle...")
@@ -8,9 +21,22 @@ println("🔨 Compiling absolute latest sources via Gradle...")
 val isWindows = System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")
 val gradleCmd = if (isWindows) "gradlew.bat" else "./gradlew"
 
+if (isWindows) {
+    runCatching {
+        ProcessBuilder("cmd", "/c", "chcp 65001 > nul")
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+            .waitFor()
+    }
+}
+
 val cliCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "cd koupper-cli && $gradleCmd jar -x test")
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
+    .apply {
+        environment()["JAVA_TOOL_OPTIONS"] = "-Dfile.encoding=UTF-8"
+    }
     .start()
 
 cliCompilation.waitFor()
@@ -18,6 +44,9 @@ cliCompilation.waitFor()
 val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "cd koupper && $gradleCmd :octopus:fatJar -x test")
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
+    .apply {
+        environment()["JAVA_TOOL_OPTIONS"] = "-Dfile.encoding=UTF-8"
+    }
     .start()
 
 octopusCompilation.waitFor()
