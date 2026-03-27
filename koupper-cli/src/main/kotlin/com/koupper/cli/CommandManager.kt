@@ -129,7 +129,10 @@ fun main(args: Array<String>) {
             commandManager.process(input)
         }
 
-        print(response)
+        println(response)
+
+        System.out.flush()
+        System.err.flush()
 
         kotlin.system.exitProcess(0)
     }
