@@ -4,6 +4,20 @@ import java.io.FileOutputStream
 import java.io.PrintStream
 import java.util.Locale
 
+fun shouldUseEmoji(): Boolean {
+    val noEmoji = System.getenv("KOUPPER_NO_EMOJI")?.equals("true", ignoreCase = true) == true
+    val asciiOnly = System.getenv("KOUPPER_ASCII")?.equals("true", ignoreCase = true) == true
+    val dumbTerm = System.getenv("TERM")?.equals("dumb", ignoreCase = true) == true
+    val stdoutEncoding = System.getProperty("sun.stdout.encoding") ?: System.getProperty("file.encoding")
+    val utf8 = stdoutEncoding?.contains("UTF-8", ignoreCase = true) == true
+
+    return !noEmoji && !asciiOnly && !dumbTerm && utf8
+}
+
+val EMOJI = shouldUseEmoji()
+
+fun icon(emoji: String, fallback: String): String = if (EMOJI) emoji else fallback
+
 fun forceUtf8Output() {
     System.setProperty("file.encoding", "UTF-8")
     runCatching {
@@ -14,8 +28,8 @@ fun forceUtf8Output() {
 
 forceUtf8Output()
 
-println("🐙 \u001B[38;5;141mBootstrapping Koupper Monorepo Environment...\u001B[0m")
-println("🔨 Compiling absolute latest sources via Gradle...")
+println("${icon("🐙", "[K] ")}\u001B[38;5;141mBootstrapping Koupper Monorepo Environment...\u001B[0m")
+println("${icon("🔨", "[*] ")}Compiling absolute latest sources via Gradle...")
 
 // 1. Compile the Monorepo sub-modules locally
 val isWindows = System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")
@@ -68,7 +82,7 @@ arrayOf(binDirectory, libsDirectory, logsDirectory, helpersDirectory).forEach {
 }
 
 // 3. Move freshly compiled JARS
-println("📦 Deploying artifacts...")
+println("${icon("📦", "[*] ")}Deploying artifacts...")
 
 val cliJarSource = File("koupper-cli/build/libs").listFiles()
     ?.filter { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
@@ -90,7 +104,7 @@ cliJarSource!!.copyTo(cliTarget, overwrite = true)
 octopusJarSource!!.copyTo(octopusTarget, overwrite = true)
 
 // 4. Generate Bin Shims for Windows and Unix
-println("⚙️ Generating CLI shims...")
+println("${icon("⚙️", "[*] ")}Generating CLI shims...")
 
 val bashShim = """
 #!/bin/bash
@@ -135,7 +149,7 @@ bashFile.setExecutable(true)
 
 ps1File.writeText(ps1Shim)
 
-println("⚙️ Generating Octopus Invokers in helpers/...")
+println("${icon("⚙️", "[*] ")}Generating Octopus Invokers in helpers/...")
 
 val bashInvoker = """
 #!/bin/bash
@@ -153,7 +167,7 @@ bashInvokerFile.writeText(bashInvoker)
 bashInvokerFile.setExecutable(true)
 ps1InvokerFile.writeText(ps1Invoker)
 
-println("\n✅ \u001B[38;5;155mKoupper Framework successfully installed on your machine!\u001B[0m")
+println("\n${icon("✅", "[OK] ")}\u001B[38;5;155mKoupper Framework successfully installed on your machine!\u001B[0m")
 println("\n\u001B[33m[IMPORTANT]\u001B[0m Make sure to add the following directory to your system PATH:")
-println("👉 \u001B[36m$binDirectory\u001B[0m")
+println("${icon("👉", "-> ")}\u001B[36m$binDirectory\u001B[0m")
 println("\nThen you can run: \u001B[38;5;229mkoupper run your-script.kts\u001B[0m")
