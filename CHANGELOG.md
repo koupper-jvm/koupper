@@ -1,0 +1,30 @@
+# 🐙 Koupper Framework - Global Changelog
+
+**Koupper** is an agile, scripting-first ecosystem for Kotlin. It is designed to act as a Modular Backend Platform where you can deploy reactive daemons, HTTP APIs, and asynchronous Job Workers using plain `.kts` or `.kt` scripts empowered by annotations.
+
+This repository serves as the **Monorepo** orchestrating three core pillars:
+1. **`koupper` (Octopus Engine):** The JVM-based daemon that compiles, routes, and executes your scripts.
+2. **`koupper-cli`:** The terminal interface to manage, dispatch, and configure your modules.
+3. **`.koupper`:** The boilerplate runtime folder that resides in `$KOUPPER_HOME`.
+
+All notable changes to the entire Monorepo infrastructure will be documented here.
+
+---
+
+## [1.0.0-monorepo] - 2026-03-26
+
+### 🌟 Architectural Milestones
+- **Monorepo Migration:** Consolidated `koupper`, `koupper-cli`, and the template folder into a single unified repository (`koupper-infrastructure`) to guarantee version parity between the execution engine, the CLI bindings, and the user template constraints.
+- **`.koupper` Boilerplate:** Officially renamed the template copy folder (`koupper-copy`) to `.koupper` to act as the pure system stub.
+
+### 🚀 Core Framework Upgrades (Octopus & CLI)
+- **Advanced Native JSON Mapping for CLI**: Completely overhauled the CLI Socket dispatcher to support raw JSON string injection via Terminal (e.g. `{"email": "test@test.com"}`). The CLI now deeply cleans external PowerShell quotes, and the Octopus Engine leverages a highly permissive Jackson configuration to seamlessly deserialize complex JSON structures directly into nested Kotlin POJOs on the fly.
+- **Event-Driven Background Workers Logging**: Refactored the internal Daemon logger. Deprecated untraceable standard `println` usages across asynchronous tasks (`@Scheduled`, `@JobsListener`, and `ScriptRunner`). Injected explicit, professional lifecycle logging tracking using `GlobalLogger` to gracefully trace daemon heartbeats in rotated `.log` files cleanly.
+- **Socket Exception Bubbling (Anti-Silent Failures)**: Hardened the `Octopus.kt` internal execution loop. If the Jackson engine or Script Mapper encounters a fatal error, the backend now forcefully captures the `Exception` and flushes it upstream via the `<ERROR::>` network marker. The CLI crashes transparently with the stacktrace instead of failing silently.
+- **UTF-8 Byte Preservation (Emojis Support)**: Restored a pristine standard character boundary on all TCP Socket Streams. `System.out` capturing now correctly buffers bytes via `ByteArrayOutputStream("UTF-8")` guaranteeing multi-byte characters like emojis (`🚀`, `📍`, `📊`) natively survive through the CLI rendering pipeline cross-OS.
+- **CLI Visual Polish**: The CLI tool now injects an elegant line break immediately after transmitting the command to the local server, separating interactive command prompts from real-time script evaluation responses cleanly.
+
+### 🔮 Future Roadmap (Proposed Improvements)
+- **REST / gRPC Interop**: Evolve the raw `Socket:9998` TCP communication pipeline into a lightweight Ktor REST API to standardize incoming parameter serialization naturally.
+- **Dual SLF4J Conflict Resolution**: Actively exclude the `slf4j-nop` bindings in the Gradle build trees to silence runtime instantiation warnings on startup.
+- **Live Job Metrics Database Integration**: Upgrade `koupper job status` to dynamically read from the internal SQLite index showing accurate Real-Time *Completed* & *Failed* counts instead of basic queue capacity checks.

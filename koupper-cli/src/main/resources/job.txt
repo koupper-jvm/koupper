@@ -1,0 +1,10 @@
+package %PACKAGE%
+
+import com.koupper.octopus.annotations.Export
+
+data class Input(val payload: String?)
+
+@Export
+val myScript: (Input) -> Unit = { input ->
+    print(input.payload)
+}

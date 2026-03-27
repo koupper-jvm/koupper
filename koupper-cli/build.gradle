@@ -1,0 +1,27 @@
+plugins {
+    id "org.jetbrains.kotlin.jvm" version "2.0.20"
+}
+
+group 'com.koupper.cli'
+version '4.5.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-script-runtime:1.4.32"
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2'
+    implementation 'org.yaml:snakeyaml:2.2'
+    implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'com.koupper.cli.CommandManagerKt'
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
