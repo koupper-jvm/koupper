@@ -77,6 +77,8 @@ class RunCommand : Command() {
                 val resultBuf = StringBuilder()
                 var inResult = false
 
+                var resultReceived = false
+
                 while (true) {
                     val line = reader.readLine() ?: break
 
@@ -87,10 +89,10 @@ class RunCommand : Command() {
                         }
 
                         line == "RESULT_END" -> {
-                            return resultBuf.toString()
+                            resultReceived = true
                         }
 
-                        inResult -> {
+                        inResult && !resultReceived -> {
                             resultBuf.appendLine(line)
                         }
 
@@ -117,7 +119,7 @@ class RunCommand : Command() {
                     }
                 }
 
-                "Error: connection closed"
+                return if (resultReceived) resultBuf.toString() else "Error: connection closed abruptly"
             }
         } catch (e: Exception) {
             "Error: ${e.message}"
