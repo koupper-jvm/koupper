@@ -510,6 +510,7 @@ fun listenForExternalCommands(
                                 private val buffer = java.io.ByteArrayOutputStream()
 
                                 override fun write(b: Int) {
+                                    if (b == '\r'.code) return // Strip \r
                                     if (b == '\n'.code) {
                                         flushBuffer()
                                     } else {
@@ -523,7 +524,7 @@ fun listenForExternalCommands(
 
                                 private fun flushBuffer() {
                                     if (buffer.size() > 0) {
-                                        val text = buffer.toString("UTF-8").removeSuffix("\r")
+                                        val text = buffer.toString("UTF-8")
                                         writer.write("PRINT::$text")
                                         writer.newLine()
                                         writer.flush()
