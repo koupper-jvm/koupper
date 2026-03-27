@@ -329,9 +329,8 @@ class ModuleCommand : Command() {
         val file = File(System.getProperty("user.home"), ".koupper/helpers/controllers.json")
         if (!file.exists()) return "⚠️  No controllers found\n"
 
-        try {
-            val mapper = jacksonObjectMapper()
-            val raw: Any = mapper.readValue(file, object : com.fasterxml.jackson.core.type.TypeReference<Any>() {})
+        val mapper = jacksonObjectMapper()
+        val raw: Any = mapper.readValue(file, object : com.fasterxml.jackson.core.type.TypeReference<Any>() {})
 
             val data: Map<String, Any?> = when (raw) {
                 is Map<*, *> -> raw.entries.associate { it.key.toString() to it.value }
@@ -402,9 +401,6 @@ class ModuleCommand : Command() {
                 }
             }
 
-            return result.toString().trimEnd() + "\n"
-        } finally {
-            if (file.exists()) file.delete()
-        }
+        return result.toString().trimEnd() + "\n"
     }
 }
