@@ -27,10 +27,33 @@ Write your business logic in clean scripts, let our **Octopus Engine** handle th
 
 ## 🏗️ Architecture
 
+What you are looking at is not a traditional "script runner"; it is a **Dynamic Execution Orchestrator**.
+
 Koupper operates as a seamless Monorepo split into two symbiotic layers:
 
-1. **Koupper Engine (Octopus)**: A long-living JVM daemon responsible for compiling, caching, and executing scheduled and reactive `.kts` scripts in isolated `ClassLoaders`.
-2. **Koupper CLI**: The lightweight binary proxy that communicates interactively with the Octopus socket (`Port 9998`) to stream real-time JSON payloads and fetch synchronous responses securely.
+1. **The Server-CLI Decoupling (Octopus Engine)**: A long-living JVM daemon responsible for maintaining context, classpaths, handling Dependency Injection, and executing `.kts` scripts in isolated `ClassLoaders`. 
+2. **Koupper CLI**: The lightweight binary proxy that communicates interactively with the Octopus socket (`Port 9998`). The CLI acts merely as a pure transmitter, offloading all heavy JVM lifting to the persistent service.
+
+### 🧠 Core Engineering Feats
+- **The Depth Tokenizer**: Achieving a CLI that understands `{...}` as a single argument without the OS Shell destroying the structure is handled by a custom manual state-parser engine. Elegant and extremely resilient.
+- **Dynamic Unmarshalling Injection**: Using Kotlin Reflection to dynamically map strictly-typed complex Data Classes (like `User`, `SalesReport`, etc.) directly from a raw shell text-string bypasses the `Shell -> JVM` barrier flawlessly without external boilerplate libraries.
+
+---
+
+## ⚡ Setup & Installation
+
+Koupper boots itself using its own ecosystem. To install the CLI, Jars, and Daemon directly on your machine from the source code:
+
+```powershell
+# 1. Clone the Monorepo
+git clone https://github.com/koupper/koupper.git
+cd koupper
+
+# 2. Run the self-bootstrapper (Compiles source and provisions ~/.koupper/bin)
+kotlinc -script install.kts
+```
+
+**After execution, just ensure `~/.koupper/bin` is in your system `PATH`.**
 
 ---
 
