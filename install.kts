@@ -8,14 +8,14 @@ println("🔨 Compiling absolute latest sources via Gradle...")
 val isWindows = System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")
 val gradleCmd = if (isWindows) "gradlew.bat" else "./gradlew"
 
-val cliCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "cd koupper-cli && $gradleCmd build jar -x test")
+val cliCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "cd koupper-cli && $gradleCmd jar -x test")
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
     .start()
 
 cliCompilation.waitFor()
 
-val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "cd koupper && $gradleCmd build jar -x test")
+val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "cd koupper && $gradleCmd :octopus:fatJar -x test")
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
     .start()
@@ -41,8 +41,13 @@ arrayOf(binDirectory, libsDirectory, logsDirectory, helpersDirectory).forEach {
 // 3. Move freshly compiled JARS
 println("📦 Deploying artifacts...")
 
-val cliJarSource = File("koupper-cli/build/libs").listFiles()?.firstOrNull { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
-val octopusJarSource = File("koupper/build/libs").listFiles()?.firstOrNull { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
+val cliJarSource = File("koupper-cli/build/libs").listFiles()
+    ?.filter { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
+    ?.maxByOrNull { it.length() }
+
+val octopusJarSource = File("koupper/octopus/build/libs").listFiles()
+    ?.filter { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
+    ?.maxByOrNull { it.length() }
 
 if (cliJarSource == null || octopusJarSource == null) {
     println("\u001B[31m❌ Artifacts not found after compilation. Expected Jars in build/libs.\u001B[0m")
