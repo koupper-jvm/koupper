@@ -12,6 +12,16 @@ val isSingleFileName: (String) -> Boolean = {
 }
 
 class RunCommand : Command() {
+    private fun runtimeOctopusToken(): String? {
+        val fromProperty = System.getProperty("koupper.octopus.token")?.trim()
+        if (!fromProperty.isNullOrBlank()) return fromProperty
+
+        val fromEnv = System.getenv("KOUPPER_OCTOPUS_TOKEN")?.trim()
+        if (!fromEnv.isNullOrBlank()) return fromEnv
+
+        return null
+    }
+
     init {
         super.name = "run"
         super.usage = "\n   koupper ${ANSI_GREEN_155}$name${ANSI_RESET} ${ANSI_GREEN_155}script-name.kts${ANSI_RESET}\n"
@@ -68,6 +78,12 @@ class RunCommand : Command() {
             Socket("localhost", 9998).use { socket ->
                 val writer = socket.getOutputStream().bufferedWriter(Charsets.UTF_8)
                 val reader = socket.getInputStream().bufferedReader(Charsets.UTF_8)
+
+                runtimeOctopusToken()?.let { token ->
+                    writer.write("AUTH::$token")
+                    writer.newLine()
+                }
+
                 writer.write("\"$context\" \"$script\" $params")
                 writer.newLine()
                 writer.flush()
