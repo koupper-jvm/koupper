@@ -32,8 +32,9 @@ val userPath = System.getProperty("user.home")
 val binDirectory = File("$userPath${File.separator}.koupper${File.separator}bin")
 val libsDirectory = File("$userPath${File.separator}.koupper${File.separator}libs")
 val logsDirectory = File("$userPath${File.separator}.koupper${File.separator}logs")
+val helpersDirectory = File("$userPath${File.separator}.koupper${File.separator}helpers")
 
-arrayOf(binDirectory, libsDirectory, logsDirectory).forEach {
+arrayOf(binDirectory, libsDirectory, logsDirectory, helpersDirectory).forEach {
     if (!it.exists()) it.mkdirs()
 }
 
@@ -68,6 +69,25 @@ bashFile.writeText(bashShim)
 bashFile.setExecutable(true)
 
 ps1File.writeText(ps1Shim)
+
+println("⚙️ Generating Octopus Invokers in helpers/...")
+
+val bashInvoker = """
+#!/bin/bash
+java -jar "$userPath/.koupper/libs/octopus.jar" "${'$'}@"
+""".trimIndent()
+
+val batInvoker = """
+@echo off
+java -jar "$userPath\.koupper\libs\octopus.jar" %*
+""".trimIndent()
+
+val bashInvokerFile = File(helpersDirectory, "octopusInvoker.sh")
+val batInvokerFile = File(helpersDirectory, "octopusInvoker.bat")
+
+bashInvokerFile.writeText(bashInvoker)
+bashInvokerFile.setExecutable(true)
+batInvokerFile.writeText(batInvoker)
 
 println("\n✅ \u001B[38;5;155mKoupper Framework successfully installed on your machine!\u001B[0m")
 println("\n\u001B[33m[IMPORTANT]\u001B[0m Make sure to add the following directory to your system PATH:")
