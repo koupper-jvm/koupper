@@ -116,21 +116,23 @@ class CommandManager {
     }
 }
 
-fun main(args: Array<String>) = runBlocking {
-    val commandManager = CommandManager()
+fun main(args: Array<String>) {
+    runBlocking {
+        val commandManager = CommandManager()
 
-    val context = System.getProperty("user.dir")
-    val input = arrayOf(context, *args)
+        val context = System.getProperty("user.dir")
+        val input = arrayOf(context, *args)
 
-    val response = if (input.size == 1) {
-        DefaultCommand().execute()
-    } else {
-        commandManager.process(input)
+        val response = if (input.size == 1) {
+            DefaultCommand().execute()
+        } else {
+            commandManager.process(input)
+        }
+
+        print(response)
+
+        kotlin.system.exitProcess(0)
     }
-
-    print(response)
-
-    kotlin.system.exitProcess(0)
 }
 
 fun startSocketServer(commandManager: CommandManager, scope: CoroutineScope) {
