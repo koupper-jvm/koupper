@@ -69,13 +69,33 @@ java -jar "$userPath/.koupper/libs/koupper-cli.jar" "${'$'}@"
 """.trimIndent()
 
 val ps1Shim = """
-${'$'}connection = Test-NetConnection -ComputerName localhost -Port 9998 -WarningAction SilentlyContinue
-if (-not ${'$'}connection.TcpTestSucceeded) {
+# Forced UTF-8 encoding for PowerShell streams
+${'$'}OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# Force the native Windows Console code page to UTF-8
+chcp 65001 > ${'$'}null
+
+# 1. Daemon check - DO NOT USE Test-NetConnection
+${'$'}octopusRunning = ${'$'}false
+try {
+    ${'$'}client = [System.Net.Sockets.TcpClient]::new()
+    ${'$'}client.Connect("localhost", 9998)
+    ${'$'}client.Close()
+    ${'$'}octopusRunning = ${'$'}true
+} catch {
+    ${'$'}octopusRunning = ${'$'}false
+}
+
+if (-not ${'$'}octopusRunning) {
     Write-Host "🐙 Octopus Engine is offline. Booting background daemon..." -ForegroundColor Magenta
-    Start-Process -FilePath "javaw" -ArgumentList "-jar `"$userPath\.koupper\libs\octopus.jar`""
+    Start-Process -FilePath "javaw" -ArgumentList "-jar `"${'$'}userPath\.koupper\libs\octopus.jar`"" -WindowStyle Hidden
     Start-Sleep -Seconds 2
 }
-java -jar "$userPath\.koupper\libs\koupper-cli.jar" ${'$'}args
+
+# 2. CLI Execution
+# We pipe to Out-Default to force PowerShell's PSReadLine to track the output lines natively.
+& java "-Dfile.encoding=UTF-8" -jar "${'$'}userPath\.koupper\libs\koupper-cli.jar" ${'$'}args | Out-Default
 """.trimIndent()
 
 val bashFile = File(binDirectory, "koupper")
