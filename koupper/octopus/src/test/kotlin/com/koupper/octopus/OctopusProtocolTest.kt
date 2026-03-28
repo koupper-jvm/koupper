@@ -3,6 +3,7 @@ package com.koupper.octopus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class OctopusProtocolTest {
@@ -54,5 +55,26 @@ class OctopusProtocolTest {
         assertTrue(json.contains("\"requestId\":\"req-42\""))
         assertTrue(json.contains("line1\\nline2"))
         assertTrue(json.contains("\\\"quoted\\\""))
+    }
+
+    @Test
+    fun `should ignore unknown JSON fields while parsing protocol command`() {
+        val parsed = parseIncomingCommand(
+            """{"type":"RUN","requestId":"req-2","context":"ctx","script":"a.kts","params":"x","extra":"ignored"}"""
+        )
+        assertNotNull(parsed)
+
+        assertEquals(ResponseMode.JSON, parsed.mode)
+        assertEquals("RUN", parsed.commandType)
+        assertEquals("req-2", parsed.requestId)
+        assertEquals("ctx", parsed.context)
+        assertEquals("a.kts", parsed.scriptPath)
+        assertEquals("x", parsed.params)
+    }
+
+    @Test
+    fun `should return null for malformed JSON command`() {
+        val parsed = parseIncomingCommand("""{"type":"RUN","context":"ctx"""")
+        assertNull(parsed)
     }
 }
