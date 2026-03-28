@@ -67,6 +67,27 @@ Run immediate terminal outputs parsing positional parameters cleanly.
 koupper run examples/hello-world.kts "Developer"
 ```
 
+### CLI Socket Overrides
+When Octopus is running on a non-default host/port (or token-protected), configure the CLI at runtime:
+
+```powershell
+# Host/port overrides
+$env:KOUPPER_OCTOPUS_HOST="127.0.0.1"
+$env:KOUPPER_OCTOPUS_PORT="9998"
+
+# Optional auth token
+$env:KOUPPER_OCTOPUS_TOKEN="your-token"
+
+koupper run examples/hello-world.kts
+```
+
+Equivalent JVM properties are also supported:
+
+```powershell
+$env:JAVA_TOOL_OPTIONS="-Dkoupper.octopus.host=127.0.0.1 -Dkoupper.octopus.port=9998 -Dkoupper.octopus.token=your-token"
+koupper run examples/hello-world.kts
+```
+
 ### 2. Deep JSON Data-Mapping (`cli-report-generator.kts`)
 Send heavily nested HTTP-like JSON objects right from Powershell. The engine will deserialize the payload, map it to a complex `SalesReportCommand` object, and execute the closure.
 ```powershell

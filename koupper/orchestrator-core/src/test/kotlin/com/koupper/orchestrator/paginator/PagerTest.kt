@@ -87,6 +87,7 @@ class PagerTest {
 
         if (nextToken == null) return@runBlocking
 
+        @Suppress("UNCHECKED_CAST")
         val secondPage = dbPager.moveTo(nextToken) as List<Map<String, Any?>>
         assertNotNull(secondPage)
         assertTrue(secondPage.isNotEmpty())
@@ -157,7 +158,7 @@ class PagerTest {
         )
 
         val token = pager.nextToken()
-        assertTrue(token == null || token is String)
+        assertTrue(token == null || token.isNotBlank())
     }
 
     @Test
@@ -225,7 +226,7 @@ class PagerTest {
 
         val result = pager.moveTo(null)
         assertNotNull(result)
-        assertTrue(result is List<*>)
+        assertTrue(result.all { it is Map<*, *> })
         println("✅ DynamoPager projection test returned ${result.size} items")
     }
 
@@ -241,7 +242,7 @@ class PagerTest {
         )
 
         val result = pager.moveTo(null)
-        assertTrue(result.isEmpty() || result is List<*>)
+        assertTrue(result.isEmpty())
     }
 
     @Test
@@ -251,7 +252,7 @@ class PagerTest {
         val pager = DynamoPager(table = "IGLY_BLOG_ARTICLES", limit = 2)
         val result = pager.moveTo("invalid_token")
         assertNotNull(result)
-        assertTrue(result is List<*>)
+        assertTrue(result.all { it is Map<*, *> })
     }
 
     @Test
