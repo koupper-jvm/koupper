@@ -175,6 +175,12 @@ Recommended production release workflow:
 
 Compatibility note: keep CLI and Octopus tags listed together in release notes for predictable upgrades.
 
+## 🔐 Production Hardening
+
+For production security defaults and deployment guardrails, see:
+
+- `docs/PRODUCTION_HARDENING.md`
+
 ---
 
 ## 📜 License
