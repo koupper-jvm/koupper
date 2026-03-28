@@ -21,6 +21,7 @@ Write your business logic in clean scripts, let our **Octopus Engine** handle th
 
 - **🚀 Zero-Boilerplate Daemons**: Use the `@Scheduled` annotation to spin up infinite background workers governed by CRON expressions.
 - **⚡ Reactive Queue Listeners**: Deploy active consumers monitoring your internal message bus automatically via `@JobsListener`.
+- **🚢 One-Click Remote Deploy**: Push `.kts` scripts from your local machine to any remote Octopus daemon via `koupper deploy`. Zero SSH/CI-CD required.
 - **💉 Native Dependency Injection**: Access internal singletons and providers (like `JSONFileHandler`, `Sender`, or `AI`) anywhere using the global `app.getInstance()` locator.
 - **🛡️ Strict JSON Deserialization**: Koupper's CLI layer maps raw, nested JSON arrays directly into your underlying Kotlin Data Classes. No manual parsing required.
 - **⚙️ Integrated Sandbox Execution**: Build entire integration tests parsing, asserting, and evaluating sibling scripts dynamically via `ScriptExecutor`.
@@ -94,7 +95,17 @@ Send heavily nested HTTP-like JSON objects right from Powershell. The engine wil
 koupper run examples/cli-report-generator.kts '{"reportName": "Q3", "region": "Global", "items": [{"name": "License", "value": 99.0}]}'
 ```
 
-### 3. Background Cron Daemons (`disk-cleanup-daemon.kts`)
+### 3. Remote Deployment (`koupper deploy`)
+Push a local script to a remote production Octopus daemon. No SSH or manual file transfers needed.
+```powershell
+# Deploy a worker script to a remote host
+koupper deploy examples/hello-world.kts "10.0.0.50"
+
+# Custom port or user context
+koupper deploy examples/hello-world.kts "user@10.0.0.50:9999"
+```
+
+### 4. Background Cron Daemons (`disk-cleanup-daemon.kts`)
 Want to delete old logs at midnight? Just annotate your export and the Octopus Engine will schedule it natively in the background upon booting.
 ```kotlin
 import com.koupper.octopus.annotations.Scheduled
