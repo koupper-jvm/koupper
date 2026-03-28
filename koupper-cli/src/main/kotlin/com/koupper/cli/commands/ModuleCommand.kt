@@ -13,6 +13,21 @@ import org.yaml.snakeyaml.Yaml
 import java.io.File
 import java.io.InputStream
 
+private fun Any?.asMapStringAny(): Map<String, Any?>? {
+    val raw = this as? Map<*, *> ?: return null
+    return raw.entries.associate { (k, v) -> k.toString() to v }
+}
+
+private fun Any?.asListOfMapStringAny(): List<Map<String, Any?>> {
+    val raw = this as? List<*> ?: return emptyList()
+    return raw.mapNotNull { it.asMapStringAny() }
+}
+
+private fun Any?.asListOfString(): List<String> {
+    val raw = this as? List<*> ?: return emptyList()
+    return raw.mapNotNull { it?.toString() }
+}
+
 fun extractServerPort(moduleDir: File): String? {
     val setupFile = findKtFileRecursively(
         File(moduleDir, "src/main/kotlin"),
@@ -173,8 +188,8 @@ class ModuleCommand : Command() {
             result.append("\n")
         }
 
-        val folders = jsonData["folders"] as? List<Map<String, Any?>> ?: emptyList()
-        val files = jsonData["files"] as? List<Map<String, Any?>> ?: emptyList()
+        val folders = jsonData["folders"].asListOfMapStringAny()
+        val files = jsonData["files"].asListOfMapStringAny()
 
         val allNames = folders.map { it["folder"] as? String ?: "" } +
                 files.map { it["file"] as? String ?: "" }
@@ -183,14 +198,14 @@ class ModuleCommand : Command() {
 
         for (folder in folders) {
             val folderName = folder["folder"] as? String ?: ""
-            val tags = (folder["tags"] as? List<String>)?.map(::colorizeTag) ?: emptyList()
+            val tags = folder["tags"].asListOfString().map(::colorizeTag)
             val padded = folderName.padEnd(maxNameLength + 2)
             result.append("$padded${tags.joinToString(" ")}\n")
         }
 
         for (file in files) {
             val fileName = file["file"] as? String ?: ""
-            val tags = (file["tags"] as? List<String>)?.map(::colorizeTag) ?: emptyList()
+            val tags = file["tags"].asListOfString().map(::colorizeTag)
             val signature = file["signature"]?.toString().orEmpty()
             val padded = fileName.padEnd(maxNameLength + 2)
             result.append("$padded${tags.joinToString(" ")}")
@@ -274,7 +289,7 @@ class ModuleCommand : Command() {
 
         sb.append("Controllers:\n")
 
-        val controllersList = jsonController?.get("controllers") as? List<Map<String, Any?>> ?: emptyList()
+        val controllersList = jsonController?.get("controllers").asListOfMapStringAny()
         val yamlControllers = config.controllers ?: emptyList()
 
         yamlControllers.forEach { yamlCtrl ->
@@ -286,7 +301,7 @@ class ModuleCommand : Command() {
 
             sb.append("$yamlCtrlName -> $yamlCtrlPath $ctrlMatchStatus\n")
 
-            val jsonEndpoints = jsonCtrl?.get("endpoints") as? List<Map<String, Any?>> ?: emptyList()
+            val jsonEndpoints = jsonCtrl?.get("endpoints").asListOfMapStringAny()
 
             yamlCtrl.apis?.forEachIndexed { idx, api ->
                 val handlerName = "RequestHandler" + (api.handler?.replaceFirstChar { it.uppercaseChar() } ?: "")
@@ -345,12 +360,12 @@ class ModuleCommand : Command() {
                 result.append("\n")
             }
 
-            val controllers = data["controllers"] as? List<Map<String, Any?>> ?: emptyList()
+            val controllers = data["controllers"].asListOfMapStringAny()
             if (controllers.isEmpty()) return result.toString()
 
             result.append(" ⚙️ Controllers found:\n\n")
 
-            val allEndpoints = controllers.flatMap { it["endpoints"] as? List<Map<String, Any?>> ?: emptyList() }
+            val allEndpoints = controllers.flatMap { it["endpoints"].asListOfMapStringAny() }
             val maxMethod = (allEndpoints.maxOfOrNull { (it["method"]?.toString() ?: "Unknown").length } ?: 6).coerceAtLeast(6)
             val maxHandler = (allEndpoints.maxOfOrNull { (it["handler"]?.toString() ?: "Unknown").length } ?: 7).coerceAtLeast(7)
 
@@ -358,7 +373,7 @@ class ModuleCommand : Command() {
                 val port = entry["port"] ?: "Unknown"
                 val name = entry["controller"] as? String ?: "Unknown"
                 val basePath = entry["path"] ?: "/"
-                val endpoints = entry["endpoints"] as? List<Map<String, Any?>> ?: emptyList()
+                val endpoints = entry["endpoints"].asListOfMapStringAny()
 
                 if (idx > 0) {
                     result.append("${DIM}────────────────────────────────────────────────────────────${RESET}\n\n")
