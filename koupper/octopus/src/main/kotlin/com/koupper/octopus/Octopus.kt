@@ -33,6 +33,8 @@ import java.net.URL
 import java.nio.file.Paths
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.reflect.KClass
 import kotlin.reflect.KProperty0
 import kotlin.system.exitProcess
@@ -78,6 +80,18 @@ private data class DaemonResponse(
     val error: String? = null
 )
 
+private data class DaemonMetricsSnapshot(
+    val uptimeMs: Long,
+    val activeConnections: Int,
+    val totalConnections: Long,
+    val totalCommands: Long,
+    val totalScripts: Long,
+    val successfulScripts: Long,
+    val failedScripts: Long,
+    val unauthorizedCommands: Long,
+    val invalidCommands: Long
+)
+
 private data class IncomingCommand(
     val mode: ResponseMode,
     val requestId: String? = null,
@@ -86,6 +100,78 @@ private data class IncomingCommand(
     val scriptPath: String = "",
     val params: String = "EMPTY_PARAMS"
 )
+
+private object DaemonMetrics {
+    private val startedAt = System.currentTimeMillis()
+    private val activeConnections = AtomicInteger(0)
+    private val totalConnections = AtomicLong(0)
+    private val totalCommands = AtomicLong(0)
+    private val totalScripts = AtomicLong(0)
+    private val successfulScripts = AtomicLong(0)
+    private val failedScripts = AtomicLong(0)
+    private val unauthorizedCommands = AtomicLong(0)
+    private val invalidCommands = AtomicLong(0)
+
+    fun onConnectionAccepted() {
+        activeConnections.incrementAndGet()
+        totalConnections.incrementAndGet()
+    }
+
+    fun onConnectionClosed() {
+        val current = activeConnections.decrementAndGet()
+        if (current < 0) {
+            activeConnections.set(0)
+        }
+    }
+
+    fun onCommandReceived() {
+        totalCommands.incrementAndGet()
+    }
+
+    fun onUnauthorizedCommand() {
+        unauthorizedCommands.incrementAndGet()
+    }
+
+    fun onInvalidCommand() {
+        invalidCommands.incrementAndGet()
+    }
+
+    fun onScriptStarted() {
+        totalScripts.incrementAndGet()
+    }
+
+    fun onScriptSucceeded() {
+        successfulScripts.incrementAndGet()
+    }
+
+    fun onScriptFailed() {
+        failedScripts.incrementAndGet()
+    }
+
+    fun snapshot(): DaemonMetricsSnapshot = DaemonMetricsSnapshot(
+        uptimeMs = System.currentTimeMillis() - startedAt,
+        activeConnections = activeConnections.get(),
+        totalConnections = totalConnections.get(),
+        totalCommands = totalCommands.get(),
+        totalScripts = totalScripts.get(),
+        successfulScripts = successfulScripts.get(),
+        failedScripts = failedScripts.get(),
+        unauthorizedCommands = unauthorizedCommands.get(),
+        invalidCommands = invalidCommands.get()
+    )
+}
+
+private fun structuredEvent(event: String, fields: Map<String, Any?> = emptyMap()): String {
+    val pairs = mutableListOf<String>()
+    pairs += jsonField("event", event)
+    pairs += jsonField("ts", System.currentTimeMillis().toString())
+
+    fields.forEach { (key, value) ->
+        pairs += jsonField(key, value?.toString())
+    }
+
+    return "{" + pairs.joinToString(",") + "}"
+}
 
 private fun jsonEscape(value: String): String = buildString {
     value.forEach { ch ->
@@ -236,6 +322,14 @@ private fun parseIncomingCommand(command: String): IncomingCommand? {
             )
         }
 
+        if (type == "HEALTH" || type == "HEALTH_CHECK") {
+            return IncomingCommand(
+                mode = ResponseMode.JSON,
+                requestId = req.requestId,
+                commandType = "HEALTH_CHECK"
+            )
+        }
+
         return IncomingCommand(
             mode = ResponseMode.JSON,
             requestId = req.requestId,
@@ -253,6 +347,13 @@ private fun parseIncomingCommand(command: String): IncomingCommand? {
         return IncomingCommand(
             mode = ResponseMode.LEGACY,
             commandType = "UPDATING_CHECK"
+        )
+    }
+
+    if (inputData[0] == "HEALTH_CHECK") {
+        return IncomingCommand(
+            mode = ResponseMode.LEGACY,
+            commandType = "HEALTH_CHECK"
         )
     }
 
@@ -864,6 +965,7 @@ fun listenForExternalCommands(
 
     while (true) {
         val clientSocket = serverSocket.accept()
+        DaemonMetrics.onConnectionAccepted()
         app.createSingleton(LoggerCore::class)
             .info { "🔗 New connection to Octopus: ${clientSocket.inetAddress.hostAddress}" }
 
@@ -885,17 +987,39 @@ fun listenForExternalCommands(
                     val (authenticated, command) = parseAuthenticatedCommand(firstLine, reader, requiredToken)
 
                     if (!authenticated) {
+                        DaemonMetrics.onUnauthorizedCommand()
                         sessionLogger.warn { "⚠️ [session=$sessionId] Unauthorized command rejected." }
+                        sessionLogger.warn {
+                            structuredEvent(
+                                event = "octopus.auth.rejected",
+                                fields = mapOf(
+                                    "sessionId" to sessionId,
+                                    "remoteAddress" to it.inetAddress.hostAddress
+                                )
+                            )
+                        }
                         sessionOutput.error("Unauthorized: invalid or missing token")
                         return@launch
                     }
 
                     if (command.isNullOrBlank() || command == "null") return@launch
 
+                    DaemonMetrics.onCommandReceived()
+
                     sessionLogger.info { "📥 [session=$sessionId] Command received in Octopus: $command" }
 
                     val parsedCommand = parseIncomingCommand(command)
                     if (parsedCommand == null) {
+                        DaemonMetrics.onInvalidCommand()
+                        sessionLogger.warn {
+                            structuredEvent(
+                                event = "octopus.command.invalid",
+                                fields = mapOf(
+                                    "sessionId" to sessionId,
+                                    "payload" to command
+                                )
+                            )
+                        }
                         sessionOutput.error("Invalid command format")
                         return@launch
                     }
@@ -907,7 +1031,38 @@ fun listenForExternalCommands(
                             checkForUpdates()
                         }
 
+                        parsedCommand.commandType == "HEALTH_CHECK" -> {
+                            val snapshot = DaemonMetrics.snapshot()
+                            val health = "{" + listOf(
+                                jsonField("status", "ok"),
+                                jsonField("uptimeMs", snapshot.uptimeMs.toString()),
+                                jsonField("activeConnections", snapshot.activeConnections.toString()),
+                                jsonField("totalConnections", snapshot.totalConnections.toString()),
+                                jsonField("totalCommands", snapshot.totalCommands.toString()),
+                                jsonField("totalScripts", snapshot.totalScripts.toString()),
+                                jsonField("successfulScripts", snapshot.successfulScripts.toString()),
+                                jsonField("failedScripts", snapshot.failedScripts.toString()),
+                                jsonField("unauthorizedCommands", snapshot.unauthorizedCommands.toString()),
+                                jsonField("invalidCommands", snapshot.invalidCommands.toString())
+                            ).joinToString(",") + "}"
+
+                            sessionLogger.info {
+                                structuredEvent(
+                                    event = "octopus.health.request",
+                                    fields = mapOf(
+                                        "sessionId" to sessionId,
+                                        "requestId" to parsedCommand.requestId,
+                                        "mode" to parsedCommand.mode.name.lowercase()
+                                    )
+                                )
+                            }
+
+                            sessionOutput.result(health, parsedCommand.mode, parsedCommand.requestId)
+                        }
+
                         parsedCommand.scriptPath.endsWith(".kts") || parsedCommand.scriptPath.endsWith(".kt") -> {
+                            DaemonMetrics.onScriptStarted()
+                            val startedAt = System.nanoTime()
 
                             try {
                                 sessionLogger.info {
@@ -926,8 +1081,40 @@ fun listenForExternalCommands(
                                         else -> result.toString()
                                     }
 
+                                    DaemonMetrics.onScriptSucceeded()
+                                    val durationMs = (System.nanoTime() - startedAt) / 1_000_000
+                                    sessionLogger.info {
+                                        structuredEvent(
+                                            event = "octopus.script.completed",
+                                            fields = mapOf(
+                                                "sessionId" to sessionId,
+                                                "requestId" to parsedCommand.requestId,
+                                                "script" to parsedCommand.scriptPath,
+                                                "durationMs" to durationMs,
+                                                "status" to "ok"
+                                            )
+                                        )
+                                    }
+
                                     sessionOutput.result(out, parsedCommand.mode, parsedCommand.requestId)
                                 }
+                            } catch (e: Exception) {
+                                DaemonMetrics.onScriptFailed()
+                                val durationMs = (System.nanoTime() - startedAt) / 1_000_000
+                                sessionLogger.error {
+                                    structuredEvent(
+                                        event = "octopus.script.failed",
+                                        fields = mapOf(
+                                            "sessionId" to sessionId,
+                                            "requestId" to parsedCommand.requestId,
+                                            "script" to parsedCommand.scriptPath,
+                                            "durationMs" to durationMs,
+                                            "status" to "error",
+                                            "error" to (e.message ?: e.javaClass.name)
+                                        )
+                                    )
+                                }
+                                sessionOutput.error(e.message ?: "Script execution failed", parsedCommand.mode, parsedCommand.requestId)
                             } finally {
                                 System.out.flush()
                                 it.shutdownOutput()
@@ -935,6 +1122,7 @@ fun listenForExternalCommands(
                         }
 
                         else -> {
+                            DaemonMetrics.onInvalidCommand()
                             app.createSingleton(LoggerCore::class)
                                 .info { "⚠️  Invalid command format: $command" }
                         }
@@ -950,6 +1138,7 @@ fun listenForExternalCommands(
                 } finally {
                     SessionStdoutBridge.clear()
                     TerminalContext.clear()
+                    DaemonMetrics.onConnectionClosed()
                 }
             }
         }
