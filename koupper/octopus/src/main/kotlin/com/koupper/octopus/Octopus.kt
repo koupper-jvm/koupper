@@ -62,9 +62,9 @@ private const val OCTOPUS_ENABLE_URL_ENV = "KOUPPER_ENABLE_RUN_FROM_URL"
 private const val OCTOPUS_ALLOW_INSECURE_URL_PROPERTY = "koupper.octopus.allowInsecureRunFromUrl"
 private const val OCTOPUS_ALLOW_INSECURE_URL_ENV = "KOUPPER_ALLOW_INSECURE_RUN_FROM_URL"
 
-private enum class ResponseMode { LEGACY, JSON }
+internal enum class ResponseMode { LEGACY, JSON }
 
-private data class DaemonRequest(
+internal data class DaemonRequest(
     val type: String? = null,
     val requestId: String? = null,
     val context: String? = null,
@@ -72,7 +72,7 @@ private data class DaemonRequest(
     val params: String? = null
 )
 
-private data class DaemonResponse(
+internal data class DaemonResponse(
     val type: String,
     val requestId: String? = null,
     val message: String? = null,
@@ -92,7 +92,7 @@ private data class DaemonMetricsSnapshot(
     val invalidCommands: Long
 )
 
-private data class IncomingCommand(
+internal data class IncomingCommand(
     val mode: ResponseMode,
     val requestId: String? = null,
     val commandType: String,
@@ -173,7 +173,7 @@ private fun structuredEvent(event: String, fields: Map<String, Any?> = emptyMap(
     return "{" + pairs.joinToString(",") + "}"
 }
 
-private fun jsonEscape(value: String): String = buildString {
+internal fun jsonEscape(value: String): String = buildString {
     value.forEach { ch ->
         when (ch) {
             '\\' -> append("\\\\")
@@ -186,7 +186,7 @@ private fun jsonEscape(value: String): String = buildString {
     }
 }
 
-private fun jsonField(name: String, value: String?): String {
+internal fun jsonField(name: String, value: String?): String {
     return if (value == null) {
         "\"$name\":null"
     } else {
@@ -194,7 +194,7 @@ private fun jsonField(name: String, value: String?): String {
     }
 }
 
-private fun daemonResponseJson(
+internal fun daemonResponseJson(
     type: String,
     requestId: String? = null,
     message: String? = null,
@@ -210,7 +210,7 @@ private fun daemonResponseJson(
     ).joinToString(",") + "}"
 }
 
-private fun parseJsonCommand(input: String): DaemonRequest? {
+internal fun parseJsonCommand(input: String): DaemonRequest? {
     val regex = Regex("\"([a-zA-Z0-9_]+)\"\\s*:\\s*(\"((?:\\\\.|[^\\\"])*)\"|null)")
     val map = mutableMapOf<String, String?>()
 
@@ -350,7 +350,7 @@ private fun parseAuthenticatedCommand(
     return true to trimmed
 }
 
-private fun parseIncomingCommand(command: String): IncomingCommand? {
+internal fun parseIncomingCommand(command: String): IncomingCommand? {
     val trimmed = command.trim()
     if (trimmed.isEmpty()) return null
 
