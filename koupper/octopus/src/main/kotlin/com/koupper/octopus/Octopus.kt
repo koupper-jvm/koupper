@@ -428,7 +428,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             app.createSingleton(LoggerCore::class).warn {
                 "⚠️ Blocked runFromUrl. Enable with -D$OCTOPUS_ENABLE_URL_PROPERTY=true or $OCTOPUS_ENABLE_URL_ENV=true"
             }
-            result(castTo("Script URL execution is disabled by default. Enable it explicitly to use runFromUrl."))
+            result(castTo<T>("Script URL execution is disabled by default. Enable it explicitly to use runFromUrl."))
             return
         }
 
@@ -436,7 +436,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             app.createSingleton(LoggerCore::class).warn {
                 "⚠️ Rejected script URL: $scriptUrl"
             }
-            result(castTo("Rejected script URL. Allowed: https, or http://localhost when insecure mode is enabled."))
+            result(castTo<T>("Rejected script URL. Allowed: https, or http://localhost when insecure mode is enabled."))
             return
         }
 
@@ -457,12 +457,12 @@ class Octopus(private var container: Container) : ScriptExecutor {
     ) {
         val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence)
             ?: run {
-                result(castTo("No function annotated with @Export was found."))
+                result(castTo<T>("No function annotated with @Export was found."))
                 return
             }
 
         if ("Export" !in annotations) {
-            result(castTo("No function annotated with @Export was found."))
+            result(castTo<T>("No function annotated with @Export was found."))
             return
         }
 
@@ -489,7 +489,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             }
             rootCause.printStackTrace(System.out)
 
-            result(castTo("Script error: ${e.message}"))
+            result(castTo<T>("Script error: ${e.message}"))
         }
     }
 
@@ -704,7 +704,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
                     sentence = scriptContent,
                     params = parsed
                 ) { container: Container ->
-                    result(castTo(container), scriptName)
+                    result(castTo<T>(container), scriptName)
                 }
             }
         }
@@ -719,10 +719,14 @@ class Octopus(private var container: Container) : ScriptExecutor {
             ((provider).constructors.elementAt(0).call() as ServiceProvider).up()
         }
 
-        val bindings = this.container.getBindings()
-        return bindings
-            .filterKeys { it is KClass<*> }
-            .mapKeys { it.key as KClass<*> }
+        val typedBindings = mutableMapOf<KClass<*>, Any>()
+        this.container.getBindings().forEach { (key, value) ->
+            if (key is KClass<*>) {
+                typedBindings[key] = value
+            }
+        }
+
+        return typedBindings
     }
 }
 
@@ -1173,7 +1177,9 @@ fun checkForUpdates(): Boolean {
 
     data class Info(val apps: ArrayList<Project>)
 
-    (textJsonParser.toType() as Info).apps.forEach { project ->
+    val info: Info = textJsonParser.toType()
+
+    info.apps.forEach { project ->
         if ((project.name == "octopus" && project.version != env("OCTOPUS_VERSION")) ||
             (project.name == "koupper-installer" && project.version != env("KOUPPER_CLI_VERSION"))
         ) {

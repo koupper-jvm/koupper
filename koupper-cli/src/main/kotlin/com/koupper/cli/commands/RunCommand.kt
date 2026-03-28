@@ -9,12 +9,37 @@ import java.io.File
 import java.net.Socket
 import java.util.UUID
 
+private const val OCTOPUS_HOST_PROPERTY = "koupper.octopus.host"
+private const val OCTOPUS_HOST_ENV = "KOUPPER_OCTOPUS_HOST"
+private const val OCTOPUS_PORT_PROPERTY = "koupper.octopus.port"
+private const val OCTOPUS_PORT_ENV = "KOUPPER_OCTOPUS_PORT"
+
 val isSingleFileName: (String) -> Boolean = {
     it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
 }
 
 class RunCommand : Command() {
     private val mapper = jacksonObjectMapper()
+
+    private fun runtimeOctopusHost(): String {
+        val fromProperty = System.getProperty(OCTOPUS_HOST_PROPERTY)?.trim()
+        if (!fromProperty.isNullOrBlank()) return fromProperty
+
+        val fromEnv = System.getenv(OCTOPUS_HOST_ENV)?.trim()
+        if (!fromEnv.isNullOrBlank()) return fromEnv
+
+        return "localhost"
+    }
+
+    private fun runtimeOctopusPort(): Int {
+        val fromProperty = System.getProperty(OCTOPUS_PORT_PROPERTY)?.trim()?.toIntOrNull()
+        if (fromProperty != null) return fromProperty
+
+        val fromEnv = System.getenv(OCTOPUS_PORT_ENV)?.trim()?.toIntOrNull()
+        if (fromEnv != null) return fromEnv
+
+        return 9998
+    }
 
     private fun runtimeOctopusToken(): String? {
         val fromProperty = System.getProperty("koupper.octopus.token")?.trim()
@@ -79,7 +104,7 @@ class RunCommand : Command() {
 
     private fun sendToOctopus(context: String, script: String, params: String): String {
         return try {
-            Socket("localhost", 9998).use { socket ->
+            Socket(runtimeOctopusHost(), runtimeOctopusPort()).use { socket ->
                 val writer = socket.getOutputStream().bufferedWriter(Charsets.UTF_8)
                 val reader = socket.getInputStream().bufferedReader(Charsets.UTF_8)
                 val requestId = UUID.randomUUID().toString()
