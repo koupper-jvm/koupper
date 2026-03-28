@@ -80,7 +80,8 @@ internal data class DaemonRequest(
     val requestId: String? = null,
     val context: String? = null,
     val script: String? = null,
-    val params: String? = null
+    val params: String? = null,
+    val scriptContent: String? = null
 )
 
 internal data class DaemonResponse(
@@ -109,7 +110,8 @@ internal data class IncomingCommand(
     val commandType: String,
     val context: String = "",
     val scriptPath: String = "",
-    val params: String = "EMPTY_PARAMS"
+    val params: String = "EMPTY_PARAMS",
+    val scriptContent: String? = null
 )
 
 private object DaemonMetrics {
@@ -319,6 +321,18 @@ internal fun parseIncomingCommand(command: String): IncomingCommand? {
                 mode = ResponseMode.JSON,
                 requestId = req.requestId,
                 commandType = "HEALTH_CHECK"
+            )
+        }
+
+        if (type == "DEPLOY") {
+            return IncomingCommand(
+                mode = ResponseMode.JSON,
+                requestId = req.requestId,
+                commandType = "DEPLOY",
+                context = req.context?.trim().orEmpty(),
+                scriptPath = req.script?.trim().orEmpty(),
+                params = req.params?.trim().takeUnless { it.isNullOrBlank() } ?: "EMPTY_PARAMS",
+                scriptContent = req.scriptContent
             )
         }
 
@@ -1064,6 +1078,82 @@ fun listenForExternalCommands(
                             }
 
                             sessionOutput.result(health, parsedCommand.mode, parsedCommand.requestId)
+                        }
+
+                        parsedCommand.commandType == "DEPLOY" -> {
+                            val deployContent = parsedCommand.scriptContent
+                            if (deployContent.isNullOrBlank()) {
+                                sessionOutput.error(
+                                    "DEPLOY payload is missing scriptContent",
+                                    parsedCommand.mode,
+                                    parsedCommand.requestId
+                                )
+                                return@launch
+                            }
+
+                            val deployDir = File(System.getProperty("user.home"), ".koupper/deployed")
+                            deployDir.mkdirs()
+                            val targetFileName = parsedCommand.scriptPath.substringAfterLast("/").substringAfterLast("\\")
+                                .ifBlank { "deployed.kts" }
+                            val targetFile = File(deployDir, targetFileName)
+                            targetFile.writeText(deployContent, Charsets.UTF_8)
+
+                            DaemonMetrics.onScriptStarted()
+                            val deployStartedAt = System.nanoTime()
+
+                            sessionLogger.info {
+                                "📦 [session=$sessionId] Deploying script: $targetFileName params=${parsedCommand.params}"
+                            }
+
+                            try {
+                                processManager.runFromScriptFile(
+                                    deployDir.absolutePath,
+                                    targetFile.name,
+                                    parsedCommand.params
+                                ) { result: Any ->
+                                    System.out.flush()
+                                    val out = if (result is Unit) "" else result.toString()
+                                    DaemonMetrics.onScriptSucceeded()
+                                    val durationMs = (System.nanoTime() - deployStartedAt) / 1_000_000
+                                    sessionLogger.info {
+                                        structuredEvent(
+                                            event = "octopus.deploy.completed",
+                                            fields = mapOf(
+                                                "sessionId" to sessionId,
+                                                "requestId" to parsedCommand.requestId,
+                                                "script" to targetFileName,
+                                                "durationMs" to durationMs,
+                                                "status" to "ok"
+                                            )
+                                        )
+                                    }
+                                    sessionOutput.result(out, parsedCommand.mode, parsedCommand.requestId)
+                                }
+                            } catch (e: Exception) {
+                                DaemonMetrics.onScriptFailed()
+                                val durationMs = (System.nanoTime() - deployStartedAt) / 1_000_000
+                                sessionLogger.error {
+                                    structuredEvent(
+                                        event = "octopus.deploy.failed",
+                                        fields = mapOf(
+                                            "sessionId" to sessionId,
+                                            "requestId" to parsedCommand.requestId,
+                                            "script" to targetFileName,
+                                            "durationMs" to durationMs,
+                                            "status" to "error",
+                                            "error" to (e.message ?: e.javaClass.name)
+                                        )
+                                    )
+                                }
+                                sessionOutput.error(
+                                    e.message ?: "Deploy execution failed",
+                                    parsedCommand.mode,
+                                    parsedCommand.requestId
+                                )
+                            } finally {
+                                System.out.flush()
+                                it.shutdownOutput()
+                            }
                         }
 
                         parsedCommand.scriptPath.endsWith(".kts") || parsedCommand.scriptPath.endsWith(".kt") -> {
