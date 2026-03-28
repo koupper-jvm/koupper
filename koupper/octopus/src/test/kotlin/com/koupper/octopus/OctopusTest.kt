@@ -126,13 +126,21 @@ class OctopusTest : AnnotationSpec() {
 
         assertEquals(
             linkedMapOf(
-                "arg0" to """{"type":"demo"}""",
-                "arg1" to """{"name":"test"}"""
+                "arg0" to """{"type":"demo"}"""
             ),
             r1.params
         )
 
-        assertEquals(listOf("item", "42", "active"), r1.positionals)
+        assertEquals(
+            listOf(
+                """{"key":"value"}""",
+                "item",
+                "42",
+                """{"name":"test"}""",
+                "active"
+            ),
+            r1.positionals
+        )
     }
 
     @Test
