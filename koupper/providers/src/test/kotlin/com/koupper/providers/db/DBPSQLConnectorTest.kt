@@ -4,7 +4,9 @@ import io.kotest.core.spec.style.AnnotationSpec
 import io.zeko.db.sql.Query
 import io.zeko.db.sql.dsl.eq
 import io.zeko.model.Entity
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.runBlocking
@@ -12,6 +14,7 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
 class DBPSQLConnectorTest : AnnotationSpec() {
     private val mainThreadSurrogate = newSingleThreadContext("UI Thread")
 
@@ -32,7 +35,7 @@ class DBPSQLConnectorTest : AnnotationSpec() {
             lateinit var rows: List<User>
 
             connector.session().once { conn ->
-                rows = conn.queryPrepared(sql, listOf("email@domain.com"), { User(it) }) as List<User>
+                rows = conn.queryPrepared(sql, listOf("email@domain.com"), { User(it) }).filterIsInstance<User>()
             }
 
             assertEquals(1, rows.size)
