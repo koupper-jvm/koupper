@@ -214,18 +214,62 @@ private fun parseJsonCommand(input: String): DaemonRequest? {
     val regex = Regex("\"([a-zA-Z0-9_]+)\"\\s*:\\s*(\"((?:\\\\.|[^\\\"])*)\"|null)")
     val map = mutableMapOf<String, String?>()
 
+    fun unescapeJsonString(raw: String): String {
+        val out = StringBuilder(raw.length)
+        var i = 0
+
+        while (i < raw.length) {
+            val ch = raw[i]
+            if (ch != '\\') {
+                out.append(ch)
+                i++
+                continue
+            }
+
+            if (i + 1 >= raw.length) {
+                out.append('\\')
+                i++
+                continue
+            }
+
+            when (val esc = raw[i + 1]) {
+                '"' -> out.append('"')
+                '\\' -> out.append('\\')
+                '/' -> out.append('/')
+                'b' -> out.append('\b')
+                'f' -> out.append('\u000C')
+                'n' -> out.append('\n')
+                'r' -> out.append('\r')
+                't' -> out.append('\t')
+                'u' -> {
+                    if (i + 5 < raw.length) {
+                        val hex = raw.substring(i + 2, i + 6)
+                        val code = hex.toIntOrNull(16)
+                        if (code != null) {
+                            out.append(code.toChar())
+                            i += 6
+                            continue
+                        }
+                    }
+                    out.append('\\').append(esc)
+                }
+
+                else -> out.append(esc)
+            }
+
+            i += 2
+        }
+
+        return out.toString()
+    }
+
     regex.findAll(input).forEach { match ->
         val key = match.groupValues[1]
         val rawValue = match.groupValues[2]
         val parsed = if (rawValue == "null") {
             null
         } else {
-            match.groupValues[3]
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\")
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\t", "\t")
+            unescapeJsonString(match.groupValues[3])
         }
         map[key] = parsed
     }
@@ -976,7 +1020,7 @@ fun listenForExternalCommands(
                     val writer = it.getOutputStream().bufferedWriter(Charsets.UTF_8)
                     val sessionOutput = SessionOutput(writer)
                     val sessionId = java.util.UUID.randomUUID().toString().take(8)
-                    val sessionLogger = LoggerFactory.get("Octopus.Session.$sessionId")
+                    val sessionLogger = app.createSingleton(LoggerCore::class)
                     TerminalContext.set(TerminalIO(reader, writer))
                     SessionStdoutBridge.bind(sessionOutput, ResponseMode.LEGACY, null)
                     val firstLine = reader.readLine()?.trim()
@@ -1129,7 +1173,7 @@ fun listenForExternalCommands(
                     }
                 } catch (e: Exception) {
                     val traceMessage = e.message ?: e.toString()
-                    LoggerFactory.get("Octopus.Session.Error")
+                    app.createSingleton(LoggerCore::class)
                         .error { "⚠️ Error: $traceMessage" }
                     try {
                         val writer = it.getOutputStream().bufferedWriter(Charsets.UTF_8)
