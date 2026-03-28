@@ -16,7 +16,6 @@ import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ServiceProviderManager
 import com.koupper.providers.files.FileHandler
 import com.koupper.providers.files.JSONFileHandler
-import com.koupper.providers.files.JSONFileHandlerImpl
 import com.koupper.providers.files.toType
 import com.koupper.providers.http.HtppClient
 import com.koupper.providers.io.TerminalContext
@@ -54,6 +53,9 @@ data class ParsedParams(
     val params: Map<String, String>,
     val positionals: List<String> = emptyList()
 )
+
+@Suppress("UNCHECKED_CAST")
+private fun <T> castTo(value: Any?): T = value as T
 
 private const val OCTOPUS_HOST = "127.0.0.1"
 private const val OCTOPUS_PORT = 9998
@@ -426,7 +428,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             app.createSingleton(LoggerCore::class).warn {
                 "⚠️ Blocked runFromUrl. Enable with -D$OCTOPUS_ENABLE_URL_PROPERTY=true or $OCTOPUS_ENABLE_URL_ENV=true"
             }
-            result("Script URL execution is disabled by default. Enable it explicitly to use runFromUrl." as T)
+            result(castTo("Script URL execution is disabled by default. Enable it explicitly to use runFromUrl."))
             return
         }
 
@@ -434,7 +436,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             app.createSingleton(LoggerCore::class).warn {
                 "⚠️ Rejected script URL: $scriptUrl"
             }
-            result("Rejected script URL. Allowed: https, or http://localhost when insecure mode is enabled." as T)
+            result(castTo("Rejected script URL. Allowed: https, or http://localhost when insecure mode is enabled."))
             return
         }
 
@@ -455,12 +457,12 @@ class Octopus(private var container: Container) : ScriptExecutor {
     ) {
         val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence)
             ?: run {
-                result("No function annotated with @Export was found." as T)
+                result(castTo("No function annotated with @Export was found."))
                 return
             }
 
         if ("Export" !in annotations) {
-            result("No function annotated with @Export was found." as T)
+            result(castTo("No function annotated with @Export was found."))
             return
         }
 
@@ -487,7 +489,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             }
             rootCause.printStackTrace(System.out)
 
-            result("Script error: ${e.message}" as T)
+            result(castTo("Script error: ${e.message}"))
         }
     }
 
@@ -702,7 +704,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
                     sentence = scriptContent,
                     params = parsed
                 ) { container: Container ->
-                    result(container as T, scriptName)
+                    result(castTo(container), scriptName)
                 }
             }
         }
@@ -717,7 +719,10 @@ class Octopus(private var container: Container) : ScriptExecutor {
             ((provider).constructors.elementAt(0).call() as ServiceProvider).up()
         }
 
-        return this.container.getBindings() as Map<KClass<*>, Any>
+        val bindings = this.container.getBindings()
+        return bindings
+            .filterKeys { it is KClass<*> }
+            .mapKeys { it.key as KClass<*> }
     }
 }
 
@@ -1156,7 +1161,7 @@ fun checkForUpdates(): Boolean {
 
     data class Versioning(val statusCode: String, val body: String)
 
-    val textJsonParser = app.getInstance(JSONFileHandler::class) as JSONFileHandlerImpl<Versioning>
+    val textJsonParser = app.getInstance(JSONFileHandler::class)
 
     textJsonParser.read(response?.asString()!!)
 
