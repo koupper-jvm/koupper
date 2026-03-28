@@ -372,6 +372,19 @@ class Octopus(private var container: Container) : ScriptExecutor {
             return -1
         }
 
+        fun isNegativeNumberLiteral(token: String): Boolean {
+            return token.matches(Regex("^-\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"))
+        }
+
+        fun isFlagToken(token: String): Boolean {
+            if (token.length <= 1 || !token.startsWith("-")) return false
+            if (token.startsWith("--")) return token.length > 2
+            if (token.startsWith("-{")) return false
+            if (isNegativeNumberLiteral(token)) return false
+
+            return token.drop(1).all { it.isLetterOrDigit() || it == '-' || it == '_' }
+        }
+
         val tokens = tokenize(args)
 
         for (rawToken in tokens) {
@@ -379,10 +392,6 @@ class Octopus(private var container: Container) : ScriptExecutor {
             if (token.isEmpty()) continue
 
             when {
-                token.startsWith("--") || (token.startsWith("-") && token.length > 1 && !token.startsWith("-{")) -> {
-                    flags += token
-                }
-
                 findEqualsOutsideStructures(token) >= 0 -> {
                     val eqIndex = findEqualsOutsideStructures(token)
                     val key = token.substring(0, eqIndex).trim()
@@ -395,6 +404,10 @@ class Octopus(private var container: Container) : ScriptExecutor {
                     }
 
                     params[key] = value
+                }
+
+                isFlagToken(token) -> {
+                    flags += token
                 }
 
                 else -> {
