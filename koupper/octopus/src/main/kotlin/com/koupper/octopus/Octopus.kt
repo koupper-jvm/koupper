@@ -1,5 +1,7 @@
 package com.koupper.octopus
 
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN_155
 import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
@@ -63,6 +65,9 @@ private const val OCTOPUS_ALLOW_INSECURE_URL_PROPERTY = "koupper.octopus.allowIn
 private const val OCTOPUS_ALLOW_INSECURE_URL_ENV = "KOUPPER_ALLOW_INSECURE_RUN_FROM_URL"
 
 internal enum class ResponseMode { LEGACY, JSON }
+
+private val daemonMapper = jacksonObjectMapper()
+    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
 internal data class DaemonRequest(
     val type: String? = null,
@@ -211,78 +216,9 @@ internal fun daemonResponseJson(
 }
 
 internal fun parseJsonCommand(input: String): DaemonRequest? {
-    val regex = Regex("\"([a-zA-Z0-9_]+)\"\\s*:\\s*(\"((?:\\\\.|[^\\\"])*)\"|null)")
-    val map = mutableMapOf<String, String?>()
-
-    fun unescapeJsonString(raw: String): String {
-        val out = StringBuilder(raw.length)
-        var i = 0
-
-        while (i < raw.length) {
-            val ch = raw[i]
-            if (ch != '\\') {
-                out.append(ch)
-                i++
-                continue
-            }
-
-            if (i + 1 >= raw.length) {
-                out.append('\\')
-                i++
-                continue
-            }
-
-            when (val esc = raw[i + 1]) {
-                '"' -> out.append('"')
-                '\\' -> out.append('\\')
-                '/' -> out.append('/')
-                'b' -> out.append('\b')
-                'f' -> out.append('\u000C')
-                'n' -> out.append('\n')
-                'r' -> out.append('\r')
-                't' -> out.append('\t')
-                'u' -> {
-                    if (i + 5 < raw.length) {
-                        val hex = raw.substring(i + 2, i + 6)
-                        val code = hex.toIntOrNull(16)
-                        if (code != null) {
-                            out.append(code.toChar())
-                            i += 6
-                            continue
-                        }
-                    }
-                    out.append('\\').append(esc)
-                }
-
-                else -> out.append(esc)
-            }
-
-            i += 2
-        }
-
-        return out.toString()
-    }
-
-    regex.findAll(input).forEach { match ->
-        val key = match.groupValues[1]
-        val rawValue = match.groupValues[2]
-        val parsed = if (rawValue == "null") {
-            null
-        } else {
-            unescapeJsonString(match.groupValues[3])
-        }
-        map[key] = parsed
-    }
-
-    if (map.isEmpty()) return null
-
-    return DaemonRequest(
-        type = map["type"],
-        requestId = map["requestId"],
-        context = map["context"],
-        script = map["script"],
-        params = map["params"]
-    )
+    return runCatching {
+        daemonMapper.readValue(input, DaemonRequest::class.java)
+    }.getOrNull()
 }
 
 private fun optionalRuntimeSetting(propertyName: String, envName: String): String? {
