@@ -60,6 +60,101 @@ private const val OCTOPUS_ENABLE_URL_ENV = "KOUPPER_ENABLE_RUN_FROM_URL"
 private const val OCTOPUS_ALLOW_INSECURE_URL_PROPERTY = "koupper.octopus.allowInsecureRunFromUrl"
 private const val OCTOPUS_ALLOW_INSECURE_URL_ENV = "KOUPPER_ALLOW_INSECURE_RUN_FROM_URL"
 
+private enum class ResponseMode { LEGACY, JSON }
+
+private data class DaemonRequest(
+    val type: String? = null,
+    val requestId: String? = null,
+    val context: String? = null,
+    val script: String? = null,
+    val params: String? = null
+)
+
+private data class DaemonResponse(
+    val type: String,
+    val requestId: String? = null,
+    val message: String? = null,
+    val result: String? = null,
+    val error: String? = null
+)
+
+private data class IncomingCommand(
+    val mode: ResponseMode,
+    val requestId: String? = null,
+    val commandType: String,
+    val context: String = "",
+    val scriptPath: String = "",
+    val params: String = "EMPTY_PARAMS"
+)
+
+private fun jsonEscape(value: String): String = buildString {
+    value.forEach { ch ->
+        when (ch) {
+            '\\' -> append("\\\\")
+            '"' -> append("\\\"")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            else -> append(ch)
+        }
+    }
+}
+
+private fun jsonField(name: String, value: String?): String {
+    return if (value == null) {
+        "\"$name\":null"
+    } else {
+        "\"$name\":\"${jsonEscape(value)}\""
+    }
+}
+
+private fun daemonResponseJson(
+    type: String,
+    requestId: String? = null,
+    message: String? = null,
+    result: String? = null,
+    error: String? = null
+): String {
+    return "{" + listOf(
+        jsonField("type", type),
+        jsonField("requestId", requestId),
+        jsonField("message", message),
+        jsonField("result", result),
+        jsonField("error", error)
+    ).joinToString(",") + "}"
+}
+
+private fun parseJsonCommand(input: String): DaemonRequest? {
+    val regex = Regex("\"([a-zA-Z0-9_]+)\"\\s*:\\s*(\"((?:\\\\.|[^\\\"])*)\"|null)")
+    val map = mutableMapOf<String, String?>()
+
+    regex.findAll(input).forEach { match ->
+        val key = match.groupValues[1]
+        val rawValue = match.groupValues[2]
+        val parsed = if (rawValue == "null") {
+            null
+        } else {
+            match.groupValues[3]
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\")
+                .replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
+        }
+        map[key] = parsed
+    }
+
+    if (map.isEmpty()) return null
+
+    return DaemonRequest(
+        type = map["type"],
+        requestId = map["requestId"],
+        context = map["context"],
+        script = map["script"],
+        params = map["params"]
+    )
+}
+
 private fun optionalRuntimeSetting(propertyName: String, envName: String): String? {
     val fromProperty = System.getProperty(propertyName)?.trim()
     if (!fromProperty.isNullOrBlank()) return fromProperty
@@ -123,6 +218,59 @@ private fun parseAuthenticatedCommand(
     }
 
     return true to trimmed
+}
+
+private fun parseIncomingCommand(command: String): IncomingCommand? {
+    val trimmed = command.trim()
+    if (trimmed.isEmpty()) return null
+
+    if (trimmed.startsWith("{")) {
+        val req = parseJsonCommand(trimmed) ?: return null
+        val type = req.type?.trim()?.uppercase() ?: "RUN"
+
+        if (type == "UPDATING_CHECK") {
+            return IncomingCommand(
+                mode = ResponseMode.JSON,
+                requestId = req.requestId,
+                commandType = "UPDATING_CHECK"
+            )
+        }
+
+        return IncomingCommand(
+            mode = ResponseMode.JSON,
+            requestId = req.requestId,
+            commandType = "RUN",
+            context = req.context?.trim().orEmpty(),
+            scriptPath = req.script?.trim().orEmpty(),
+            params = req.params?.trim().takeUnless { it.isNullOrBlank() } ?: "EMPTY_PARAMS"
+        )
+    }
+
+    val inputData = tokenize(trimmed)
+    if (inputData.isEmpty()) return null
+
+    if (inputData[0] == "UPDATING_CHECK") {
+        return IncomingCommand(
+            mode = ResponseMode.LEGACY,
+            commandType = "UPDATING_CHECK"
+        )
+    }
+
+    val scriptContext = inputData[0].replace("\"", "")
+    val scriptPath = if (inputData.size > 1) inputData[1].replace("\"", "") else ""
+    val parameters = if (inputData.size > 2) {
+        inputData.drop(2).joinToString(" ") { if (it.contains(" ")) "\"$it\"" else it }
+    } else {
+        "EMPTY_PARAMS"
+    }
+
+    return IncomingCommand(
+        mode = ResponseMode.LEGACY,
+        commandType = "RUN",
+        context = scriptContext,
+        scriptPath = scriptPath,
+        params = parameters
+    )
 }
 
 class Octopus(private var container: Container) : ScriptExecutor {
@@ -558,31 +706,61 @@ fun tokenize(input: String): List<String> {
 private class SessionOutput(private val writer: java.io.BufferedWriter) {
     private val lock = Any()
 
-    fun printLine(text: String) {
+    fun printLine(text: String, mode: ResponseMode = ResponseMode.LEGACY, requestId: String? = null) {
         synchronized(lock) {
-            writer.write("PRINT::$text")
-            writer.newLine()
-            writer.flush()
+            when (mode) {
+                ResponseMode.LEGACY -> {
+                    writer.write("PRINT::$text")
+                    writer.newLine()
+                    writer.flush()
+                }
+
+                ResponseMode.JSON -> {
+                    writer.write(daemonResponseJson(type = "print", requestId = requestId, message = text))
+                    writer.newLine()
+                    writer.flush()
+                }
+            }
         }
     }
 
-    fun result(out: String) {
+    fun result(out: String, mode: ResponseMode = ResponseMode.LEGACY, requestId: String? = null) {
         synchronized(lock) {
-            writer.write("RESULT_BEGIN")
-            writer.newLine()
-            writer.write(out)
-            writer.newLine()
-            writer.write("RESULT_END")
-            writer.newLine()
-            writer.flush()
+            when (mode) {
+                ResponseMode.LEGACY -> {
+                    writer.write("RESULT_BEGIN")
+                    writer.newLine()
+                    writer.write(out)
+                    writer.newLine()
+                    writer.write("RESULT_END")
+                    writer.newLine()
+                    writer.flush()
+                }
+
+                ResponseMode.JSON -> {
+                    writer.write(daemonResponseJson(type = "result", requestId = requestId, result = out))
+                    writer.newLine()
+                    writer.flush()
+                }
+            }
         }
     }
 
-    fun error(message: String) {
+    fun error(message: String, mode: ResponseMode = ResponseMode.LEGACY, requestId: String? = null) {
         synchronized(lock) {
-            writer.write("ERROR::$message")
-            writer.newLine()
-            writer.flush()
+            when (mode) {
+                ResponseMode.LEGACY -> {
+                    writer.write("ERROR::$message")
+                    writer.newLine()
+                    writer.flush()
+                }
+
+                ResponseMode.JSON -> {
+                    writer.write(daemonResponseJson(type = "error", requestId = requestId, error = message))
+                    writer.newLine()
+                    writer.flush()
+                }
+            }
         }
     }
 }
@@ -590,6 +768,8 @@ private class SessionOutput(private val writer: java.io.BufferedWriter) {
 private object SessionStdoutBridge {
     private val installed = AtomicBoolean(false)
     private val sessionOutput = InheritableThreadLocal<SessionOutput?>()
+    private val responseMode = InheritableThreadLocal<ResponseMode?>()
+    private val requestId = InheritableThreadLocal<String?>()
     private val threadBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
     private val fallback = PrintStream(object : OutputStream() {
         override fun write(b: Int) {}
@@ -603,13 +783,17 @@ private object SessionStdoutBridge {
         System.setErr(routingOut)
     }
 
-    fun bind(output: SessionOutput) {
+    fun bind(output: SessionOutput, mode: ResponseMode = ResponseMode.LEGACY, currentRequestId: String? = null) {
         sessionOutput.set(output)
+        responseMode.set(mode)
+        requestId.set(currentRequestId)
     }
 
     fun clear() {
         flushCurrentThreadBuffer()
         sessionOutput.remove()
+        responseMode.remove()
+        requestId.remove()
         threadBuffer.remove()
     }
 
@@ -624,7 +808,7 @@ private object SessionStdoutBridge {
     private fun emit(text: String) {
         val output = sessionOutput.get()
         if (output != null) {
-            output.printLine(text)
+            output.printLine(text, responseMode.get() ?: ResponseMode.LEGACY, requestId.get())
         } else {
             fallback.print(text)
         }
@@ -692,7 +876,7 @@ fun listenForExternalCommands(
                     val sessionId = java.util.UUID.randomUUID().toString().take(8)
                     val sessionLogger = LoggerFactory.get("Octopus.Session.$sessionId")
                     TerminalContext.set(TerminalIO(reader, writer))
-                    SessionStdoutBridge.bind(sessionOutput)
+                    SessionStdoutBridge.bind(sessionOutput, ResponseMode.LEGACY, null)
                     val firstLine = reader.readLine()?.trim()
 
                     if (firstLine.isNullOrBlank() || firstLine == "null") return@launch
@@ -710,31 +894,31 @@ fun listenForExternalCommands(
 
                     sessionLogger.info { "📥 [session=$sessionId] Command received in Octopus: $command" }
 
-                    val inputData = tokenize(command)
+                    val parsedCommand = parseIncomingCommand(command)
+                    if (parsedCommand == null) {
+                        sessionOutput.error("Invalid command format")
+                        return@launch
+                    }
 
-                    if (inputData.isEmpty()) return@launch
-
-                    val scriptContext = inputData[0].replace("\"", "")
-                    val scriptPath = if (inputData.size > 1) inputData[1].replace("\"", "") else ""
+                    SessionStdoutBridge.bind(sessionOutput, parsedCommand.mode, parsedCommand.requestId)
 
                     when {
-                        inputData[0] == "UPDATING_CHECK" -> {
+                        parsedCommand.commandType == "UPDATING_CHECK" -> {
                             checkForUpdates()
                         }
 
-                        inputData.size >= 2 && (scriptPath.endsWith(".kts") || scriptPath.endsWith(".kt")) -> {
-                            val parameters = if (inputData.size > 2) {
-                                inputData.drop(2).joinToString(" ") { if (it.contains(" ")) "\"$it\"" else it }
-                            } else {
-                                "EMPTY_PARAMS"
-                            }
+                        parsedCommand.scriptPath.endsWith(".kts") || parsedCommand.scriptPath.endsWith(".kt") -> {
 
                             try {
                                 sessionLogger.info {
-                                    "📜 [session=$sessionId] Executing script: $scriptPath with params: $parameters"
+                                    "📜 [session=$sessionId] Executing script: ${parsedCommand.scriptPath} with params: ${parsedCommand.params}"
                                 }
 
-                                processManager.runFromScriptFile(scriptContext, scriptPath, parameters) { result: Any ->
+                                processManager.runFromScriptFile(
+                                    parsedCommand.context,
+                                    parsedCommand.scriptPath,
+                                    parsedCommand.params
+                                ) { result: Any ->
                                     System.out.flush()
 
                                     val out = when (result) {
@@ -742,7 +926,7 @@ fun listenForExternalCommands(
                                         else -> result.toString()
                                     }
 
-                                    sessionOutput.result(out)
+                                    sessionOutput.result(out, parsedCommand.mode, parsedCommand.requestId)
                                 }
                             } finally {
                                 System.out.flush()
@@ -761,7 +945,7 @@ fun listenForExternalCommands(
                         .error { "⚠️ Error: $traceMessage" }
                     try {
                         val writer = it.getOutputStream().bufferedWriter(Charsets.UTF_8)
-                        SessionOutput(writer).error(traceMessage)
+                        SessionOutput(writer).error(traceMessage, ResponseMode.LEGACY, null)
                     } catch (_: Exception) {}
                 } finally {
                     SessionStdoutBridge.clear()
