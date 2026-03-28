@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.7.1] - 2026-03-28
+
+### Changed
+- `deploy` now requires auth token configuration (`KOUPPER_OCTOPUS_TOKEN` / `koupper.octopus.token`).
+- `deploy` includes payload SHA-256 checksum for daemon-side integrity verification.
+
+### Added
+- Deploy smoke coverage improvements for auth-prefixed socket exchange and checksum propagation.
+
+---
+
 ## [4.6.0] - 2026-03-28
 
 ### Added
