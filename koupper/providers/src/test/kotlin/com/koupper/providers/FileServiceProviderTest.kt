@@ -13,14 +13,14 @@ class FileServiceProviderTest : AnnotationSpec() {
     @Test
     fun `should bind the text file handler impl`() {
         assertTrue {
-            app.getInstance(TextFileHandler::class, "TextFileHandlerImpl") is TextFileHandlerImpl
+            app.getInstance(TextFileHandler::class) is TextFileHandlerImpl
         }
     }
 
     @Test
     fun `should bind the file handler impl`() {
         assertTrue {
-            app.getInstance(FileHandler::class, "FileHandlerImpl") is FileHandlerImpl
+            app.getInstance(FileHandler::class) is FileHandlerImpl
         }
     }
 
