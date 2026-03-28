@@ -35,6 +35,22 @@ class OctopusProtocolTest {
     }
 
     @Test
+    fun `should parse deploy command with content hash`() {
+        val parsed = parseIncomingCommand(
+            """{"type":"DEPLOY","requestId":"d-1","script":"worker.kts","scriptContent":"@Export val ok=1","contentSha256":"abc123","params":"--force"}"""
+        )
+        assertNotNull(parsed)
+
+        assertEquals(ResponseMode.JSON, parsed.mode)
+        assertEquals("DEPLOY", parsed.commandType)
+        assertEquals("d-1", parsed.requestId)
+        assertEquals("worker.kts", parsed.scriptPath)
+        assertEquals("@Export val ok=1", parsed.scriptContent)
+        assertEquals("abc123", parsed.contentSha256)
+        assertEquals("--force", parsed.params)
+    }
+
+    @Test
     fun `should parse health check from legacy command`() {
         val parsed = parseIncomingCommand("HEALTH_CHECK")
         assertNotNull(parsed)
