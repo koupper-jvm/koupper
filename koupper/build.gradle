@@ -87,6 +87,7 @@ project(':octopus') {
 
         implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion"
         implementation "net.java.dev.jna:jna:5.14.0"
+        implementation "com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion"
 
         runtimeOnly "org.slf4j:slf4j-simple:$slf4jVersion"
 
