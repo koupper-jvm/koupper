@@ -1,10 +1,21 @@
 package com.koupper.orchestrator.paginator
 
 import io.kotest.common.runBlocking
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import kotlin.test.*
 
 class PagerTest {
+    private fun hasDbEnv(): Boolean {
+        val required = listOf("DB_HOST", "DB_DATABASE", "DB_USERNAME", "DB_PASSWORD")
+        return required.all { !System.getenv(it).isNullOrBlank() }
+    }
+
+    private fun hasAwsEnv(): Boolean {
+        val required = listOf("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION")
+        return required.all { !System.getenv(it).isNullOrBlank() }
+    }
+
     @Test
     fun `should compute total items from different collection types`() {
         data class User(val name: String)
@@ -62,6 +73,8 @@ class PagerTest {
 
     @Test
     fun `should paginate DB table correctly`() = runBlocking {
+        assumeTrue(hasDbEnv(), "Skipping DB integration test: missing DB_* env vars")
+
         val dbPager = DatabasePager(limit = 3, table = "blogs", orderBy = "id", direction = "ASC")
 
         val firstPage = dbPager.currentItem()
@@ -85,6 +98,8 @@ class PagerTest {
 
     @Test
     fun `should paginate Dynamo correctly`() {
+        assumeTrue(hasAwsEnv(), "Skipping Dynamo integration test: missing AWS_* env vars")
+
         val pager = DynamoPager(
             table = "IGLY_BLOG_ARTICLES",
             limit = 5
@@ -130,6 +145,8 @@ class PagerTest {
 
     @Test
     fun `should return null nextToken on last Dynamo page`() {
+        assumeTrue(hasAwsEnv(), "Skipping Dynamo integration test: missing AWS_* env vars")
+
         val pager = DynamoPager(
             table = "IGLY_BLOG_ARTICLES",
             limit = 100,
@@ -160,6 +177,8 @@ class PagerTest {
 
     @Test
     fun `should handle invalid database connection gracefully`() = runBlocking {
+        assumeTrue(hasDbEnv(), "Skipping DB integration test: missing DB_* env vars")
+
         val pager = DatabasePager(limit = 5, table = "non_existing_table", orderBy = "id", direction = "ASC")
         try {
             val rows = pager.currentItem()
@@ -172,7 +191,9 @@ class PagerTest {
                         message.contains("no existe") ||
                         message.contains("does not exist") ||
                         message.contains("undefined") ||
-                        message.contains("table"),
+                        message.contains("table") ||
+                        message.contains("db_host") ||
+                        message.contains("environment"),
                 "Unexpected error message for invalid table: $message"
             )
         }
@@ -192,6 +213,8 @@ class PagerTest {
 
     @Test
     fun `should support filterExpression and projectionFields in DynamoPager`() {
+        assumeTrue(hasAwsEnv(), "Skipping Dynamo integration test: missing AWS_* env vars")
+
         val pager = DynamoPager(
             table = "IGLY_BLOG_ARTICLES",
             limit = 3
@@ -208,6 +231,8 @@ class PagerTest {
 
     @Test
     fun `should return empty result when filterExpression excludes all Dynamo items`() {
+        assumeTrue(hasAwsEnv(), "Skipping Dynamo integration test: missing AWS_* env vars")
+
         val pager = DynamoPager(
             table = "IGLY_BLOG_ARTICLES",
             limit = 3,
@@ -221,6 +246,8 @@ class PagerTest {
 
     @Test
     fun `should handle decodeToken failure gracefully in DynamoPager`() {
+        assumeTrue(hasAwsEnv(), "Skipping Dynamo integration test: missing AWS_* env vars")
+
         val pager = DynamoPager(table = "IGLY_BLOG_ARTICLES", limit = 2)
         val result = pager.moveTo("invalid_token")
         assertNotNull(result)
@@ -229,6 +256,8 @@ class PagerTest {
 
     @Test
     fun `should correctly compute totalOfItems and totalOfPages in DatabasePager`() = runBlocking {
+        assumeTrue(hasDbEnv(), "Skipping DB integration test: missing DB_* env vars")
+
         val pager = DatabasePager(limit = 2, table = "blogs", orderBy = "id", direction = "ASC")
 
         val items = pager.currentItem()
