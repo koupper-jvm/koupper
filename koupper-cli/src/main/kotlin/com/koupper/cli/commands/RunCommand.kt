@@ -1,17 +1,21 @@
 package com.koupper.cli.commands
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.koupper.cli.ANSIColors.ANSI_GREEN_155
 import com.koupper.cli.ANSIColors.ANSI_RESET
 import com.koupper.cli.ANSIColors.ANSI_WHITE
 import com.koupper.cli.ANSIColors.ANSI_YELLOW_229
 import java.io.File
 import java.net.Socket
+import java.util.UUID
 
 val isSingleFileName: (String) -> Boolean = {
     it.contains("^[a-zA-Z0-9]+.kts$".toRegex())
 }
 
 class RunCommand : Command() {
+    private val mapper = jacksonObjectMapper()
+
     private fun runtimeOctopusToken(): String? {
         val fromProperty = System.getProperty("koupper.octopus.token")?.trim()
         if (!fromProperty.isNullOrBlank()) return fromProperty
@@ -78,13 +82,24 @@ class RunCommand : Command() {
             Socket("localhost", 9998).use { socket ->
                 val writer = socket.getOutputStream().bufferedWriter(Charsets.UTF_8)
                 val reader = socket.getInputStream().bufferedReader(Charsets.UTF_8)
+                val requestId = UUID.randomUUID().toString()
 
                 runtimeOctopusToken()?.let { token ->
                     writer.write("AUTH::$token")
                     writer.newLine()
                 }
 
-                writer.write("\"$context\" \"$script\" $params")
+                writer.write(
+                    mapper.writeValueAsString(
+                        mapOf(
+                            "type" to "RUN",
+                            "requestId" to requestId,
+                            "context" to context,
+                            "script" to script,
+                            "params" to params
+                        )
+                    )
+                )
                 writer.newLine()
                 writer.flush()
 
@@ -97,6 +112,35 @@ class RunCommand : Command() {
 
                 while (true) {
                     val line = reader.readLine() ?: break
+
+                    if (line.startsWith("{")) {
+                        val node = runCatching { mapper.readTree(line) }.getOrNull()
+                        if (node != null && node.has("type")) {
+                            val type = node.get("type")?.asText().orEmpty().lowercase()
+                            val incomingRequestId = node.get("requestId")?.asText()
+
+                            if (!incomingRequestId.isNullOrBlank() && incomingRequestId != requestId) {
+                                continue
+                            }
+
+                            when (type) {
+                                "print" -> {
+                                    val message = node.get("message")?.asText().orEmpty()
+                                    if (message.isNotEmpty()) println(message)
+                                }
+
+                                "result" -> {
+                                    return node.get("result")?.asText() ?: ""
+                                }
+
+                                "error" -> {
+                                    return node.get("error")?.asText() ?: "Unknown daemon error"
+                                }
+                            }
+
+                            continue
+                        }
+                    }
 
                     when {
                         line == "RESULT_BEGIN" -> {
