@@ -98,12 +98,20 @@ koupper run examples/cli-report-generator.kts '{"reportName": "Q3", "region": "G
 ### 3. Remote Deployment (`koupper deploy`)
 Push a local script to a remote production Octopus daemon. No SSH or manual file transfers needed.
 ```powershell
+# Required for secure deploy auth
+$env:KOUPPER_OCTOPUS_TOKEN="your-remote-daemon-token"
+
 # Deploy a worker script to a remote host
 koupper deploy examples/hello-world.kts "10.0.0.50"
 
 # Custom port or user context
 koupper deploy examples/hello-world.kts "user@10.0.0.50:9999"
 ```
+
+Deploy hardening defaults:
+- deploy requires daemon token auth (`KOUPPER_OCTOPUS_TOKEN`)
+- payload integrity is validated with SHA-256 checksum
+- daemon enforces max deploy size (`KOUPPER_OCTOPUS_DEPLOY_MAX_BYTES`, default `262144`)
 
 ### 4. Background Cron Daemons (`disk-cleanup-daemon.kts`)
 Want to delete old logs at midnight? Just annotate your export and the Octopus Engine will schedule it natively in the background upon booting.

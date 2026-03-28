@@ -6,6 +6,7 @@ import com.koupper.cli.ANSIColors.ANSI_RESET
 import com.koupper.cli.ANSIColors.ANSI_YELLOW_229
 import java.io.File
 import java.net.Socket
+import java.security.MessageDigest
 import java.util.UUID
 
 class DeployCommand : Command() {
@@ -55,8 +56,12 @@ class DeployCommand : Command() {
         val destination = args[2]
         val (remoteHost, remotePort) = parseDestination(destination)
         val token = runtimeOctopusToken()
+        if (token.isNullOrBlank()) {
+            return "❌ Deploy requires KOUPPER_OCTOPUS_TOKEN (or -Dkoupper.octopus.token)"
+        }
         val params = if (args.size > 3) args.drop(3).joinToString(" ") else "EMPTY_PARAMS"
         val scriptContent = localFile.readText(Charsets.UTF_8)
+        val contentSha256 = sha256Hex(scriptContent.toByteArray(Charsets.UTF_8))
 
         return sendDeployToOctopus(
             host = remoteHost,
@@ -64,6 +69,7 @@ class DeployCommand : Command() {
             token = token,
             scriptName = localFile.name,
             scriptContent = scriptContent,
+            contentSha256 = contentSha256,
             params = params
         )
     }
@@ -101,6 +107,7 @@ class DeployCommand : Command() {
         token: String?,
         scriptName: String,
         scriptContent: String,
+        contentSha256: String,
         params: String
     ): String {
         return try {
@@ -123,6 +130,7 @@ class DeployCommand : Command() {
                             "requestId" to requestId,
                             "script" to scriptName,
                             "scriptContent" to scriptContent,
+                            "contentSha256" to contentSha256,
                             "params" to params
                         )
                     )
@@ -199,6 +207,11 @@ class DeployCommand : Command() {
         } catch (e: Exception) {
             "❌ Cannot connect to $host:$port — ${e.message}"
         }
+    }
+
+    private fun sha256Hex(bytes: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+        return digest.joinToString("") { "%02x".format(it) }
     }
 
     override fun name(): String = AvailableCommands.DEPLOY
