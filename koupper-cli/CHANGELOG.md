@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- No changes yet.
+
+---
+
+## [4.6.0] - 2026-03-28
+
+### Added
+- End-to-end smoke tests for `run` socket flows covering JSON responses, requestId filtering, and legacy envelope fallback.
+
 ### Changed
+- `run` command now supports runtime Octopus host/port overrides via:
+  - `KOUPPER_OCTOPUS_HOST` / `koupper.octopus.host`
+  - `KOUPPER_OCTOPUS_PORT` / `koupper.octopus.port`
+- Help and runtime docs were updated to include socket override usage.
 - Updated help descriptions related to the `new` command.
 - Refactored `ModuleCommand` to improve how it displays module information.
 - Modified the structure of `ApiConfig` to support the new format.
