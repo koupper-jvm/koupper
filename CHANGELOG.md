@@ -11,6 +11,20 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 
 ---
 
+## [1.1.0-monorepo] - 2026-03-28
+
+### 🧱 Release Governance
+- Introduced explicit release-track guidance for independent artifacts (`koupper` / Octopus and `koupper-cli`) aligned with Semantic Versioning.
+- Established stable release tagging convention for production cuts:
+  - `octopus-v<version>`
+  - `cli-v<version>`
+  - optional platform snapshot tag `koupper-v<version>`
+
+### ✅ Stability and Hardening
+- Completed a focused hardening wave across socket protocol handling, parser reliability, daemon/client output isolation, and test coverage.
+- Added smoke and integration-oriented coverage to reduce regressions in CLI-to-Octopus request flows.
+- Stabilized environment-dependent test suites to avoid flaky outcomes in CI and local execution.
+
 ## [1.0.0-monorepo] - 2026-03-26
 
 ### 🌟 Architectural Milestones
