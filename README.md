@@ -179,7 +179,7 @@ Compatibility note: keep CLI and Octopus tags listed together in release notes f
 
 For production security defaults and deployment guardrails, see:
 
-- `docs/PRODUCTION_HARDENING.md`
+- [Production Hardening Guide](docs/PRODUCTION_HARDENING.md)
 
 ---
 
