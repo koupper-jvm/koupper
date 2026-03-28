@@ -6,6 +6,7 @@ import com.koupper.cli.commands.AvailableCommands.HELP
 import com.koupper.cli.commands.AvailableCommands.MODULE
 import com.koupper.cli.commands.AvailableCommands.NEW
 import com.koupper.cli.commands.AvailableCommands.RUN
+import com.koupper.cli.commands.AvailableCommands.DEPLOY
 import com.koupper.cli.commands.AvailableCommands.JOB
 import com.koupper.cli.commands.jobs.JobCommand
 import kotlinx.coroutines.delay
@@ -54,6 +55,7 @@ class CommandManager {
             HELP to HelpCommand(),
             NEW to NewCommand(),
             RUN to RunCommand(),
+            DEPLOY to DeployCommand(),
             MODULE to ModuleCommand(),
             JOB to JobCommand()
         )
