@@ -8,6 +8,34 @@ import kotlin.script.experimental.host.toScriptSource
 import kotlin.script.experimental.jvm.*
 import kotlin.script.experimental.jvmhost.BasicJvmScriptingHost
 
+private const val SCRIPT_WARNINGS_PROPERTY = "koupper.scripting.showWarnings"
+private const val SCRIPT_WARNINGS_ENV = "KOUPPER_SCRIPT_WARNINGS"
+private const val SCRIPT_NOISY_WARNINGS_PROPERTY = "koupper.scripting.showNoisyWarnings"
+private const val SCRIPT_NOISY_WARNINGS_ENV = "KOUPPER_SCRIPT_NOISY_WARNINGS"
+
+private fun runtimeFlag(propertyName: String, envName: String, default: Boolean): Boolean {
+    val fromProperty = System.getProperty(propertyName)?.trim()
+    val fromEnv = System.getenv(envName)?.trim()
+    val raw = fromProperty?.takeIf { it.isNotBlank() } ?: fromEnv?.takeIf { it.isNotBlank() } ?: return default
+
+    return raw.equals("true", ignoreCase = true) || raw == "1" || raw.equals("yes", ignoreCase = true)
+}
+
+private fun shouldDisplayWarning(diagnostic: ScriptDiagnostic): Boolean {
+    val showWarnings = runtimeFlag(SCRIPT_WARNINGS_PROPERTY, SCRIPT_WARNINGS_ENV, default = true)
+    if (!showWarnings) return false
+
+    val showNoisyWarnings = runtimeFlag(SCRIPT_NOISY_WARNINGS_PROPERTY, SCRIPT_NOISY_WARNINGS_ENV, default = false)
+    if (!showNoisyWarnings && diagnostic.severity == ScriptDiagnostic.Severity.WARNING) {
+        val message = diagnostic.message.lowercase()
+        if (message.contains("new faster version of jar fs")) {
+            return false
+        }
+    }
+
+    return true
+}
+
 /**
  * Production-grade scripting host with support for external classpaths,
  * lazy classloader caching, diagnostics, and safe resource cleanup.
@@ -95,6 +123,7 @@ class ScriptingHostBackend(
         // Reportar diagnósticos antes de lanzar
         result.reports
             .filter { it.severity >= ScriptDiagnostic.Severity.WARNING }
+            .filter { shouldDisplayWarning(it) }
             .forEach { diagnostic ->
                 val location = diagnostic.location?.let { loc ->
                     " (line ${loc.start.line}, col ${loc.start.col})"
