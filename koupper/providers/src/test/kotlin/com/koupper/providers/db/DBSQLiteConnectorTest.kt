@@ -1,12 +1,15 @@
 package com.koupper.providers.db
 
 import io.kotest.core.spec.style.AnnotationSpec
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.setMain
 
+@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
 class DBSQLiteConnectorTest : AnnotationSpec() {
     private val mainThreadSurrogate = newSingleThreadContext("UI Thread")
 
