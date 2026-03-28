@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.2.0] - 2026-03-28
+
+### Added
+- Socket observability and protocol coverage improvements for request/response handling and integration tests.
+- Safer parser and socket behavior validation to keep CLI/daemon communication stable under mixed payloads.
+
+### Changed
+- Octopus protocol parsing now relies on Jackson-based request decoding in key paths.
+- Runtime/daemon test suites were stabilized for environment-dependent scenarios.
+
+### Fixed
+- Stdout/session routing race conditions in Octopus socket execution flow.
+- Socket security defaults were hardened (loopback-first, tighter run-from-url handling).
+- Multiple unchecked-cast and parser edge-case regressions found during protocol hardening.
+
 ## [6.0.0] - 2025-10-15
 
 ### Added

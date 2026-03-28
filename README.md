@@ -131,6 +131,33 @@ koupper run examples/integration-tests.kts
 
 ---
 
+## 🚢 Versioning & Release Workflow
+
+Koupper uses Semantic Versioning with independent artifact tracks:
+
+- `koupper` (Octopus runtime): `6.x.y`
+- `koupper-cli` (CLI binary): `4.x.y`
+
+Recommended production release workflow:
+
+1. Merge release-ready PRs into `main`.
+2. Bump versions in:
+   - `koupper/build.gradle`
+   - `koupper-cli/build.gradle`
+3. Update changelogs:
+   - `CHANGELOG.md`
+   - `koupper/CHANGELOG.md`
+   - `koupper-cli/CHANGELOG.md`
+4. Create annotated git tags:
+   - `octopus-v<version>`
+   - `cli-v<version>`
+   - optional `koupper-v<version>` for a full monorepo snapshot
+5. Publish GitHub releases from those tags.
+
+Compatibility note: keep CLI and Octopus tags listed together in release notes for predictable upgrades.
+
+---
+
 ## 📜 License
 Built with 🩵 by Jacob Guzman Acosta / Igly technologies.
 Available under the MIT License.
