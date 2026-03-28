@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.3.1] - 2026-03-28
+
+### Changed
+- Hardened DEPLOY execution by requiring daemon token-backed auth for remote deploy flows.
+- Added payload integrity validation using SHA-256 checksum correlation.
+- Added configurable max deploy payload guardrail (`KOUPPER_OCTOPUS_DEPLOY_MAX_BYTES`, default `262144`).
+
+### Added
+- Extended socket integration coverage for DEPLOY auth, checksum mismatch, and payload size rejection scenarios.
+
 ## [6.2.0] - 2026-03-28
 
 ### Added

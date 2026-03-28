@@ -11,6 +11,21 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 
 ---
 
+## [1.2.1-monorepo] - 2026-03-28
+
+### 🔐 Deploy Security Hardening
+- Remote deploy now enforces token-authenticated execution and payload checksum verification.
+- Runtime deploy guardrails were added to reject oversized payloads with explicit limits.
+
+### 🧪 Stability
+- Added DEPLOY-focused socket integration coverage for success/failure auth and hash paths.
+- Added production hardening guidance document and linked it from the root README.
+
+### 📦 Release Alignment
+- Monorepo stable snapshot aligned to:
+  - `octopus 6.3.1`
+  - `koupper-cli 4.7.1`
+
 ## [1.1.0-monorepo] - 2026-03-28
 
 ### 🧱 Release Governance
