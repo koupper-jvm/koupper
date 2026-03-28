@@ -32,6 +32,7 @@ import java.net.ServerSocket
 import java.net.URI
 import java.net.URL
 import java.nio.file.Paths
+import java.security.MessageDigest
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -69,6 +70,9 @@ private const val OCTOPUS_ENABLE_URL_PROPERTY = "koupper.octopus.enableRunFromUr
 private const val OCTOPUS_ENABLE_URL_ENV = "KOUPPER_ENABLE_RUN_FROM_URL"
 private const val OCTOPUS_ALLOW_INSECURE_URL_PROPERTY = "koupper.octopus.allowInsecureRunFromUrl"
 private const val OCTOPUS_ALLOW_INSECURE_URL_ENV = "KOUPPER_ALLOW_INSECURE_RUN_FROM_URL"
+private const val OCTOPUS_DEPLOY_MAX_BYTES_PROPERTY = "koupper.octopus.deploy.maxBytes"
+private const val OCTOPUS_DEPLOY_MAX_BYTES_ENV = "KOUPPER_OCTOPUS_DEPLOY_MAX_BYTES"
+private const val OCTOPUS_DEFAULT_DEPLOY_MAX_BYTES = 262144
 
 internal enum class ResponseMode { LEGACY, JSON }
 
@@ -81,7 +85,8 @@ internal data class DaemonRequest(
     val context: String? = null,
     val script: String? = null,
     val params: String? = null,
-    val scriptContent: String? = null
+    val scriptContent: String? = null,
+    val contentSha256: String? = null
 )
 
 internal data class DaemonResponse(
@@ -111,7 +116,8 @@ internal data class IncomingCommand(
     val context: String = "",
     val scriptPath: String = "",
     val params: String = "EMPTY_PARAMS",
-    val scriptContent: String? = null
+    val scriptContent: String? = null,
+    val contentSha256: String? = null
 )
 
 private object DaemonMetrics {
@@ -258,6 +264,20 @@ private fun isRunFromUrlEnabled(): Boolean =
 private fun isInsecureRunFromUrlAllowed(): Boolean =
     runtimeFlag(OCTOPUS_ALLOW_INSECURE_URL_PROPERTY, OCTOPUS_ALLOW_INSECURE_URL_ENV, default = false)
 
+private fun runtimeDeployMaxBytes(): Int {
+    val value = optionalRuntimeSetting(OCTOPUS_DEPLOY_MAX_BYTES_PROPERTY, OCTOPUS_DEPLOY_MAX_BYTES_ENV)
+        ?.toIntOrNull()
+        ?: OCTOPUS_DEFAULT_DEPLOY_MAX_BYTES
+    return if (value <= 0) OCTOPUS_DEFAULT_DEPLOY_MAX_BYTES else value
+}
+
+private fun sha256Hex(bytes: ByteArray): String {
+    val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+    return digest.joinToString("") { "%02x".format(it) }
+}
+
+private val deployScriptNameRegex = Regex("^[A-Za-z0-9._-]+\\.(kts|kt)$")
+
 private fun isAllowedScriptUrl(scriptUrl: String): Boolean {
     val uri = runCatching { URI(scriptUrl) }.getOrNull() ?: return false
     val scheme = uri.scheme?.lowercase() ?: return false
@@ -332,7 +352,8 @@ internal fun parseIncomingCommand(command: String): IncomingCommand? {
                 context = req.context?.trim().orEmpty(),
                 scriptPath = req.script?.trim().orEmpty(),
                 params = req.params?.trim().takeUnless { it.isNullOrBlank() } ?: "EMPTY_PARAMS",
-                scriptContent = req.scriptContent
+                scriptContent = req.scriptContent,
+                contentSha256 = req.contentSha256?.trim()
             )
         }
 
@@ -1081,6 +1102,15 @@ fun listenForExternalCommands(
                         }
 
                         parsedCommand.commandType == "DEPLOY" -> {
+                            if (requiredToken.isNullOrBlank()) {
+                                sessionOutput.error(
+                                    "DEPLOY requires daemon auth token configuration",
+                                    parsedCommand.mode,
+                                    parsedCommand.requestId
+                                )
+                                return@launch
+                            }
+
                             val deployContent = parsedCommand.scriptContent
                             if (deployContent.isNullOrBlank()) {
                                 sessionOutput.error(
@@ -1091,12 +1121,51 @@ fun listenForExternalCommands(
                                 return@launch
                             }
 
+                            val deployBytes = deployContent.toByteArray(Charsets.UTF_8)
+                            val maxDeployBytes = runtimeDeployMaxBytes()
+                            if (deployBytes.size > maxDeployBytes) {
+                                sessionOutput.error(
+                                    "DEPLOY payload exceeds max size ($maxDeployBytes bytes)",
+                                    parsedCommand.mode,
+                                    parsedCommand.requestId
+                                )
+                                return@launch
+                            }
+
+                            val providedSha256 = parsedCommand.contentSha256?.lowercase()
+                            if (providedSha256.isNullOrBlank()) {
+                                sessionOutput.error(
+                                    "DEPLOY payload is missing contentSha256",
+                                    parsedCommand.mode,
+                                    parsedCommand.requestId
+                                )
+                                return@launch
+                            }
+
+                            val calculatedSha256 = sha256Hex(deployBytes)
+                            if (providedSha256 != calculatedSha256) {
+                                sessionOutput.error(
+                                    "DEPLOY payload hash mismatch",
+                                    parsedCommand.mode,
+                                    parsedCommand.requestId
+                                )
+                                return@launch
+                            }
+
                             val deployDir = File(System.getProperty("user.home"), ".koupper/deployed")
                             deployDir.mkdirs()
                             val targetFileName = parsedCommand.scriptPath.substringAfterLast("/").substringAfterLast("\\")
                                 .ifBlank { "deployed.kts" }
+                            if (!deployScriptNameRegex.matches(targetFileName)) {
+                                sessionOutput.error(
+                                    "DEPLOY script name must be a safe .kts/.kt filename",
+                                    parsedCommand.mode,
+                                    parsedCommand.requestId
+                                )
+                                return@launch
+                            }
                             val targetFile = File(deployDir, targetFileName)
-                            targetFile.writeText(deployContent, Charsets.UTF_8)
+                            targetFile.writeBytes(deployBytes)
 
                             DaemonMetrics.onScriptStarted()
                             val deployStartedAt = System.nanoTime()
@@ -1122,6 +1191,8 @@ fun listenForExternalCommands(
                                                 "sessionId" to sessionId,
                                                 "requestId" to parsedCommand.requestId,
                                                 "script" to targetFileName,
+                                                "sizeBytes" to deployBytes.size,
+                                                "sha256" to calculatedSha256,
                                                 "durationMs" to durationMs,
                                                 "status" to "ok"
                                             )
@@ -1139,6 +1210,8 @@ fun listenForExternalCommands(
                                             "sessionId" to sessionId,
                                             "requestId" to parsedCommand.requestId,
                                             "script" to targetFileName,
+                                            "sizeBytes" to deployBytes.size,
+                                            "sha256" to calculatedSha256,
                                             "durationMs" to durationMs,
                                             "status" to "error",
                                             "error" to (e.message ?: e.javaClass.name)

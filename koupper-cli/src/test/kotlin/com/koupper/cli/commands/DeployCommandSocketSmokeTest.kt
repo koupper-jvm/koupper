@@ -46,19 +46,24 @@ class DeployCommandSocketSmokeTest {
         ServerSocket(0).use { serverSocket ->
             System.setProperty("koupper.octopus.host", "127.0.0.1")
             System.setProperty("koupper.octopus.port", serverSocket.localPort.toString())
+            System.setProperty("koupper.octopus.token", "secret-token")
 
             var receivedType: String? = null
             var receivedContent: String? = null
+            var receivedSha256: String? = null
 
             thread(start = true, isDaemon = true) {
                 serverSocket.accept().use { socket ->
                     val reader = socket.getInputStream().bufferedReader(Charsets.UTF_8)
                     val writer = socket.getOutputStream().bufferedWriter(Charsets.UTF_8)
 
+                    assertEquals("AUTH::secret-token", reader.readLine())
+
                     val requestJson = mapper.readTree(reader.readLine())
                     val realRequestId = requestJson["requestId"].asText()
                     receivedType = requestJson["type"]?.asText()
                     receivedContent = requestJson["scriptContent"]?.asText()
+                    receivedSha256 = requestJson["contentSha256"]?.asText()
 
                     writer.write("""{"type":"result","requestId":"$realRequestId","result":"worker-deployed-ok"}""")
                     writer.newLine()
@@ -75,6 +80,7 @@ class DeployCommandSocketSmokeTest {
                 receivedContent?.contains("@Export") == true,
                 "CLI must send the script source in scriptContent"
             )
+            assertTrue(!receivedSha256.isNullOrBlank(), "CLI must send contentSha256")
             assertTrue(result.contains("✅ Deployed"), "Result should indicate success")
             assertTrue(result.contains("worker-deployed-ok"), "Result should contain daemon reply")
         }
@@ -89,11 +95,14 @@ class DeployCommandSocketSmokeTest {
         ServerSocket(0).use { serverSocket ->
             System.setProperty("koupper.octopus.host", "127.0.0.1")
             System.setProperty("koupper.octopus.port", serverSocket.localPort.toString())
+            System.setProperty("koupper.octopus.token", "secret-token")
 
             thread(start = true, isDaemon = true) {
                 serverSocket.accept().use { socket ->
                     val reader = socket.getInputStream().bufferedReader(Charsets.UTF_8)
                     val writer = socket.getOutputStream().bufferedWriter(Charsets.UTF_8)
+
+                    assertEquals("AUTH::secret-token", reader.readLine())
 
                     val requestJson = mapper.readTree(reader.readLine())
                     val realRequestId = requestJson["requestId"].asText()
@@ -122,11 +131,14 @@ class DeployCommandSocketSmokeTest {
         ServerSocket(0).use { serverSocket ->
             System.setProperty("koupper.octopus.host", "127.0.0.1")
             System.setProperty("koupper.octopus.port", serverSocket.localPort.toString())
+            System.setProperty("koupper.octopus.token", "secret-token")
 
             thread(start = true, isDaemon = true) {
                 serverSocket.accept().use { socket ->
                     val reader = socket.getInputStream().bufferedReader(Charsets.UTF_8)
                     val writer = socket.getOutputStream().bufferedWriter(Charsets.UTF_8)
+
+                    assertEquals("AUTH::secret-token", reader.readLine())
 
                     val requestJson = mapper.readTree(reader.readLine())
                     val realRequestId = requestJson["requestId"].asText()
@@ -156,9 +168,18 @@ class DeployCommandSocketSmokeTest {
 
     @Test
     fun `deploy command should return error if local script does not exist`() {
+        System.setProperty("koupper.octopus.token", "secret-token")
         val command = DeployCommand()
         val result = command.execute("/tmp", "non-existent.kts", "127.0.0.1").trim()
         assertTrue(result.contains("not found locally"), "Should report missing file, got: $result")
+    }
+
+    @Test
+    fun `deploy command should require auth token before socket call`() {
+        val scriptFile = buildTempScript(name = "token-required.kts")
+        val command = DeployCommand()
+        val result = command.execute(scriptFile.parent, scriptFile.name, "127.0.0.1").trim()
+        assertTrue(result.contains("KOUPPER_OCTOPUS_TOKEN"), "Should request token configuration, got: $result")
     }
 
     // ─── test 5: destination parsing ─────────────────────────────────────────────
