@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.net.ServerSocket
 import java.net.Socket
+import java.security.MessageDigest
 import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -28,6 +29,7 @@ class OctopusSocketIntegrationTest {
         System.clearProperty("koupper.octopus.port")
         System.clearProperty("koupper.octopus.host")
         System.clearProperty("koupper.octopus.token")
+        System.clearProperty("koupper.octopus.deploy.maxBytes")
     }
 
     @Test
@@ -81,6 +83,81 @@ class OctopusSocketIntegrationTest {
             val payload = response.joinToString("\n")
             assertContains(payload, "\"requestId\":\"$expectedRequestId\"")
             assertTrue(!payload.contains("\"requestId\":\"req-other\""))
+        }
+    }
+
+    @Test
+    fun `deploy command should execute when auth and payload hash are valid`() = runBlocking {
+        withTestServer(maxConnections = 1, authToken = "secret-token") { port ->
+            val requestId = UUID.randomUUID().toString()
+            val content = "@Export val run = 1"
+            val hash = sha256Hex(content.toByteArray(Charsets.UTF_8))
+            val response = sendRawCommand(
+                port,
+                listOf(
+                    "AUTH::secret-token",
+                    """{"type":"DEPLOY","requestId":"$requestId","script":"worker.kts","scriptContent":"$content","contentSha256":"$hash","params":"deploy-ok"}"""
+                )
+            )
+
+            val payload = response.joinToString("\n")
+            assertContains(payload, "\"type\":\"result\"")
+            assertContains(payload, "\"requestId\":\"$requestId\"")
+            assertContains(payload, "legacy-result:deploy-ok")
+        }
+    }
+
+    @Test
+    fun `deploy command should reject payload hash mismatch`() = runBlocking {
+        withTestServer(maxConnections = 1, authToken = "secret-token") { port ->
+            val requestId = UUID.randomUUID().toString()
+            val content = "@Export val run = 1"
+            val response = sendRawCommand(
+                port,
+                listOf(
+                    "AUTH::secret-token",
+                    """{"type":"DEPLOY","requestId":"$requestId","script":"worker.kts","scriptContent":"$content","contentSha256":"bad-hash","params":"deploy-fail"}"""
+                )
+            )
+
+            assertContains(response.joinToString("\n"), "DEPLOY payload hash mismatch")
+        }
+    }
+
+    @Test
+    fun `deploy command should reject payload above max bytes`() = runBlocking {
+        System.setProperty("koupper.octopus.deploy.maxBytes", "32")
+
+        withTestServer(maxConnections = 1, authToken = "secret-token") { port ->
+            val requestId = UUID.randomUUID().toString()
+            val content = "@Export val payload = ${"9".repeat(200)}"
+            val hash = sha256Hex(content.toByteArray(Charsets.UTF_8))
+            val response = sendRawCommand(
+                port,
+                listOf(
+                    "AUTH::secret-token",
+                    """{"type":"DEPLOY","requestId":"$requestId","script":"worker.kts","scriptContent":"$content","contentSha256":"$hash","params":"overflow"}"""
+                )
+            )
+
+            assertContains(response.joinToString("\n"), "DEPLOY payload exceeds max size")
+        }
+    }
+
+    @Test
+    fun `deploy command should be rejected when daemon auth token is not configured`() = runBlocking {
+        withTestServer(maxConnections = 1, authToken = null) { port ->
+            val requestId = UUID.randomUUID().toString()
+            val content = "@Export val run = 1"
+            val hash = sha256Hex(content.toByteArray(Charsets.UTF_8))
+            val response = sendRawCommand(
+                port,
+                listOf(
+                    """{"type":"DEPLOY","requestId":"$requestId","script":"worker.kts","scriptContent":"$content","contentSha256":"$hash","params":"unauth-deploy"}"""
+                )
+            )
+
+            assertContains(response.joinToString("\n"), "DEPLOY requires daemon auth token configuration")
         }
     }
 
@@ -163,6 +240,11 @@ class OctopusSocketIntegrationTest {
     }
 
     private fun reserveRandomPort(): Int = ServerSocket(0).use { it.localPort }
+
+    private fun sha256Hex(bytes: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+        return digest.joinToString("") { "%02x".format(it) }
+    }
 
     private class FakeScriptExecutor : ScriptExecutor {
         override fun <T> runFromScriptFile(context: String, scriptPath: String, params: String, result: (value: T) -> Unit) {
