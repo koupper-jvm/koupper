@@ -57,6 +57,10 @@ data class ParsedParams(
 
 private const val OCTOPUS_HOST = "127.0.0.1"
 private const val OCTOPUS_PORT = 9998
+private const val OCTOPUS_HOST_PROPERTY = "koupper.octopus.host"
+private const val OCTOPUS_HOST_ENV = "KOUPPER_OCTOPUS_HOST"
+private const val OCTOPUS_PORT_PROPERTY = "koupper.octopus.port"
+private const val OCTOPUS_PORT_ENV = "KOUPPER_OCTOPUS_PORT"
 private const val OCTOPUS_AUTH_PROPERTY = "koupper.octopus.token"
 private const val OCTOPUS_AUTH_ENV = "KOUPPER_OCTOPUS_TOKEN"
 private const val OCTOPUS_ENABLE_URL_PROPERTY = "koupper.octopus.enableRunFromUrl"
@@ -237,6 +241,12 @@ private fun runtimeFlag(propertyName: String, envName: String, default: Boolean)
 }
 
 private fun runtimeOctopusToken(): String? = optionalRuntimeSetting(OCTOPUS_AUTH_PROPERTY, OCTOPUS_AUTH_ENV)
+
+private fun runtimeOctopusHost(): String =
+    optionalRuntimeSetting(OCTOPUS_HOST_PROPERTY, OCTOPUS_HOST_ENV) ?: OCTOPUS_HOST
+
+private fun runtimeOctopusPort(): Int =
+    optionalRuntimeSetting(OCTOPUS_PORT_PROPERTY, OCTOPUS_PORT_ENV)?.toIntOrNull() ?: OCTOPUS_PORT
 
 private fun isRunFromUrlEnabled(): Boolean =
     runtimeFlag(OCTOPUS_ENABLE_URL_PROPERTY, OCTOPUS_ENABLE_URL_ENV, default = false)
@@ -936,21 +946,28 @@ fun main() = runBlocking {
 
 fun listenForExternalCommands(
     processManager: ScriptExecutor,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    maxConnections: Int? = null
 ) {
-    val serverSocket = ServerSocket(OCTOPUS_PORT, 50, InetAddress.getByName(OCTOPUS_HOST))
+    val host = runtimeOctopusHost()
+    val port = runtimeOctopusPort()
+    val serverSocket = ServerSocket(port, 50, InetAddress.getByName(host))
     val authEnabled = !runtimeOctopusToken().isNullOrBlank()
     app.createSingleton(LoggerCore::class)
-        .info { "🔄 Octopus listening on $OCTOPUS_HOST:$OCTOPUS_PORT (auth=${if (authEnabled) "enabled" else "disabled"})" }
+        .info { "🔄 Octopus listening on $host:$port (auth=${if (authEnabled) "enabled" else "disabled"})" }
 
-    while (true) {
-        val clientSocket = serverSocket.accept()
-        DaemonMetrics.onConnectionAccepted()
-        app.createSingleton(LoggerCore::class)
-            .info { "🔗 New connection to Octopus: ${clientSocket.inetAddress.hostAddress}" }
+    var acceptedConnections = 0
 
-        scope.launch(Dispatchers.IO) {
-            clientSocket.use {
+    try {
+        while (maxConnections == null || acceptedConnections < maxConnections) {
+            val clientSocket = serverSocket.accept()
+            acceptedConnections++
+            DaemonMetrics.onConnectionAccepted()
+            app.createSingleton(LoggerCore::class)
+                .info { "🔗 New connection to Octopus: ${clientSocket.inetAddress.hostAddress}" }
+
+            scope.launch(Dispatchers.IO) {
+                clientSocket.use {
                 try {
                     val reader = it.getInputStream().bufferedReader(Charsets.UTF_8)
                     val writer = it.getOutputStream().bufferedWriter(Charsets.UTF_8)
@@ -1120,8 +1137,11 @@ fun listenForExternalCommands(
                     TerminalContext.clear()
                     DaemonMetrics.onConnectionClosed()
                 }
+                }
             }
         }
+    } finally {
+        runCatching { serverSocket.close() }
     }
 }
 
