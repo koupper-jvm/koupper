@@ -316,8 +316,9 @@ object ScriptRunner {
             if (v is PendingJson) {
                 val json = v.json.trim()
                 val expectedArgName = functionArgs.getOrNull(i) ?: ""
+                val signatureArgName = functionSignature?.parameterTypes?.getOrNull(i)
                 val expectedClass = functionSignature?.let {
-                    resolveClassFromArgName(expectedArgName, it, targetCL, inferredClassName)
+                    resolveClassFromArgName(signatureArgName ?: expectedArgName, it, targetCL, inferredClassName)
                 }
 
                 if (expectedClass != null) {
