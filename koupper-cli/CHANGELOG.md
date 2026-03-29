@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `new module` type parsing now accepts aliases (`scripts`, `jobs`, `pipelines`) and validates unsupported values early.
 - `help new` now documents module parameters and script import flags (`-si/-se/-swi/-swe`) explicitly.
 - `new module` now injects default/imported scripts after scaffold generation to avoid losing `myScript` starter files.
+- `module add-scripts` added to import scripts into existing modules without overwriting by default (`--overwrite` optional).
 
 ---
 
