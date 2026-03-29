@@ -1,0 +1,56 @@
+plugins {
+    id 'application'
+    id 'org.jetbrains.kotlin.jvm' version '2.0.20'
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+    flatDir {
+        dirs 'libs'
+    }
+}
+
+def jerseyVersion = '3.1.1'
+def kotlinVersion = '2.0.20'
+def kotlinTestVersion = '2.0.20'
+def grizzlyVersion = '4.0.0'
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
+
+    testImplementation "org.jetbrains.kotlin:kotlin-test:$kotlinTestVersion"
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit5:$kotlinTestVersion"
+
+    implementation "org.glassfish.jersey.containers:jersey-container-grizzly2-http:$jerseyVersion"
+    implementation "org.glassfish.jersey.inject:jersey-hk2:$jerseyVersion"
+    implementation "org.glassfish.jersey.media:jersey-media-json-jackson:$jerseyVersion"
+
+    implementation 'com.amazonaws:aws-lambda-java-core:1.2.3'
+    implementation 'com.amazonaws:aws-lambda-java-events:3.14.0'
+    runtimeOnly 'com.amazonaws:aws-lambda-java-log4j2:1.6.0'
+
+    implementation "jakarta.servlet:jakarta.servlet-api:5.0.0"
+}
+
+task copyDependencies(type: Copy) {
+    into("$buildDir/libs")
+    from(configurations.runtimeClasspath) {
+        into 'lib'
+    }
+}
+
+application {
+    mainClass.set("server.SetupKt")
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+startScripts.dependsOn(copyDependencies)
+
+version = '0.0.0'

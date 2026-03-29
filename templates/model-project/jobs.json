@@ -1,0 +1,6 @@
+{
+  "id": "local-file",
+  "driver": "file",
+  "queue": "default",
+  "for-all-projects": true
+}
