@@ -61,17 +61,17 @@ private fun resolveTemplateProjectSource(context: String): TemplateProjectSource
     }
 
     val localCandidates = listOf(
-        File(context, "model-project"),
         File(context, "templates/model-project"),
-        File(System.getProperty("user.dir"), "model-project"),
         File(System.getProperty("user.dir"), "templates/model-project"),
         File(System.getProperty("user.home"), ".koupper/templates/model-project"),
+        File(context, "model-project"),
+        File(System.getProperty("user.dir"), "model-project"),
         File(System.getProperty("user.home"), ".koupper/model-project"),
-        File(context, "model-project.zip"),
         File(context, "templates/model-project.zip"),
-        File(System.getProperty("user.dir"), "model-project.zip"),
         File(System.getProperty("user.dir"), "templates/model-project.zip"),
         File(System.getProperty("user.home"), ".koupper/templates/model-project.zip"),
+        File(context, "model-project.zip"),
+        File(System.getProperty("user.dir"), "model-project.zip"),
         File(System.getProperty("user.home"), ".koupper/model-project.zip")
     )
 
