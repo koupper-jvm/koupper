@@ -99,6 +99,16 @@ class NewCommand : Command() {
                     return "\n${ANSI_YELLOW_229}Module scaffolding failed for $name. Run output: $runResult$ANSI_RESET\n"
                 }
 
+                val requiredScaffoldFiles = listOf(
+                    File(moduleDir, "settings.gradle"),
+                    File(moduleDir, "build.gradle")
+                )
+                val missingScaffoldFiles = requiredScaffoldFiles.filterNot { it.exists() }
+                if (missingScaffoldFiles.isNotEmpty()) {
+                    val missingNames = missingScaffoldFiles.joinToString(", ") { it.name }
+                    return "\n${ANSI_YELLOW_229}Module scaffolding failed for $name. Missing files: $missingNames.$ANSI_RESET\n"
+                }
+
                 val pkgPath = packageName.trim().replace(".", "/")
                 val extensionsDir = File(moduleDir, "src/main/kotlin/$pkgPath/extensions")
                 extensionsDir.mkdirs()
@@ -112,6 +122,10 @@ class NewCommand : Command() {
                     imports = scriptImports,
                     packageName = packageName
                 )
+
+                if (!extensionsDir.exists() || extensionsDir.listFiles().isNullOrEmpty()) {
+                    return "\n${ANSI_YELLOW_229}Module was created but no starter scripts were generated in ${extensionsDir.path}.$ANSI_RESET\n"
+                }
 
                 "Module $name generated successfully with type $type."
             }
