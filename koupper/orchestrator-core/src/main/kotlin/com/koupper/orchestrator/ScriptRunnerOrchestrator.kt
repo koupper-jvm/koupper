@@ -194,6 +194,9 @@ object ScriptRunner {
                 ?: error("No se pudo extraer firma de la función"))
 
         val functionSignature = extractExportFunctionSignature(call.code)
+        val inferredClassName = call.className
+            ?: target::class.java.enclosingClass?.name
+            ?: target::class.java.name.substringBefore("$", missingDelimiterValue = target::class.java.name)
 
         fun argIndex(k: String) = k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE
 
@@ -314,7 +317,7 @@ object ScriptRunner {
                 val json = v.json.trim()
                 val expectedArgName = functionArgs.getOrNull(i) ?: ""
                 val expectedClass = functionSignature?.let {
-                    resolveClassFromArgName(expectedArgName, it, targetCL, call.className)
+                    resolveClassFromArgName(expectedArgName, it, targetCL, inferredClassName)
                 }
 
                 if (expectedClass != null) {

@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `module add-scripts` added to import scripts into existing modules without overwriting by default (`--overwrite` optional).
 - Added dedicated tests for `module add-scripts` import behavior (copy, skip, overwrite, wildcard).
 - Refactored shared script-import parsing/validation logic into reusable command utilities.
+- `module` now resolves HTTP/controller checks relative to the selected module directory.
+- Job list/worker output now avoids extra leading blank lines for more consistent terminal formatting.
+- `module add-scripts` now includes a direct source-path hint when imports fail.
 
 ---
 
