@@ -31,6 +31,8 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 ### 🧰 Scaffolding and Tooling
 - Installer now provisions a local versioned module template in `~/.koupper/templates/model-project` for local-first module generation.
 - `new` command help now documents parameter and script import flag usage more explicitly.
+- Installer now supports `--force` reinstall cleanup and `--doctor` verification mode.
+- Uninstaller now supports CLI flags `--force` and `--purge` for non-interactive cleanup workflows.
 
 ## [1.1.0-monorepo] - 2026-03-28
 
