@@ -149,6 +149,13 @@ koupper new module name="demo",version="1.0.0",package="demo.app" --script-inclu
 koupper new module name="demo",version="1.0.0",package="demo.app" --script-wildcard-inclusive "extensions/*.kts"
 ```
 
+To add scripts into an already generated module (no overwrite by default):
+
+```powershell
+koupper module add-scripts name="demo" --script-inclusive "extensions/sample.kts"
+koupper module add-scripts name="demo" --script-wildcard-inclusive "extensions/*.kts" --overwrite
+```
+
 Scaffolding source resolution is local-first (`templates/model-project`), with optional overrides:
 
 ```powershell
