@@ -28,6 +28,53 @@ fun forceUtf8Output() {
 
 forceUtf8Output()
 
+val cliArgs: Set<String> = runCatching { args.toSet() }.getOrDefault(emptySet())
+val forceReinstall = cliArgs.contains("--force")
+val doctorOnly = cliArgs.contains("--doctor") || cliArgs.contains("--verify")
+
+val userPath = System.getProperty("user.home")
+val koupperHome = File("$userPath${File.separator}.koupper")
+val binDirectory = File(koupperHome, "bin")
+val libsDirectory = File(koupperHome, "libs")
+val logsDirectory = File(koupperHome, "logs")
+val helpersDirectory = File(koupperHome, "helpers")
+val templatesDirectory = File(koupperHome, "templates")
+val modelTemplateDirectory = File(templatesDirectory, "model-project")
+
+fun check(name: String, ok: Boolean): String {
+    val status = if (ok) "OK" else "FAIL"
+    return "[$status] $name"
+}
+
+fun runDoctorAndExit() {
+    println("${icon("🩺", "[*] ")}Koupper installation doctor")
+
+    val checks = listOf(
+        check("~/.koupper exists", koupperHome.exists()),
+        check("CLI jar (~/.koupper/libs/koupper-cli.jar)", File(libsDirectory, "koupper-cli.jar").exists()),
+        check("Octopus jar (~/.koupper/libs/octopus.jar)", File(libsDirectory, "octopus.jar").exists()),
+        check("Template directory (~/.koupper/templates/model-project)", modelTemplateDirectory.exists()),
+        check("Template settings.gradle", File(modelTemplateDirectory, "settings.gradle").exists()),
+        check("Bin shim (~/.koupper/bin/koupper)", File(binDirectory, "koupper").exists()),
+        check("PowerShell shim (~/.koupper/bin/koupper.ps1)", File(binDirectory, "koupper.ps1").exists())
+    )
+
+    checks.forEach { println(it) }
+
+    val hasFail = checks.any { it.startsWith("[FAIL]") }
+    if (hasFail) {
+        println("\n${icon("⚠️", "[!] ")}Some checks failed. Run: kotlinc -script install.kts --force")
+        kotlin.system.exitProcess(1)
+    }
+
+    println("\n${icon("✅", "[OK] ")}Installation looks healthy.")
+    kotlin.system.exitProcess(0)
+}
+
+if (doctorOnly) {
+    runDoctorAndExit()
+}
+
 println("${icon("🐙", "[K] ")}\u001B[38;5;141mBootstrapping Koupper Monorepo Environment...\u001B[0m")
 println("${icon("🔨", "[*] ")}Compiling absolute latest sources via Gradle...")
 
@@ -71,12 +118,15 @@ if (cliCompilation.exitValue() != 0 || octopusCompilation.exitValue() != 0) {
 }
 
 // 2. Provision Directory Paths
-val userPath = System.getProperty("user.home")
-val binDirectory = File("$userPath${File.separator}.koupper${File.separator}bin")
-val libsDirectory = File("$userPath${File.separator}.koupper${File.separator}libs")
-val logsDirectory = File("$userPath${File.separator}.koupper${File.separator}logs")
-val helpersDirectory = File("$userPath${File.separator}.koupper${File.separator}helpers")
-val templatesDirectory = File("$userPath${File.separator}.koupper${File.separator}templates")
+
+if (forceReinstall) {
+    println("${icon("🧹", "[*] ")}Force mode enabled: cleaning previous installation artifacts...")
+    listOf(binDirectory, libsDirectory, helpersDirectory, templatesDirectory).forEach { dir ->
+        if (dir.exists()) {
+            dir.deleteRecursively()
+        }
+    }
+}
 
 arrayOf(binDirectory, libsDirectory, logsDirectory, helpersDirectory, templatesDirectory).forEach {
     if (!it.exists()) it.mkdirs()
@@ -108,7 +158,7 @@ octopusJarSource!!.copyTo(octopusTarget, overwrite = true)
 println("${icon("🧩", "[*] ")}Provisioning local module template...")
 
 val templateSource = File("templates${File.separator}model-project")
-val templateTarget = File(templatesDirectory, "model-project")
+val templateTarget = modelTemplateDirectory
 
 if (templateSource.exists() && templateSource.isDirectory) {
     if (templateTarget.exists()) {

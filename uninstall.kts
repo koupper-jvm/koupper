@@ -13,6 +13,10 @@ fun forceUtf8Output() {
 
 forceUtf8Output()
 
+val cliArgs: Set<String> = runCatching { args.toSet() }.getOrDefault(emptySet())
+val forceArg = cliArgs.contains("--force")
+val purgeArg = cliArgs.contains("--purge")
+
 val home = System.getProperty("user.home")
 val koupperHome = File(home, ".koupper")
 
@@ -23,7 +27,11 @@ if (!koupperHome.exists()) {
     kotlin.system.exitProcess(0)
 }
 
-val force = System.getenv("KOUPPER_UNINSTALL_FORCE")?.equals("true", ignoreCase = true) == true
+val force = forceArg || (System.getenv("KOUPPER_UNINSTALL_FORCE")?.equals("true", ignoreCase = true) == true)
+
+if (purgeArg) {
+    println("[!] Purge mode enabled: removing full ~/.koupper tree")
+}
 
 if (!force) {
     print("Delete ${koupperHome.absolutePath}? [y/N]: ")
@@ -46,3 +54,4 @@ if (!deleted || koupperHome.exists()) {
 
 println("[OK] Koupper files removed from ${koupperHome.absolutePath}.")
 println("[INFO] If needed, remove ~/.koupper/bin from your PATH manually.")
+println("[INFO] Tip: reinstall fresh with 'kotlinc -script install.kts -- --force'")
