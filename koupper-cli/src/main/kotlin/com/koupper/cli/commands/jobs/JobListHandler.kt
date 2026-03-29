@@ -34,7 +34,7 @@ class JobListHandler : JobSubcommandHandler {
                 res.forEach {
                     when (it) {
                         is JobInfo -> {
-                            sb.appendLine()
+                            if (sb.isNotEmpty()) sb.appendLine()
                             sb.appendLine("From config with id: ${'$'}{it.configId}")
                             sb.appendLine("📦 Job ID: ${'$'}{it.id}")
                             sb.appendLine(" - Function: ${'$'}{it.function}")
@@ -45,7 +45,7 @@ class JobListHandler : JobSubcommandHandler {
                             sb.appendLine(" - Origin: ${'$'}{it.origin}")
                         }
                         is JobResult.Error -> {
-                            sb.appendLine()
+                            if (sb.isNotEmpty()) sb.appendLine()
                             sb.appendLine("${'$'}{it.message}")
                         }
                     }
