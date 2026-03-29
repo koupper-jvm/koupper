@@ -131,7 +131,12 @@ fun main(args: Array<String>) {
             commandManager.process(input)
         }
 
+        val addPromptSpacer = input.getOrNull(1) == RUN
+
         println(response)
+        if (addPromptSpacer) {
+            println()
+        }
 
         System.out.flush()
         System.err.flush()
