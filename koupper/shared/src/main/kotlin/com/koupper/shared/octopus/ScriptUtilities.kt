@@ -191,6 +191,7 @@ fun resolveClassFromArgName(
         .substringBefore("<")
         .removeSuffix("?")
         .trim()
+    val simpleType = cleanType.substringAfterLast('.')
 
     val builtIns = mapOf(
         "String" to String::class.java,
@@ -224,8 +225,8 @@ fun resolveClassFromArgName(
         }
     }
 
-    // Buscar si está definido inline en el script
-    val isDefinedInline = signature.code.contains(Regex("""(class|data class|object)\s+$cleanType\b"""))
+    // Buscar si está definido inline en el script (soporta fqcn o simple name)
+    val isDefinedInline = signature.code.contains(Regex("""(class|data class|object)\s+$simpleType\b"""))
 
     if (isDefinedInline) {
         runCatching {
@@ -235,13 +236,13 @@ fun resolveClassFromArgName(
         explicitClassName?.let { className ->
             val host = className.substringBefore("$", className)
             runCatching {
-                return Class.forName("$host$$cleanType", true, classLoader)
+                return Class.forName("$host$$simpleType", true, classLoader)
             }
         }
 
         // Algunos runtimes de scripting prefijan el nombre
         runCatching {
-            return Class.forName("Script\$$cleanType", true, classLoader)
+            return Class.forName("Script\$$simpleType", true, classLoader)
         }
     }
 
