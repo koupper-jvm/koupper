@@ -64,15 +64,9 @@ private fun resolveTemplateProjectSource(context: String): TemplateProjectSource
         File(context, "templates/model-project"),
         File(System.getProperty("user.dir"), "templates/model-project"),
         File(System.getProperty("user.home"), ".koupper/templates/model-project"),
-        File(context, "model-project"),
-        File(System.getProperty("user.dir"), "model-project"),
-        File(System.getProperty("user.home"), ".koupper/model-project"),
         File(context, "templates/model-project.zip"),
         File(System.getProperty("user.dir"), "templates/model-project.zip"),
-        File(System.getProperty("user.home"), ".koupper/templates/model-project.zip"),
-        File(context, "model-project.zip"),
-        File(System.getProperty("user.dir"), "model-project.zip"),
-        File(System.getProperty("user.home"), ".koupper/model-project.zip")
+        File(System.getProperty("user.home"), ".koupper/templates/model-project.zip")
     )
 
     localCandidates.firstOrNull { it.exists() }?.let { candidate ->
@@ -89,7 +83,7 @@ private fun resolveTemplateProjectSource(context: String): TemplateProjectSource
     }
 
     throw IllegalStateException(
-        "Could not resolve model project source. Set MODEL_BACK_PROJECT_PATH, provide a local model-project directory, or configure MODEL_BACK_PROJECT_URL."
+        "Could not resolve model project source. Set MODEL_BACK_PROJECT_PATH, provide templates/model-project locally, or configure MODEL_BACK_PROJECT_URL."
     )
 }
 
