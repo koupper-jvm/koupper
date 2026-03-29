@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `new module` now infers `type` from `template` when type is omitted (`jobs` -> `job`, `pipelines` -> `pipeline`).
 - `new module` type parsing now accepts aliases (`scripts`, `jobs`, `pipelines`) and validates unsupported values early.
 - `help new` now documents module parameters and script import flags (`-si/-se/-swi/-swe`) explicitly.
+- `new module` now injects default/imported scripts after scaffold generation to avoid losing `myScript` starter files.
 
 ---
 
