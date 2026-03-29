@@ -5,6 +5,8 @@ import com.koupper.container.app
 import com.koupper.octopus.exceptions.UndefinedHandlerException
 import com.koupper.octopus.modifiers.*
 import com.koupper.octopus.modules.Module
+import com.koupper.octopus.modules.prepareTemplateProject
+import com.koupper.octopus.modules.resolveAndCopyProcessManagerJar
 import com.koupper.octopus.modules.http.Post
 import com.koupper.octopus.modules.http.Put
 import com.koupper.octopus.modules.http.Route
@@ -15,9 +17,7 @@ import com.koupper.os.env
 import com.koupper.providers.files.FileHandler
 import com.koupper.providers.files.TextFileHandler
 import com.koupper.providers.files.YmlFileHandler
-import com.koupper.providers.files.downloadFile
 import java.io.File
-import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.exists
@@ -99,7 +99,7 @@ class AWSAGHandlerBuilder(
     override fun build() {
         print("Building module...")
 
-        this.modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL", context), projectName)
+        this.modelProject = prepareTemplateProject(context, projectName, this.fileHandler)
 
         GradleConfigurator.configure {
             this.rootProjectName = projectName
@@ -108,12 +108,10 @@ class AWSAGHandlerBuilder(
 
         print("\nRequesting an optimized process manager...")
 
-        File("${this.modelProject.path}/libs").mkdir()
-
-        downloadFile(
-            URL(env("OPTIMIZED_PROCESS_MANAGER_URL", context)),
-            "${modelProject.path}/libs/octopus-${env("OCTOPUS_VERSION", context)}.jar"
-        )
+        val libsDir = File(this.modelProject, "libs")
+        libsDir.mkdirs()
+        val octopusVersion = env("OCTOPUS_VERSION", context, required = false, allowEmpty = true, default = "latest")
+        resolveAndCopyProcessManagerJar(context, libsDir, "octopus-$octopusVersion.jar")
 
         println("${ANSIColors.ANSI_GREEN_155}[\u2713]${ANSIColors.ANSI_RESET}")
 
