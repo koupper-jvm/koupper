@@ -4,9 +4,7 @@ import com.koupper.container.app
 import com.koupper.octopus.modifiers.GradleConfigurator
 import com.koupper.os.env
 import com.koupper.providers.files.FileHandler
-import com.koupper.providers.files.downloadFile
 import java.io.File
-import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -33,8 +31,8 @@ class ExecutableJarBuilder(
     }
 
     override fun build() {
-        // 1. Descargar y descomprimir el proyecto base
-        val projectRoot = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"), projectName)
+        // 1. Resolver y preparar el proyecto base (local-first, remote fallback)
+        val projectRoot = prepareTemplateProject(context, projectName, this.fileHandler)
 
         // 2. Limpiar el zip temporal (best effort)
         try {
@@ -49,14 +47,11 @@ class ExecutableJarBuilder(
             this.version = moduleVersion
         }
 
-        // 4. Descargar el process manager en libs/
+        // 4. Resolver process manager en libs/ (local-first, remote fallback)
         val libsDir = projectRoot.resolve("libs")
         libsDir.mkdirs()
-
-        downloadFile(
-            URL(env("OPTIMIZED_PROCESS_MANAGER_URL")),
-            libsDir.resolve("octopus-${env("OCTOPUS_VERSION")}.jar").toString()
-        )
+        val octopusVersion = env("OCTOPUS_VERSION", context, required = false, allowEmpty = true, default = "latest")
+        resolveAndCopyProcessManagerJar(context, libsDir, "octopus-$octopusVersion.jar")
 
         // 5. LIMPIAR el proyecto y crear scripts
         cleanProjectAndCreateBootstrapping(projectRoot)
