@@ -10,6 +10,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class RunCommandSocketSmokeTest {
     private val mapper = jacksonObjectMapper()
@@ -93,6 +94,43 @@ class RunCommandSocketSmokeTest {
         }
     }
 
+    @Test
+    fun `run command should send json payload loaded from file`() {
+        withSocketServer { serverSocket ->
+            var receivedParams: String? = null
+
+            thread(start = true, isDaemon = true) {
+                serverSocket.accept().use { socket ->
+                    val reader = socket.getInputStream().bufferedReader(Charsets.UTF_8)
+                    val writer = socket.getOutputStream().bufferedWriter(Charsets.UTF_8)
+
+                    val request = mapper.readTree(reader.readLine())
+                    val realRequestId = request["requestId"].asText()
+                    receivedParams = request["params"]?.asText()
+
+                    writer.write("{\"type\":\"result\",\"requestId\":\"$realRequestId\",\"result\":\"file-json-ok\"}")
+                    writer.newLine()
+                    writer.flush()
+                }
+            }
+
+            val output = executeRunCommandWithJsonFilePayload("""{"reportName":"Q3","region":"Global"}""")
+            assertEquals("file-json-ok", output)
+            assertEquals("""{"reportName":"Q3","region":"Global"}""", receivedParams)
+        }
+    }
+
+    @Test
+    fun `run command should return error when json file does not exist`() {
+        val tempDir = Files.createTempDirectory("koupper-run-json-missing").toFile()
+        val script = File(tempDir, "demo.kts")
+        script.writeText("println(\"ok\")")
+
+        val command = RunCommand()
+        val output = command.execute(tempDir.absolutePath, script.name, "--json-file", "missing.json")
+        assertTrue(output.contains("does not exist"), "Expected missing json file error, got: $output")
+    }
+
     private fun withSocketServer(block: (ServerSocket) -> Unit) {
         ServerSocket(0).use { serverSocket ->
             System.setProperty("koupper.octopus.host", "127.0.0.1")
@@ -111,5 +149,21 @@ class RunCommandSocketSmokeTest {
 
         val command = RunCommand()
         return command.execute(tempDir.absolutePath, scriptName, params).trim()
+    }
+
+    private fun executeRunCommandWithJsonFilePayload(json: String): String {
+        val tempDir = Files.createTempDirectory("koupper-run-smoke-json-file").toFile()
+        tempDir.deleteOnExit()
+
+        val script = File(tempDir, "demo.kts")
+        script.writeText("println(\"ok\")")
+        script.deleteOnExit()
+
+        val jsonFile = File(tempDir, "payload.json")
+        jsonFile.writeText(json)
+        jsonFile.deleteOnExit()
+
+        val command = RunCommand()
+        return command.execute(tempDir.absolutePath, script.name, "--json-file", jsonFile.name).trim()
     }
 }

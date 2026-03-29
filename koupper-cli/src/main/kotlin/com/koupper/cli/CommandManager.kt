@@ -133,7 +133,11 @@ fun main(args: Array<String>) {
 
         val addPromptSpacer = input.getOrNull(1) == RUN
 
-        println(response)
+        print(response)
+        if (!response.endsWith("\n")) {
+            println()
+        }
+
         if (addPromptSpacer) {
             println()
         }
