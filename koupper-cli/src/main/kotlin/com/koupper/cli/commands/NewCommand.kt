@@ -178,7 +178,24 @@ class NewCommand : Command() {
         return "$newInfo$additionalInfo$ANSI_RESET"
     }
 
-    override fun showArguments(): String = ""
+    override fun showArguments(): String {
+        return """
+
+ ${ANSIColors.ANSI_YELLOW_229}* Parameters:$ANSI_RESET
+   ${ANSI_GREEN_155}name$ANSI_RESET      Required module name
+   ${ANSI_GREEN_155}version$ANSI_RESET   Required semantic version
+   ${ANSI_GREEN_155}package$ANSI_RESET   Required Kotlin package (e.g. demo.app)
+   ${ANSI_GREEN_155}template$ANSI_RESET  Optional: default | http | jobs | pipelines
+   ${ANSI_GREEN_155}type$ANSI_RESET      Optional: script | job | pipeline (aliases supported)
+
+ ${ANSIColors.ANSI_YELLOW_229}* Script import flags:$ANSI_RESET
+   ${ANSI_GREEN_155}-si, --script-inclusive$ANSI_RESET           Include script preserving relative path
+   ${ANSI_GREEN_155}-se, --script-exclusive$ANSI_RESET           Include script at module root extensions
+   ${ANSI_GREEN_155}-swi, --script-wildcard-inclusive$ANSI_RESET Include all scripts from wildcard preserving structure
+   ${ANSI_GREEN_155}-swe, --script-wildcard-exclusive$ANSI_RESET Include all scripts from wildcard flattened
+
+        """.trimIndent()
+    }
 
     private fun parseKeyValueParams(input: String): Map<String, String> {
         if (input.isBlank()) return emptyMap()
