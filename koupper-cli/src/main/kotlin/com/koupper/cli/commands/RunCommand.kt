@@ -53,7 +53,7 @@ class RunCommand : Command() {
 
     init {
         super.name = "run"
-        super.usage = "\n   koupper ${ANSI_GREEN_155}$name${ANSI_RESET} ${ANSI_GREEN_155}script-name.kts${ANSI_RESET}\n"
+        super.usage = "\n   koupper ${ANSI_GREEN_155}$name${ANSI_RESET} ${ANSI_GREEN_155}script-name.kts${ANSI_RESET} [params | --json-file <file.json>]\n"
         super.description = "\n   Run a kotlin script\n"
         super.arguments = emptyMap()
         super.additionalInformation = """
@@ -70,6 +70,30 @@ class RunCommand : Command() {
             }
 
             val executionArgs = args.sliceArray(2 until args.size)
+
+            if (executionArgs.isNotEmpty() && executionArgs[0] == "--json-file") {
+                if (executionArgs.size < 2) {
+                    return "\n${ANSI_YELLOW_229} Missing JSON file path. Usage: koupper run <script> --json-file <file.json>.${ANSI_RESET}\n"
+                }
+
+                val jsonFilePath = executionArgs[1]
+                val jsonFile = if (File(jsonFilePath).isAbsolute) {
+                    File(jsonFilePath)
+                } else {
+                    File(context + File.separator + jsonFilePath)
+                }
+
+                if (!jsonFile.exists()) {
+                    return "\n${ANSI_YELLOW_229} JSON file ${jsonFile.name} does not exist.${ANSI_RESET}\n"
+                }
+
+                val jsonPayload = jsonFile.readText(Charsets.UTF_8).trim()
+                if (jsonPayload.isBlank()) {
+                    return "\n${ANSI_YELLOW_229} JSON file ${jsonFile.name} is empty.${ANSI_RESET}\n"
+                }
+
+                return execute(context = context, filePath = args[1], params = jsonPayload)
+            }
 
             return if (executionArgs.isNotEmpty()) {
                 execute(context = context, args[1], args.drop(2).joinToString(" "))
