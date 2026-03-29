@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `run` now supports `--json-file <path>` to load JSON payloads directly from file.
 - CLI run output spacing was normalized to avoid inconsistent prompt separation across scripts.
+- `new module` now infers `type` from `template` when type is omitted (`jobs` -> `job`, `pipelines` -> `pipeline`).
+- `new module` type parsing now accepts aliases (`scripts`, `jobs`, `pipelines`) and validates unsupported values early.
 
 ---
 
