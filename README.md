@@ -53,8 +53,20 @@ cd koupper
 # 2. Run the self-bootstrapper (Compiles source and provisions ~/.koupper/bin)
 kotlinc -script install.kts
 
+# Optional: clean reinstall (removes old bins/libs/templates/helpers first)
+kotlinc -script install.kts -- --force
+
+# Optional: doctor mode (verifies jars, shims, and template provisioning)
+kotlinc -script install.kts -- --doctor
+
 # Optional: uninstall everything under ~/.koupper
 kotlinc -script uninstall.kts
+
+# Optional: non-interactive uninstall
+kotlinc -script uninstall.kts -- --force
+
+# Optional: explicit purge mode
+kotlinc -script uninstall.kts -- --purge --force
 ```
 
 Installer note: `install.kts` also provisions `~/.koupper/templates/model-project` so `koupper new module` works in local-first mode without downloading template archives.
