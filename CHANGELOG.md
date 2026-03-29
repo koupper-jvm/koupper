@@ -26,6 +26,12 @@ All notable changes to the entire Monorepo infrastructure will be documented her
   - `octopus 6.3.1`
   - `koupper-cli 4.7.1`
 
+## [Unreleased]
+
+### 🧰 Scaffolding and Tooling
+- Installer now provisions a local versioned module template in `~/.koupper/templates/model-project` for local-first module generation.
+- `new` command help now documents parameter and script import flag usage more explicitly.
+
 ## [1.1.0-monorepo] - 2026-03-28
 
 ### 🧱 Release Governance
