@@ -76,8 +76,9 @@ val binDirectory = File("$userPath${File.separator}.koupper${File.separator}bin"
 val libsDirectory = File("$userPath${File.separator}.koupper${File.separator}libs")
 val logsDirectory = File("$userPath${File.separator}.koupper${File.separator}logs")
 val helpersDirectory = File("$userPath${File.separator}.koupper${File.separator}helpers")
+val templatesDirectory = File("$userPath${File.separator}.koupper${File.separator}templates")
 
-arrayOf(binDirectory, libsDirectory, logsDirectory, helpersDirectory).forEach {
+arrayOf(binDirectory, libsDirectory, logsDirectory, helpersDirectory, templatesDirectory).forEach {
     if (!it.exists()) it.mkdirs()
 }
 
@@ -102,6 +103,22 @@ val octopusTarget = File(libsDirectory, "octopus.jar")
 
 cliJarSource!!.copyTo(cliTarget, overwrite = true)
 octopusJarSource!!.copyTo(octopusTarget, overwrite = true)
+
+// 3.1 Provision local model template (local-first scaffolding)
+println("${icon("🧩", "[*] ")}Provisioning local module template...")
+
+val templateSource = File("templates${File.separator}model-project")
+val templateTarget = File(templatesDirectory, "model-project")
+
+if (templateSource.exists() && templateSource.isDirectory) {
+    if (templateTarget.exists()) {
+        templateTarget.deleteRecursively()
+    }
+    templateSource.copyRecursively(templateTarget, overwrite = true)
+    println("${icon("✅", "[OK] ")}Template installed at ${templateTarget.absolutePath}")
+} else {
+    println("${icon("⚠️", "[!] ")}Template source not found at ${templateSource.absolutePath}. Skipping local template provisioning.")
+}
 
 // 4. Generate Bin Shims for Windows and Unix
 println("${icon("⚙️", "[*] ")}Generating CLI shims...")

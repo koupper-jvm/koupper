@@ -57,6 +57,8 @@ kotlinc -script install.kts
 kotlinc -script uninstall.kts
 ```
 
+Installer note: `install.kts` also provisions `~/.koupper/templates/model-project` so `koupper new module` works in local-first mode without downloading template archives.
+
 **After execution, just ensure `~/.koupper/bin` is in your system `PATH`.**
 
 ---
@@ -139,6 +141,13 @@ koupper new module name="demo-pipe",version="1.0.0",package="demo.pipe" template
 ```
 
 You can still override `type` manually. Accepted type aliases are `script/scripts`, `job/jobs`, and `pipeline/pipelines`.
+
+To include scripts from your current project while scaffolding a module:
+
+```powershell
+koupper new module name="demo",version="1.0.0",package="demo.app" --script-inclusive "extensions/sample.kts"
+koupper new module name="demo",version="1.0.0",package="demo.app" --script-wildcard-inclusive "extensions/*.kts"
+```
 
 Scaffolding source resolution is local-first (`templates/model-project`), with optional overrides:
 
