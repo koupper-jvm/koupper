@@ -68,11 +68,6 @@ class NewCommand : Command() {
                 }
 
                 val moduleDir = File(args[0], name)
-                moduleDir.mkdirs()
-
-                val pkgPath = packageName.trim().replace(".", "/")
-                val extensionsDir = File(moduleDir, "src/main/kotlin/$pkgPath/extensions")
-                extensionsDir.mkdirs()
 
                 val initResource = initResourceForTemplate(template)
 
@@ -92,6 +87,22 @@ class NewCommand : Command() {
 
                 finalInitFile.writeText(replacedInit, Charsets.UTF_8)
 
+                val runResult = try {
+                    CommandManager.commands["run"]?.execute(moduleDir.parentFile.absolutePath, "init.kts") ?: ""
+                } finally {
+                    if (finalInitFile.exists()) {
+                        finalInitFile.delete()
+                    }
+                }
+
+                if (!moduleDir.exists()) {
+                    return "\n${ANSI_YELLOW_229}Module scaffolding failed for $name. Run output: $runResult$ANSI_RESET\n"
+                }
+
+                val pkgPath = packageName.trim().replace(".", "/")
+                val extensionsDir = File(moduleDir, "src/main/kotlin/$pkgPath/extensions")
+                extensionsDir.mkdirs()
+
                 val currentDir = File(args[0])
 
                 applyScriptImports(
@@ -101,12 +112,6 @@ class NewCommand : Command() {
                     imports = scriptImports,
                     packageName = packageName
                 )
-
-                CommandManager.commands["run"]?.execute(moduleDir.parentFile.absolutePath, "init.kts") ?: ""
-
-                if (finalInitFile.exists()) {
-                    finalInitFile.delete()
-                }
 
                 "Module $name generated successfully with type $type."
             }
