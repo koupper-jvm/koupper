@@ -317,8 +317,13 @@ object ScriptRunner {
                 val json = v.json.trim()
                 val expectedArgName = functionArgs.getOrNull(i) ?: ""
                 val signatureArgName = functionSignature?.parameterTypes?.getOrNull(i)
-                val expectedClass = functionSignature?.let {
-                    resolveClassFromArgName(signatureArgName ?: expectedArgName, it, targetCL, inferredClassName)
+                val paramTypeReflection = invoke.parameterTypes.getOrNull(i)
+                val expectedClass = if (paramTypeReflection != null && paramTypeReflection != Object::class.java && paramTypeReflection != Any::class.java) {
+                    paramTypeReflection
+                } else {
+                    functionSignature?.let {
+                        resolveClassFromArgName(signatureArgName ?: expectedArgName, it, targetCL, inferredClassName)
+                    }
                 }
 
                 if (expectedClass != null) {
