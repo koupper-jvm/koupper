@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Module scaffolding bootstrapping now normalizes artifact type aliases (`scripts/jobs/pipelines`) before generating starter execution flow.
 - Local template source resolution now prioritizes versioned `templates/model-project` paths ahead of legacy `model-project` fallback paths.
 
+### Fixed
+- Local template extraction now normalizes single-root zip archives so scaffold files land at the expected module root.
+
 ---
 
 ## [6.3.1] - 2026-03-28

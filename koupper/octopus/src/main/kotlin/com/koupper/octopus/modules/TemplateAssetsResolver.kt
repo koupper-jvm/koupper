@@ -32,7 +32,8 @@ fun prepareTemplateProject(context: String, projectName: String, fileHandler: Fi
         }
 
         is TemplateProjectSource.ZipArchive -> {
-            fileHandler.unzipFile(source.pathOrUrl, projectName)
+            val extracted = fileHandler.unzipFile(source.pathOrUrl, projectName)
+            normalizeExtractedProjectRoot(extracted)
         }
     }
 }
@@ -180,4 +181,32 @@ private fun copyTemplateDirectory(sourceDir: File, targetDir: File) {
                 source.copyTo(destination, overwrite = true)
             }
         }
+}
+
+private fun normalizeExtractedProjectRoot(targetDir: File): File {
+    if (File(targetDir, "settings.gradle").exists()) {
+        return targetDir
+    }
+
+    val childDirectories = targetDir.listFiles()?.filter { it.isDirectory }.orEmpty()
+    if (childDirectories.size != 1) {
+        return targetDir
+    }
+
+    val nestedRoot = childDirectories.first()
+    val nestedHasGradle = File(nestedRoot, "settings.gradle").exists() || File(nestedRoot, "build.gradle").exists()
+    if (!nestedHasGradle) {
+        return targetDir
+    }
+
+    nestedRoot.listFiles().orEmpty().forEach { child ->
+        val destination = File(targetDir, child.name)
+        if (destination.exists()) {
+            destination.deleteRecursively()
+        }
+        child.renameTo(destination)
+    }
+
+    nestedRoot.deleteRecursively()
+    return targetDir
 }
