@@ -98,6 +98,14 @@ Send heavily nested HTTP-like JSON objects right from Powershell. The engine wil
 koupper run examples/cli-report-generator.kts '{"reportName": "Q3", "region": "Global", "items": [{"name": "License", "value": 99.0}]}'
 ```
 
+You can also pass JSON from a file (recommended when shell parsing/escaping is problematic):
+
+```powershell
+koupper run examples/cli-report-generator.kts --json-file examples/cli-report-generator.input.json
+```
+
+If a JSON parse error happens in your terminal, use the `--json-file` mode to bypass shell quoting issues.
+
 ### 3. Remote Deployment (`koupper deploy`)
 Push a local script to a remote production Octopus daemon. No SSH or manual file transfers needed.
 ```powershell
