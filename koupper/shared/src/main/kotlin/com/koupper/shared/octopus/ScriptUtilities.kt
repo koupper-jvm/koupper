@@ -231,13 +231,14 @@ fun resolveClassFromArgName(
         runCatching {
             return Class.forName(cleanType, true, classLoader)
         }
-        
+
         explicitClassName?.let { className ->
+            val host = className.substringBefore("$", className)
             runCatching {
-                return Class.forName("$className$$cleanType", true, classLoader)
+                return Class.forName("$host$$cleanType", true, classLoader)
             }
         }
-        
+
         // Algunos runtimes de scripting prefijan el nombre
         runCatching {
             return Class.forName("Script\$$cleanType", true, classLoader)
