@@ -9,7 +9,7 @@ fun main() {
 
     /*
     #SCRIPT_EXAMPLE
-    val out: Output = processManager.call(myScript, Input(payload = "any value"))
+    val out: Output = processManager.call(::myScript, Input(payload = "any value"))
     println("OK script finished: ${out.message}")
     */
 
