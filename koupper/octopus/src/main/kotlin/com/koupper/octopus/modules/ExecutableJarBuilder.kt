@@ -192,6 +192,8 @@ class ExecutableJarBuilder(
 
         // Extraer el contenido del script
         val scriptContent = scriptBlock.find(content)?.groupValues?.get(1)?.trim() ?: ""
+        val normalizedScriptContent = scriptContent
+            .replace("processManager.call(myScript", "processManager.call(::myScript")
 
         // Imports específicos para script
         val scriptImports = listOf(
@@ -211,7 +213,7 @@ class ExecutableJarBuilder(
             appendLine("fun main() {")
             appendLine("    // Use the processManager to use a default configurations and execute the script files.")
             appendLine()
-            val lines = scriptContent.lines()
+            val lines = normalizedScriptContent.lines()
 
             lines.forEachIndexed { index, line ->
                 if (index == 0) {
