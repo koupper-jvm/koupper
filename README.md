@@ -124,6 +124,29 @@ Deploy hardening defaults:
 - payload integrity is validated with SHA-256 checksum
 - daemon enforces max deploy size (`KOUPPER_OCTOPUS_DEPLOY_MAX_BYTES`, default `262144`)
 
+### 3.5. Module Scaffolding (`koupper new module`)
+Create scaffolded projects with type/template-aware defaults:
+
+```powershell
+# Script module (default type)
+koupper new module name="demo-script",version="1.0.0",package="demo.app" template="default"
+
+# Jobs module (type inferred from template)
+koupper new module name="demo-jobs",version="1.0.0",package="demo.jobs" template="jobs"
+
+# Pipelines module (type inferred from template)
+koupper new module name="demo-pipe",version="1.0.0",package="demo.pipe" template="pipelines"
+```
+
+You can still override `type` manually. Accepted type aliases are `script/scripts`, `job/jobs`, and `pipeline/pipelines`.
+
+Scaffolding source resolution is local-first (`templates/model-project`), with optional overrides:
+
+```powershell
+$env:MODEL_BACK_PROJECT_PATH="C:/custom/model-project"
+$env:OPTIMIZED_PROCESS_MANAGER_PATH="C:/custom/octopus.jar"
+```
+
 ### 4. Background Cron Daemons (`disk-cleanup-daemon.kts`)
 Want to delete old logs at midnight? Just annotate your export and the Octopus Engine will schedule it natively in the background upon booting.
 ```kotlin

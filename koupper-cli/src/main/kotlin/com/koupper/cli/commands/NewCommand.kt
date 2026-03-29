@@ -15,6 +15,8 @@ class NewCommand : Command() {
         super.usage =
             "\n   koupper ${ANSI_GREEN_155}$name$ANSI_RESET ${ANSI_GREEN_155}module name=\"auth-server\",version=\"1.0.0\",package=\"tdn.auth\" --script-inclusive \"scripts/example.kts\" type=\"script\"${ANSI_RESET}\n" +
                     "\n   koupper ${ANSI_GREEN_155}$name$ANSI_RESET ${ANSI_GREEN_155}module name=\"auth-server\",version=\"1.0.0\",package=\"tdn.auth\" -si \"scripts/example.kts\" type=\"script\"${ANSI_RESET}\n" +
+                    "\n   koupper ${ANSI_GREEN_155}$name$ANSI_RESET ${ANSI_GREEN_155}module name=\"jobs-server\",version=\"1.0.0\",package=\"tdn.jobs\" template=\"jobs\"${ANSI_RESET}\n" +
+                    "\n   koupper ${ANSI_GREEN_155}$name$ANSI_RESET ${ANSI_GREEN_155}module name=\"pipeline-server\",version=\"1.0.0\",package=\"tdn.pipeline\" template=\"pipelines\"${ANSI_RESET}\n" +
                     "\n   koupper ${ANSI_GREEN_155}$name$ANSI_RESET ${ANSI_GREEN_155}script-name.kts${ANSI_RESET}\n"
         super.description = "\n   Creates a module or script\n"
         super.arguments = emptyMap()
@@ -43,12 +45,18 @@ class NewCommand : Command() {
                 val name = params["name"]!!
                 val version = params["version"]!!
                 val packageName = params["package"]!!
-                val type = (params["type"] ?: "script").trim().ifBlank { "script" }
-                val template = (params["template"] ?: "default").trim().ifBlank { "default" }
+                val template = (params["template"] ?: "default").trim().ifBlank { "default" }.lowercase()
+                val typeRaw = (params["type"] ?: inferTypeFromTemplate(template)).trim().ifBlank { inferTypeFromTemplate(template) }
+                val type = normalizeType(typeRaw)
 
                 val allowedTemplates = setOf("default", "http", "jobs", "pipelines")
                 if (template !in allowedTemplates) {
                     return "\n${ANSI_YELLOW_229}Invalid template: $template. Allowed: ${allowedTemplates.joinToString(", ")}.$ANSI_RESET\n"
+                }
+
+                val allowedTypes = setOf("script", "job", "pipeline")
+                if (type !in allowedTypes) {
+                    return "\n${ANSI_YELLOW_229}Invalid type: $typeRaw. Allowed: ${allowedTypes.joinToString(", ")} (also supports aliases jobs/pipelines/scripts).$ANSI_RESET\n"
                 }
 
                 val tokens = splitBySpacesRespectingQuotes(raw)
@@ -396,11 +404,28 @@ class NewCommand : Command() {
     }
 
     private fun templateResourceForType(type: String): List<String> {
-        return when (type.trim().lowercase()) {
+        return when (normalizeType(type)) {
             "script" -> listOf("script.txt")
             "job" -> listOf("job.txt")
             "pipeline" -> listOf("script1.txt", "script2.txt")
             else -> listOf("script.txt")
+        }
+    }
+
+    private fun normalizeType(type: String): String {
+        return when (type.trim().lowercase()) {
+            "scripts" -> "script"
+            "jobs" -> "job"
+            "pipelines" -> "pipeline"
+            else -> type.trim().lowercase()
+        }
+    }
+
+    private fun inferTypeFromTemplate(template: String): String {
+        return when (template.trim().lowercase()) {
+            "jobs" -> "job"
+            "pipelines" -> "pipeline"
+            else -> "script"
         }
     }
 

@@ -9,7 +9,6 @@ import com.koupper.octopus.modules.locateScriptsInPackage
 import com.koupper.os.env
 import com.koupper.providers.files.FileHandler
 import java.io.File
-import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
 
