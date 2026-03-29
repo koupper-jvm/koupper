@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Local template extraction now normalizes single-root zip archives so scaffold files land at the expected module root.
 - Script module bootstrapping now uses property references (`::myScript`) in `processManager.call(...)` to match `ScriptExecutor` API expectations.
 - Script argument type resolution now infers script host class names when explicit metadata is missing, reducing runtime `argument type mismatch` for inline script models.
+- Script argument type resolution now handles fully-qualified inline model names by falling back to script-local nested class lookup.
+- Job/script argument binding now prefers parameter types extracted from source signatures when runtime metadata contains fully-qualified aliases.
 
 ---
 
