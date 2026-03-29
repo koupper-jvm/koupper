@@ -52,6 +52,9 @@ cd koupper
 
 # 2. Run the self-bootstrapper (Compiles source and provisions ~/.koupper/bin)
 kotlinc -script install.kts
+
+# Optional: uninstall everything under ~/.koupper
+kotlinc -script uninstall.kts
 ```
 
 **After execution, just ensure `~/.koupper/bin` is in your system `PATH`.**
