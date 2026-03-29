@@ -56,6 +56,7 @@ class ModuleCommand : Command() {
         super.usage = """
             
    koupper $ANSI_GREEN_155$name$ANSI_RESET
+   koupper $ANSI_GREEN_155$name$ANSI_RESET add-scripts name="demo-script" --script-inclusive "extensions/example.kts"
     """
         super.description = """
    ${ANSI_YELLOW_229}Displays folders and files inside the module, including their tags.
@@ -100,6 +101,10 @@ class ModuleCommand : Command() {
     override fun name(): String = MODULE
 
     override fun execute(vararg args: String): String {
+        if (args.getOrNull(1)?.equals("add-scripts", ignoreCase = true) == true) {
+            return addScriptsToExistingModule(*args)
+        }
+
         val flags = mutableSetOf<String>()
         var moduleName: String? = null
 
@@ -154,6 +159,286 @@ class ModuleCommand : Command() {
         }
 
         return "\n$octopusDependencyInfo\n" + results.joinToString("\n")
+    }
+
+    private enum class ScriptMode { INCLUSIVE, EXCLUSIVE }
+
+    private data class ScriptImport(
+        val mode: ScriptMode,
+        val wildcard: Boolean,
+        val path: String
+    )
+
+    private fun addScriptsToExistingModule(vararg args: String): String {
+        val contextDir = File(args.getOrNull(0) ?: ".").absoluteFile
+        val raw = args.drop(2).joinToString(" ").trim()
+
+        if (raw.isBlank()) {
+            return "\n$ANSI_YELLOW_229 Missing parameters. Example: koupper module add-scripts name=\"demo\" --script-inclusive \"extensions/example.kts\".$ANSI_RESET\n"
+        }
+
+        val params = parseKeyValueParams(raw)
+        val moduleName = params["name"]?.trim().orEmpty()
+        if (moduleName.isBlank()) {
+            return "\n$ANSI_YELLOW_229 Missing required parameter: name.$ANSI_RESET\n"
+        }
+
+        val moduleDir = File(contextDir, moduleName)
+        if (!moduleDir.exists() || !moduleDir.isDirectory) {
+            return "\n$ANSI_YELLOW_229 Module not found: ${moduleDir.path}$ANSI_RESET\n"
+        }
+
+        val packageName = params["package"]?.trim().takeUnless { it.isNullOrBlank() }
+            ?: detectModulePackageName(moduleDir)
+            ?: return "\n$ANSI_YELLOW_229 Could not infer package name from module. Provide package=\"your.package\".$ANSI_RESET\n"
+
+        val pkgPath = packageName.replace(".", "/")
+        val extensionsDir = File(moduleDir, "src/main/kotlin/$pkgPath/extensions")
+        extensionsDir.mkdirs()
+
+        val tokens = splitBySpacesRespectingQuotes(raw)
+        val imports = parseScriptImports(tokens)
+        if (imports.isEmpty()) {
+            return "\n$ANSI_YELLOW_229 No script import flags provided. Use -si/-se/-swi/-swe.$ANSI_RESET\n"
+        }
+
+        val errors = validateScriptImports(imports)
+        if (errors.isNotEmpty()) {
+            return "\n$ANSI_YELLOW_229${errors.joinToString("\n")}$ANSI_RESET\n"
+        }
+
+        val overwrite = tokens.any { it == "--overwrite" }
+        val result = importScriptsIntoModule(
+            currentDir = contextDir,
+            moduleExtensionsDir = extensionsDir,
+            imports = imports,
+            packageName = packageName,
+            overwrite = overwrite
+        )
+
+        return buildString {
+            append("\n${ANSI_GREEN_155}Scripts added to module $moduleName.${ANSI_RESET}\n")
+            append(" - Added: ${result.added}\n")
+            append(" - Skipped (exists): ${result.skipped}\n")
+            append(" - Failed: ${result.failed}\n")
+            if (!overwrite) {
+                append("\nTip: use --overwrite to replace existing destination files.\n")
+            }
+        }
+    }
+
+    private data class ImportResult(
+        val added: Int,
+        val skipped: Int,
+        val failed: Int
+    )
+
+    private fun importScriptsIntoModule(
+        currentDir: File,
+        moduleExtensionsDir: File,
+        imports: List<ScriptImport>,
+        packageName: String,
+        overwrite: Boolean
+    ): ImportResult {
+        var added = 0
+        var skipped = 0
+        var failed = 0
+
+        imports.forEach { imp ->
+            if (imp.wildcard) {
+                val baseDirRel = imp.path.substringBefore("*").trimEnd('/')
+                val baseDirFs = File(currentDir, baseDirRel)
+                if (!baseDirFs.exists() || !baseDirFs.isDirectory) {
+                    failed++
+                    return@forEach
+                }
+
+                val files = baseDirFs.walkTopDown()
+                    .filter { it.isFile && (it.name.endsWith(".kts") || it.name.endsWith(".kt")) }
+                    .toList()
+
+                files.forEach { src ->
+                    val relativeInsideExtensions = src.relativeTo(baseDirFs).path
+                    val dest = if (imp.mode == ScriptMode.EXCLUSIVE) {
+                        File(moduleExtensionsDir, src.name)
+                    } else {
+                        File(moduleExtensionsDir, relativeInsideExtensions)
+                    }
+
+                    dest.parentFile.mkdirs()
+                    when (copyScriptWithPackageReplacement(src, dest, packageName, overwrite)) {
+                        CopyOutcome.ADDED -> added++
+                        CopyOutcome.SKIPPED -> skipped++
+                        CopyOutcome.FAILED -> failed++
+                    }
+                }
+            } else {
+                val src = File(currentDir, imp.path)
+                if (!src.exists() || !src.isFile) {
+                    failed++
+                    return@forEach
+                }
+
+                val normalized = imp.path.replace("\\", "/")
+                val relativeInsideExtensions = normalized.substringAfter("extensions/", src.name)
+                val dest = if (imp.mode == ScriptMode.EXCLUSIVE) {
+                    File(moduleExtensionsDir, src.name)
+                } else {
+                    File(moduleExtensionsDir, relativeInsideExtensions)
+                }
+
+                dest.parentFile.mkdirs()
+                when (copyScriptWithPackageReplacement(src, dest, packageName, overwrite)) {
+                    CopyOutcome.ADDED -> added++
+                    CopyOutcome.SKIPPED -> skipped++
+                    CopyOutcome.FAILED -> failed++
+                }
+            }
+        }
+
+        return ImportResult(added = added, skipped = skipped, failed = failed)
+    }
+
+    private enum class CopyOutcome { ADDED, SKIPPED, FAILED }
+
+    private fun copyScriptWithPackageReplacement(
+        src: File,
+        dest: File,
+        packageName: String,
+        overwrite: Boolean
+    ): CopyOutcome {
+        if (dest.exists() && !overwrite) {
+            return CopyOutcome.SKIPPED
+        }
+
+        return try {
+            val content = src.readText(Charsets.UTF_8)
+            val contentReplaced = content.replace("%PACKAGE%", packageName)
+            dest.writeText(contentReplaced, Charsets.UTF_8)
+            if (dest.exists() && dest.length() > 0) CopyOutcome.ADDED else CopyOutcome.FAILED
+        } catch (_: Exception) {
+            CopyOutcome.FAILED
+        }
+    }
+
+    private fun parseKeyValueParams(input: String): Map<String, String> {
+        if (input.isBlank()) return emptyMap()
+
+        val regex = Regex("""\b([A-Za-z][A-Za-z0-9_-]*)\s*=\s*("([^"]*)"|([^\s,]+))""")
+        val out = LinkedHashMap<String, String>()
+
+        regex.findAll(input).forEach { m ->
+            val key = m.groupValues[1].trim()
+            val quoted = m.groupValues[3]
+            val plain = m.groupValues[4]
+            out[key] = if (quoted.isNotBlank()) quoted else plain
+        }
+
+        return out
+    }
+
+    private fun splitBySpacesRespectingQuotes(input: String): List<String> {
+        if (input.isBlank()) return emptyList()
+
+        val out = mutableListOf<String>()
+        val sb = StringBuilder()
+        var inQuotes = false
+
+        for (ch in input) {
+            when (ch) {
+                '"' -> {
+                    inQuotes = !inQuotes
+                    sb.append(ch)
+                }
+
+                ' ' -> {
+                    if (inQuotes) sb.append(ch)
+                    else {
+                        val token = sb.toString().trim()
+                        if (token.isNotEmpty()) out.add(token)
+                        sb.setLength(0)
+                    }
+                }
+
+                else -> sb.append(ch)
+            }
+        }
+
+        val last = sb.toString().trim()
+        if (last.isNotEmpty()) out.add(last)
+
+        return out
+    }
+
+    private fun parseScriptImports(tokens: List<String>): List<ScriptImport> {
+        fun stripQuotes(s: String): String =
+            if (s.length >= 2 && s.first() == '"' && s.last() == '"') s.substring(1, s.length - 1) else s
+
+        fun flagToImport(flag: String): Pair<ScriptMode, Boolean>? = when (flag) {
+            "-si", "--script-inclusive" -> ScriptMode.INCLUSIVE to false
+            "-se", "--script-exclusive" -> ScriptMode.EXCLUSIVE to false
+            "-swi", "--script-wildcard-inclusive" -> ScriptMode.INCLUSIVE to true
+            "-swe", "--script-wildcard-exclusive" -> ScriptMode.EXCLUSIVE to true
+            else -> null
+        }
+
+        val out = mutableListOf<ScriptImport>()
+        var i = 0
+
+        while (i < tokens.size) {
+            val flag = tokens[i].trim()
+            val mapped = flagToImport(flag)
+
+            if (mapped != null) {
+                val (mode, wildcard) = mapped
+                val next = tokens.getOrNull(i + 1) ?: throw IllegalArgumentException("Missing path after $flag")
+                out.add(ScriptImport(mode, wildcard, stripQuotes(next.trim())))
+                i += 2
+            } else {
+                i += 1
+            }
+        }
+
+        return out
+    }
+
+    private fun validateScriptImports(imports: List<ScriptImport>): List<String> {
+        val errors = mutableListOf<String>()
+
+        imports.forEach { imp ->
+            if (imp.path.isBlank()) {
+                errors.add("Empty script path")
+                return@forEach
+            }
+
+            if (!imp.path.startsWith("extensions/")) {
+                errors.add("Script path must start with extensions/: ${imp.path}")
+            }
+
+            if (!imp.wildcard) {
+                if (!(imp.path.endsWith(".kts") || imp.path.endsWith(".kt"))) {
+                    errors.add("Script must end with .kts or .kt: ${imp.path}")
+                }
+            } else if (!imp.path.contains("*")) {
+                errors.add("Wildcard flag requires * in path: ${imp.path}")
+            }
+        }
+
+        return errors
+    }
+
+    private fun detectModulePackageName(moduleDir: File): String? {
+        val sourceRoot = File(moduleDir, "src/main/kotlin")
+        if (!sourceRoot.exists()) return null
+
+        val extensionsDir = sourceRoot.walkTopDown()
+            .firstOrNull { it.isDirectory && it.name == "extensions" }
+            ?: return null
+
+        val relative = extensionsDir.relativeTo(sourceRoot).path.replace("\\", "/")
+        return relative.substringBeforeLast("/extensions", missingDelimiterValue = "")
+            .replace('/', '.')
+            .ifBlank { null }
     }
 
     private fun buildModuleAnalysisResult(): String {
