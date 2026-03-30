@@ -80,6 +80,52 @@ koupper job status --configId=local-file
 cd ..
 ```
 
+## Job Listener + Worker Logger Isolation
+
+Use this to verify listener logs are still emitted even when worker jobs define their own `@Logger` destination.
+
+```powershell
+cd .\smoke-jobs\
+
+@'
+package tdn.jobs.extensions
+
+import com.koupper.octopus.annotations.Export
+import com.koupper.octopus.annotations.Logger
+import com.koupper.logging.GlobalLogger.log
+
+data class Input(val payload: String?)
+
+@Export
+@Logger(destination = "file:LOGFILE[yyyy-MM-dd]", level = "INFO")
+val myScript: (Input) -> Unit = { input ->
+    log.info { "WORKER payload=${input.payload}" }
+}
+'@ | Set-Content -Path .\extensions\myScript.kts -Encoding ASCII
+
+@'
+import com.koupper.octopus.annotations.Export
+import com.koupper.octopus.annotations.Logger
+import com.koupper.octopus.annotations.JobsListener
+import com.koupper.octopus.process.JobEvent
+import com.koupper.logging.GlobalLogger.log
+
+@JobsListener(debug = true, configId = "job-callbacks")
+@Export
+@Logger(destination = "file:example[yyyy-MM-dd]", level = "INFO")
+val jobsListener: (JobEvent) -> Int = { c ->
+    log.info { "Procesando JobEvent con id=${c.jobId}" }
+    200
+}
+'@ | Set-Content -Path .\extensions\jobsListener.kts -Encoding ASCII
+
+# Trigger jobs and listener according to your module's standard flow, then verify both files contain output:
+# - logs/LOGFILE.<date>.log
+# - logs/example.<date>.log
+
+cd ..
+```
+
 ## Pipeline Module Scaffold
 
 ```powershell
