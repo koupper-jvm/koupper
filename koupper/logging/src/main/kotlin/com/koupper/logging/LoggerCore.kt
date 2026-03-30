@@ -40,8 +40,24 @@ object LoggerContext {
 }
 
 class ScopedMDC(private val pairs: Map<String, String>) : AutoCloseable {
-    init { pairs.forEach { (k, v) -> LoggerContext.put(k, v) } }
-    override fun close() { pairs.keys.forEach(LoggerContext::remove) }
+    private val previousValues: Map<String, String?> = pairs.keys.associateWith { key ->
+        LoggerContext.getMDC()[key]
+    }
+
+    init {
+        pairs.forEach { (k, v) -> LoggerContext.put(k, v) }
+    }
+
+    override fun close() {
+        pairs.keys.forEach { key ->
+            val previous = previousValues[key]
+            if (previous == null) {
+                LoggerContext.remove(key)
+            } else {
+                LoggerContext.put(key, previous)
+            }
+        }
+    }
 }
 
 /* --------- Formateadores --------- */
