@@ -62,6 +62,14 @@ object ScriptImportParser {
         fun stripQuotes(s: String): String =
             if (s.length >= 2 && s.first() == '"' && s.last() == '"') s.substring(1, s.length - 1) else s
 
+        fun normalizePath(raw: String): String {
+            var value = raw.trim().replace('\\', '/')
+            value = value.removePrefix("./")
+            value = value.removePrefix(".\\")
+            while (value.startsWith('/')) value = value.removePrefix("/")
+            return value
+        }
+
         fun flagToImport(flag: String): Pair<ScriptImportMode, Boolean>? = when (flag) {
             "-si", "--script-inclusive" -> ScriptImportMode.INCLUSIVE to false
             "-se", "--script-exclusive" -> ScriptImportMode.EXCLUSIVE to false
@@ -78,9 +86,11 @@ object ScriptImportParser {
             val mapped = flagToImport(flag)
 
             if (mapped != null) {
-                val (mode, wildcard) = mapped
+                val (mode, wildcardFlag) = mapped
                 val next = tokens.getOrNull(i + 1) ?: throw IllegalArgumentException("Missing path after $flag")
-                out.add(ParsedScriptImport(mode, wildcard, stripQuotes(next.trim())))
+                val normalizedPath = normalizePath(stripQuotes(next.trim()))
+                val wildcard = wildcardFlag && normalizedPath.contains("*")
+                out.add(ParsedScriptImport(mode, wildcard, normalizedPath))
                 i += 2
             } else {
                 i += 1
