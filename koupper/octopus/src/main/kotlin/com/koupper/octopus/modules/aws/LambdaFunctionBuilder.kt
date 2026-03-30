@@ -39,6 +39,7 @@ class LambdaFunctionBuilder(
         GradleConfigurator.configure {
             this.rootProjectName = projectName
             this.version = moduleVersion
+            this.projectRootPath = modelProject.absolutePath
         }
 
         print("\u001B[38;5;155m\nRequesting an optimized process manager... \u001B[0m")

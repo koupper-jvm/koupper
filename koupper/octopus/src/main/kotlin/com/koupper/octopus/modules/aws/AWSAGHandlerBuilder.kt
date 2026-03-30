@@ -104,6 +104,7 @@ class AWSAGHandlerBuilder(
         GradleConfigurator.configure {
             this.rootProjectName = projectName
             this.version = moduleVersion
+            this.projectRootPath = modelProject.absolutePath
         }
 
         print("\nRequesting an optimized process manager...")
