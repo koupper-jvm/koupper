@@ -23,7 +23,7 @@ data class PaymentPayload(
 )
 
 @Export
-@Logger(destination = "file:payment-worker-[yyy-MM-dd]", level = "INFO")
+@Logger(destination = "file:payment-worker-[yyyy-MM-dd]", level = "INFO")
 @JobsListener(debug = true, configId = "payment-queue")
 val processPayment: (JobEvent, PaymentPayload) -> Int = { event, payload ->
     log.info { "💳 Processing payment job [${event.jobId}] originating from context [${event.context}]" }
