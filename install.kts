@@ -3,6 +3,7 @@ import java.io.FileDescriptor
 import java.io.FileOutputStream
 import java.io.PrintStream
 import java.util.Locale
+import kotlin.system.exitProcess
 
 fun shouldUseEmoji(): Boolean {
     val noEmoji = System.getenv("KOUPPER_NO_EMOJI")?.equals("true", ignoreCase = true) == true
@@ -46,6 +47,29 @@ fun check(name: String, ok: Boolean): String {
     return "[$status] $name"
 }
 
+fun failInstall(message: String): Nothing {
+    println("\u001B[31m${icon("❌", "[ERROR] ")}$message\u001B[0m")
+    exitProcess(1)
+}
+
+fun safeDeleteDirectory(dir: File, title: String) {
+    if (!dir.exists()) return
+    val ok = runCatching { dir.deleteRecursively() }.getOrDefault(false)
+    if (!ok && dir.exists()) {
+        failInstall("Could not remove $title at ${dir.absolutePath}. Close running koupper/octopus processes and try again.")
+    }
+}
+
+fun safeCopy(source: File, target: File, title: String) {
+    val copied = runCatching {
+        source.copyTo(target, overwrite = true)
+    }
+
+    if (copied.isFailure) {
+        failInstall("Could not replace $title at ${target.absolutePath}. Ensure daemon/CLI is not locking this file and retry with install -- --force.")
+    }
+}
+
 fun runDoctorAndExit() {
     println("${icon("🩺", "[*] ")}Koupper installation doctor")
 
@@ -63,7 +87,7 @@ fun runDoctorAndExit() {
 
     val hasFail = checks.any { it.startsWith("[FAIL]") }
     if (hasFail) {
-        println("\n${icon("⚠️", "[!] ")}Some checks failed. Run: kotlinc -script install.kts --force")
+        println("\n${icon("⚠️", "[!] ")}Some checks failed. Run: kotlinc -script install.kts -- --force")
         kotlin.system.exitProcess(1)
     }
 
@@ -121,11 +145,10 @@ if (cliCompilation.exitValue() != 0 || octopusCompilation.exitValue() != 0) {
 
 if (forceReinstall) {
     println("${icon("🧹", "[*] ")}Force mode enabled: cleaning previous installation artifacts...")
-    listOf(binDirectory, libsDirectory, helpersDirectory, templatesDirectory).forEach { dir ->
-        if (dir.exists()) {
-            dir.deleteRecursively()
-        }
-    }
+    safeDeleteDirectory(binDirectory, "bin directory")
+    safeDeleteDirectory(libsDirectory, "libs directory")
+    safeDeleteDirectory(helpersDirectory, "helpers directory")
+    safeDeleteDirectory(templatesDirectory, "templates directory")
 }
 
 arrayOf(binDirectory, libsDirectory, logsDirectory, helpersDirectory, templatesDirectory).forEach {
@@ -151,8 +174,8 @@ if (cliJarSource == null || octopusJarSource == null) {
 val cliTarget = File(libsDirectory, "koupper-cli.jar")
 val octopusTarget = File(libsDirectory, "octopus.jar")
 
-cliJarSource!!.copyTo(cliTarget, overwrite = true)
-octopusJarSource!!.copyTo(octopusTarget, overwrite = true)
+safeCopy(cliJarSource!!, cliTarget, "CLI jar")
+safeCopy(octopusJarSource!!, octopusTarget, "Octopus jar")
 
 // 3.1 Provision local model template (local-first scaffolding)
 println("${icon("🧩", "[*] ")}Provisioning local module template...")
