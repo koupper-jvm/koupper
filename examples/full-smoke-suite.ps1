@@ -31,6 +31,32 @@ function Run-External {
     if ($outputText -match "InvocationTargetException|Script error:|No function annotated with @Export was found\.") {
         throw "Step failed ($Label) due to runtime error output."
     }
+
+    return $outputText
+}
+
+function Assert-OutputContains {
+    param(
+        [string]$Output,
+        [string]$Needle,
+        [string]$Description
+    )
+
+    if ($Output -notmatch [Regex]::Escape($Needle)) {
+        throw "Expected output to contain '$Needle' for $Description"
+    }
+}
+
+function Assert-OutputNotContains {
+    param(
+        [string]$Output,
+        [string]$Needle,
+        [string]$Description
+    )
+
+    if ($Output -match [Regex]::Escape($Needle)) {
+        throw "Output unexpectedly contained '$Needle' for $Description"
+    }
 }
 
 $scriptPath = $MyInvocation.MyCommand.Path
@@ -46,6 +72,7 @@ $extDir = Join-Path $workspace "extensions"
 $moduleScript = "smoke-script"
 $moduleJobs = "smoke-jobs"
 $modulePipe = "smoke-pipeline"
+$jobWorkerScript = "queued-worker.kts"
 
 function Assert-PathExists {
     param(
@@ -208,8 +235,52 @@ val extraScript: () -> String = {
         Push-Location (Join-Path $workspace $moduleJobs)
         try {
             Run-External "Initialize jobs config" { Invoke-Koupper job init --force }
-            Run-External "List jobs by config" { Invoke-Koupper job list --configId=local-file }
-            Run-External "Run job worker" { Invoke-Koupper job run-worker --configId=local-file }
+
+            @'
+import com.koupper.octopus.annotations.Export
+data class WorkerInput(val payload: String?)
+
+@Export
+val worker: (WorkerInput) -> String = { input ->
+    println("Processed payload: ${input.payload}")
+    "processed"
+}
+'@ | Set-Content -Path $jobWorkerScript -Encoding ASCII
+
+            $moduleContext = (Get-Location).Path
+            $jobsQueueDir = Join-Path $moduleContext "jobs/default"
+            New-Item -ItemType Directory -Force -Path $jobsQueueDir | Out-Null
+
+            $scriptPath = (Join-Path $moduleContext $jobWorkerScript).Replace("\\", "/")
+            $contextPath = $moduleContext.Replace("\\", "/")
+
+            $manualJob = [ordered]@{
+                id = "smoke-job-1"
+                fileName = "queued-worker.kts"
+                functionName = "worker"
+                params = @{ arg0 = '{"payload":"smoke-job-1"}' }
+                scriptPath = $scriptPath
+                origin = "smoke-suite"
+                context = $contextPath
+                sourceType = "script"
+            } | ConvertTo-Json -Depth 10
+
+            Set-Content -Path (Join-Path $jobsQueueDir "smoke-job-1.json") -Value $manualJob -Encoding ASCII
+
+            Run-External "Seed one smoke job in local-file queue" { Get-Item (Join-Path $jobsQueueDir "smoke-job-1.json") | Out-Null }
+            $listBeforeRun = Run-External "List jobs by config (should show pending job)" { Invoke-Koupper job list --configId=local-file }
+            Assert-OutputNotContains -Output $listBeforeRun -Needle "No jobs found" -Description "job listing before worker execution"
+            Assert-OutputNotContains -Output $listBeforeRun -Needle "Failed to read job" -Description "manual queued job parsing"
+
+            $workerRunOutput = Run-External "Run job worker" { Invoke-Koupper job run-worker --configId=local-file }
+            Assert-OutputNotContains -Output $workerRunOutput -Needle "Failed to execute job" -Description "worker execution"
+
+            $listAfterRun = Run-External "List jobs by config after worker" { Invoke-Koupper job list --configId=local-file }
+            Assert-OutputNotContains -Output $listAfterRun -Needle "Failed to read job" -Description "post-worker queue state"
+            if ($listAfterRun -match "Job ID:") {
+                throw "Expected queue to be empty after worker execution"
+            }
+
             Run-External "Show job status" { Invoke-Koupper job status --configId=local-file }
         } finally {
             Pop-Location
