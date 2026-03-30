@@ -1,7 +1,6 @@
 package com.koupper.octopus.annotations
 
 import com.koupper.container.app
-import com.koupper.logging.GlobalLogger
 import com.koupper.logging.LogSpec
 import com.koupper.logging.captureLogsAsync
 import com.koupper.logging.withScriptLogger
@@ -252,8 +251,147 @@ object JobsListenerSetup {
                             // 1. Log execution boundary and keep stream fresh
                             logger.info { "✅ Background job scripts executed successfully." }
 
-                            // 2. Notificamos al listener
-                            onJob(results)
+                            // 2. Notify listener callback using the same scoped logger
+                            logger.info { "📦 Processing ${results.size} background task results." }
+                            results.forEach { result ->
+                                when (result) {
+                                    is JobInfo -> {
+                                        val event = JobEvent(
+                                            jobId = result.id,
+                                            function = result.function,
+                                            context = result.context,
+                                            contextVersion = result.version,
+                                            origin = result.origin,
+                                            packageName = result.packg,
+                                            scriptPath = result.source,
+                                            finishedAt = System.currentTimeMillis()
+                                        )
+
+                                        fun jsonStringToKotlin(className: String, valueJson: String): Any? {
+                                            val clazz = try {
+                                                Class.forName(className)
+                                            } catch (e: ClassNotFoundException) {
+                                                throw IllegalArgumentException("Class not found for name: $className", e)
+                                            }
+
+                                            return try {
+                                                jsonHandler.read(valueJson).toType(clazz)
+                                            } catch (e: Exception) {
+                                                throw IllegalStateException(
+                                                    "Failed to parse JSON into class $className: ${e.message}",
+                                                    e
+                                                )
+                                            }
+                                        }
+
+                                        val workerFunctionArgs: List<String> = workerTask.signature.first
+
+                                        val argsParams: MutableMap<String, Any?> = linkedMapOf()
+
+                                        fun argIndex(k: String) = k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE
+
+                                        val orderedParams = this.jlc.paramsJson.entries.sortedBy { argIndex(it.key) }
+                                        var userIdx = 0
+
+                                        var inj: Any?
+
+                                        loop@ for (argName in workerFunctionArgs) {
+                                            inj = if (argName == "JobEvent") {
+                                                event
+                                            } else {
+                                                this.injector(argName)
+                                            }
+
+
+                                            if (inj != null) {
+                                                argsParams[argName] = inj
+                                                userIdx += 1
+                                                continue@loop
+                                            }
+
+                                            val argKey = "arg$userIdx"
+                                            val raw = orderedParams.firstOrNull { it.key == argKey }?.value
+                                            val isNullable = argName.trim().endsWith("?")
+
+                                            if (raw == null) {
+                                                if (isNullable) {
+                                                    argsParams[argName] = null
+                                                    userIdx += 1
+                                                    continue@loop
+                                                } else error("Falta '$key' en params para tipo '$argName'")
+                                            }
+
+                                            val token = raw.trim()
+
+                                            val unwrapped = if (token.length >= 2 && token[0] == '"' &&
+                                                (token.getOrNull(1) == '{' || token.getOrNull(1) == '[')
+                                            ) {
+                                                jsonHandler.readTo<String>(token)
+                                            } else token
+
+                                            val value: Any? =
+                                                if (argName.isSimpleType()) {
+                                                    when (argName.normalizeType()) {
+                                                        "String" -> {
+                                                            if (unwrapped != null && unwrapped.length >= 2 &&
+                                                                unwrapped.first() == '"' && unwrapped.last() == '"'
+                                                            ) {
+                                                                jsonHandler.readTo<String>(unwrapped)
+                                                            } else {
+                                                                unwrapped
+                                                            }
+                                                        }
+
+                                                        "Int" -> jsonHandler.readTo<Int>(unwrapped)
+                                                        "Long" -> jsonHandler.readTo<Long>(unwrapped)
+                                                        "Double" -> jsonHandler.readTo<Double>(unwrapped)
+                                                        "Boolean" -> jsonHandler.readTo<Boolean>(unwrapped)
+                                                        "Float" -> jsonHandler.readTo<Float>(unwrapped)
+                                                        "Short" -> jsonHandler.readTo<Short>(unwrapped)
+                                                        "Byte" -> jsonHandler.readTo<Byte>(unwrapped)
+                                                        "Char" -> jsonHandler.readTo<String>(unwrapped)?.single()
+                                                        else -> jsonHandler.readTo<Any>(unwrapped)
+                                                    }
+                                                } else if (looksLikeObjectLiteral(unwrapped!!)) {
+                                                    val normalizedObject = normalizeObjectLiteralToJson(unwrapped)
+
+                                                    jsonStringToKotlin(argName, normalizedObject)
+                                                } else null
+
+                                            if (value != null) {
+                                                argsParams[argName] = value
+                                            }
+
+                                            userIdx += 1
+                                        }
+
+                                        val mergedParams: Map<String, Any?> = argsParams
+
+                                        JobReplayer.replayJobsListenerScript(
+                                            context = workerTask.context!!,
+                                            config,
+                                            newParams = mergedParams,
+                                            logger = logger,
+                                            injector = { typeName ->
+                                                when (typeName.normalizeType()) {
+                                                    "JobRunner" -> JobRunner
+                                                    "JobLister" -> JobLister
+                                                    "JobBuilder" -> JobBuilder
+                                                    "JobDisplayer" -> JobDisplayer
+                                                    "RoutesRegistration" -> RoutesRegistration(this.jlc.scriptContext)
+                                                    "ModuleAnalyzer" -> ModuleAnalyzer(this.jlc.scriptContext)
+                                                    "ModuleProcessor" -> ModuleProcessor(this.jlc.scriptContext)
+                                                    "JobEvent" -> event
+                                                    else -> null
+                                                }
+                                            },
+                                            symbol = this.backend.getSymbol(jlc.functionName),
+                                        ) { updatedWorkerJob ->
+                                            updatedWorkerJob.dispatchToQueue(workerTask.context, config.id)
+                                        }
+                                    }
+                                }
+                            }
 
                             // 3. AHORA SÍ, matamos el log porque ya terminó el proceso asíncrono
                             closeLogs()
@@ -261,147 +399,7 @@ object JobsListenerSetup {
                     }
                 }
             },
-            onJob = { results ->
-                GlobalLogger.log.info { "📦 Processing ${results.size} background task results." }
-                results.forEach { result ->
-                    when (result) {
-                        is JobInfo -> {
-                            val event = JobEvent(
-                                jobId = result.id,
-                                function = result.function,
-                                context = result.context,
-                                contextVersion = result.version,
-                                origin = result.origin,
-                                packageName = result.packg,
-                                scriptPath = result.source,
-                                finishedAt = System.currentTimeMillis()
-                            )
-
-                            fun jsonStringToKotlin(className: String, valueJson: String): Any? {
-                                val clazz = try {
-                                    Class.forName(className)
-                                } catch (e: ClassNotFoundException) {
-                                    throw IllegalArgumentException("Class not found for name: $className", e)
-                                }
-
-                                return try {
-                                    jsonHandler.read(valueJson).toType(clazz)
-                                } catch (e: Exception) {
-                                    throw IllegalStateException(
-                                        "Failed to parse JSON into class $className: ${e.message}",
-                                        e
-                                    )
-                                }
-                            }
-
-                            val workerFunctionArgs: List<String> = workerTask.signature.first
-
-                            val argsParams: MutableMap<String, Any?> = linkedMapOf()
-
-                            fun argIndex(k: String) = k.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE
-
-                            val orderedParams = this.jlc.paramsJson.entries.sortedBy { argIndex(it.key) }
-                            var userIdx = 0
-
-                            var inj: Any?
-
-                            loop@ for (argName in workerFunctionArgs) {
-                                inj = if (argName == "JobEvent") {
-                                    event
-                                } else {
-                                    this.injector(argName)
-                                }
-
-
-                                if (inj != null) {
-                                    argsParams[argName] = inj
-                                    userIdx += 1
-                                    continue@loop
-                                }
-
-                                val argKey = "arg$userIdx"
-                                val raw = orderedParams.firstOrNull { it.key == argKey }?.value
-                                val isNullable = argName.trim().endsWith("?")
-
-                                if (raw == null) {
-                                    if (isNullable) {
-                                        argsParams[argName] = null
-                                        userIdx += 1
-                                        continue@loop
-                                    } else error("Falta '$key' en params para tipo '$argName'")
-                                }
-
-                                val token = raw.trim()
-
-                                val unwrapped = if (token.length >= 2 && token[0] == '"' &&
-                                    (token.getOrNull(1) == '{' || token.getOrNull(1) == '[')
-                                ) {
-                                    jsonHandler.readTo<String>(token)
-                                } else token
-
-                                val value: Any? =
-                                    if (argName.isSimpleType()) {
-                                        when (argName.normalizeType()) {
-                                            "String" -> {
-                                                if (unwrapped != null && unwrapped.length >= 2 &&
-                                                    unwrapped.first() == '"' && unwrapped.last() == '"'
-                                                ) {
-                                                    jsonHandler.readTo<String>(unwrapped)
-                                                } else {
-                                                    unwrapped
-                                                }
-                                            }
-
-                                            "Int" -> jsonHandler.readTo<Int>(unwrapped)
-                                            "Long" -> jsonHandler.readTo<Long>(unwrapped)
-                                            "Double" -> jsonHandler.readTo<Double>(unwrapped)
-                                            "Boolean" -> jsonHandler.readTo<Boolean>(unwrapped)
-                                            "Float" -> jsonHandler.readTo<Float>(unwrapped)
-                                            "Short" -> jsonHandler.readTo<Short>(unwrapped)
-                                            "Byte" -> jsonHandler.readTo<Byte>(unwrapped)
-                                            "Char" -> jsonHandler.readTo<String>(unwrapped)?.single()
-                                            else -> jsonHandler.readTo<Any>(unwrapped)
-                                        }
-                                    } else if (looksLikeObjectLiteral(unwrapped!!)) {
-                                        val normalizedObject = normalizeObjectLiteralToJson(unwrapped)
-
-                                        jsonStringToKotlin(argName, normalizedObject)
-                                    } else null
-
-                                if (value != null) {
-                                    argsParams[argName] = value
-                                }
-
-                                userIdx += 1
-                            }
-
-                            val mergedParams: Map<String, Any?> = argsParams
-
-                            JobReplayer.replayJobsListenerScript(
-                                context = workerTask.context!!,
-                                config,
-                                newParams = mergedParams,
-                                injector = { typeName ->
-                                    when (typeName.normalizeType()) {
-                                        "JobRunner" -> JobRunner
-                                        "JobLister" -> JobLister
-                                        "JobBuilder" -> JobBuilder
-                                        "JobDisplayer" -> JobDisplayer
-                                        "RoutesRegistration" -> RoutesRegistration(this.jlc.scriptContext)
-                                        "ModuleAnalyzer" -> ModuleAnalyzer(this.jlc.scriptContext)
-                                        "ModuleProcessor" -> ModuleProcessor(this.jlc.scriptContext)
-                                        "JobEvent" -> event
-                                        else -> null
-                                    }
-                                },
-                                symbol = this.backend.getSymbol(jlc.functionName),
-                            ) { updatedWorkerJob ->
-                                updatedWorkerJob.dispatchToQueue(workerTask.context, config.id)
-                            }
-                        }
-                    }
-                }
-            }
+            onJob = {}
         )
 
         return "JobListener initialized"
