@@ -101,6 +101,48 @@ class ModuleCommandAddScriptsTest {
         assertTrue(result.contains("Added: 2"), "Expected two imported scripts, got: $result")
     }
 
+    @Test
+    fun `module add-scripts wildcard flags should accept shell-expanded file paths`() {
+        val root = createWorkspace()
+        val moduleDir = createModule(root, moduleName = "demo", packageName = "demo.app")
+
+        val src = File(root, "extensions/hello-world.kts")
+        src.parentFile.mkdirs()
+        src.writeText("println(\"hello\")")
+
+        val command = ModuleCommand()
+        val result = command.execute(
+            root.absolutePath,
+            "add-scripts",
+            "name=\"demo\" --script-wildcard-exclusive \"extensions/hello-world.kts\" --overwrite"
+        )
+
+        val copied = File(moduleDir, "src/main/kotlin/demo/app/extensions/hello-world.kts")
+        assertTrue(copied.exists(), "Expected file copy for expanded wildcard path")
+        assertTrue(result.contains("Added: 1"), "Expected one added file, got: $result")
+    }
+
+    @Test
+    fun `module add-scripts should accept windows-style slash paths`() {
+        val root = createWorkspace()
+        val moduleDir = createModule(root, moduleName = "demo", packageName = "demo.app")
+
+        val src = File(root, "extensions\\hello-world.kts")
+        src.parentFile.mkdirs()
+        src.writeText("println(\"hello\")")
+
+        val command = ModuleCommand()
+        val result = command.execute(
+            root.absolutePath,
+            "add-scripts",
+            "name=\"demo\" --script-inclusive \"extensions\\hello-world.kts\""
+        )
+
+        val copied = File(moduleDir, "src/main/kotlin/demo/app/extensions/hello-world.kts")
+        assertTrue(copied.exists(), "Expected windows-style path to be normalized and copied")
+        assertTrue(result.contains("Added: 1"), "Expected one added file, got: $result")
+    }
+
     private fun createWorkspace(): File {
         return Files.createTempDirectory("koupper-module-add-scripts").toFile().also { it.deleteOnExit() }
     }
