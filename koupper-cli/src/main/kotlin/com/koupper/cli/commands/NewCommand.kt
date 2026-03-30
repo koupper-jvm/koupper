@@ -150,7 +150,16 @@ class NewCommand : Command() {
                     return "\n${ANSI_YELLOW_229} The script ${File(finalScript).name} already exist.${ANSI_RESET}\n"
                 }
 
-                this::class.java.classLoader.getResourceAsStream("script.txt")?.toFile(finalScript)
+                val template = this::class.java.classLoader.getResourceAsStream("script.txt")
+                    ?.bufferedReader(Charsets.UTF_8)
+                    ?.readText()
+                    .orEmpty()
+
+                val standaloneTemplate = template
+                    .replace("package %PACKAGE%\r\n\r\n", "")
+                    .replace("package %PACKAGE%\n\n", "")
+
+                File(finalScript).writeText(standaloneTemplate, Charsets.UTF_8)
                 "${args[1]} file created."
             }
 
