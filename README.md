@@ -229,6 +229,10 @@ koupper job list
 koupper job run-worker
 ```
 
+For a versioned manual checklist (including real job queue lifecycle validation), use:
+
+- `docs/CLI_COMMAND_CHECKLIST.md`
+
 For a full end-to-end automated smoke suite (module generation, builds, jobs, pipelines, and cleanup):
 
 ```powershell
