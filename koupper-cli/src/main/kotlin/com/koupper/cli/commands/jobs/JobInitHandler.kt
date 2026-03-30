@@ -21,12 +21,7 @@ class JobInitHandler : JobSubcommandHandler {
               "id": "local-file",
               "driver": "file",
               "queue": "default",
-              "for-all-projects": true,
-              "queues": {
-                "default": {
-                  "concurrency": 1
-                }
-              }
+              "for-all-projects": true
             }
             """.trimIndent()
         )
