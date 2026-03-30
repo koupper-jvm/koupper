@@ -229,6 +229,12 @@ koupper job list
 koupper job run-worker
 ```
 
+For a full end-to-end automated smoke suite (module generation, builds, jobs, pipelines, and cleanup):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\examples\full-smoke-suite.ps1
+```
+
 ---
 
 ## 🚢 Versioning & Release Workflow
