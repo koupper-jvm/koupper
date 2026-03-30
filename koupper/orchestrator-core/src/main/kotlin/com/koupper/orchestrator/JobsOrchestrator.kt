@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.koupper.logging.GlobalLogger
+import com.koupper.logging.KLogger
 import com.koupper.orchestrator.JobRunner.runCompiled
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.orchestrator.config.JobConfiguration
@@ -1061,6 +1062,7 @@ object JobReplayer {
         context: String,
         config: JobConfiguration,
         newParams: Map<String, Any?>,
+        logger: KLogger? = null,
         injector: (String) -> Any? = { null },
         symbol: Any? = null,
         onResult: (KouTask) -> Unit = {}
@@ -1072,7 +1074,9 @@ object JobReplayer {
             val driver = cfg.driver
             val d = JobDrivers.resolve(driver)
 
-            GlobalLogger.log.info {
+            val replayLogger = logger ?: GlobalLogger.log
+
+            replayLogger.info {
                 " 🔁 Replaying jobs using [$driver]"
             }
 
@@ -1090,13 +1094,13 @@ object JobReplayer {
 
                         val result = ScriptRunner.runScript(updated, symbol, injector)
 
-                        GlobalLogger.log.info { result.toString() }
+                        replayLogger.info { result.toString() }
 
                         onResult(updated)
                     }
 
                     is JobResult.Error -> {
-                        GlobalLogger.log.warn { res.message }
+                        replayLogger.warn { res.message }
                         res.exception?.printStackTrace()
                     }
                 }
