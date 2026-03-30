@@ -47,7 +47,7 @@ Koupper boots itself using its own ecosystem. To install the CLI, Jars, and Daem
 
 ```powershell
 # 1. Clone the Monorepo
-git clone https://github.com/koupper/koupper.git
+git clone https://github.com/koupper-jvm/koupper.git
 cd koupper
 
 # 2. Run the self-bootstrapper (Compiles source and provisions ~/.koupper/bin)
@@ -175,6 +175,10 @@ $env:MODEL_BACK_PROJECT_PATH="C:/custom/model-project"
 $env:OPTIMIZED_PROCESS_MANAGER_PATH="C:/custom/octopus.jar"
 ```
 
+Important context notes:
+- run `koupper module ...` and `koupper job ...` from your module root when you want module-local configs (`jobs.json`, scripts, build outputs) to be detected.
+- if you suspect stale local binaries/templates after upgrades, run `kotlinc -script install.kts -- --force` and then `kotlinc -script install.kts -- --doctor`.
+
 ### 4. Background Cron Daemons (`disk-cleanup-daemon.kts`)
 Want to delete old logs at midnight? Just annotate your export and the Octopus Engine will schedule it natively in the background upon booting.
 ```kotlin
@@ -208,6 +212,21 @@ val processSupportTicket: (JobEvent, SupportTicket) -> Int = { event, ticket ->
 Koupper ships with its own Integration Testing suite capabilities. You can dynamically orchestrate and assert script evaluations directly natively:
 ```powershell
 koupper run examples/integration-tests.kts
+```
+
+## ✅ Quick Release Smoke
+
+Run this after install or after merging feature branches:
+
+```powershell
+koupper help
+koupper run examples/hello-world.kts "Smoke"
+koupper run examples/cli-report-generator.kts --json-file examples/cli-report-generator.input.json
+koupper new module name="smoke-script",version="1.0.0",package="smoke.script"
+koupper new module name="smoke-jobs",version="1.0.0",package="smoke.jobs",template="jobs"
+cd .\smoke-jobs\
+koupper job list
+koupper job run-worker
 ```
 
 ---
