@@ -87,7 +87,7 @@ jobs:
       - name: Ensure Gradle wrappers are executable
         shell: bash
         run: |
-          chmod +x ./gradlew ./koupper/gradlew ./koupper-cli/gradlew
+          chmod +x ./koupper/gradlew ./koupper-cli/gradlew
 
       - name: Run full smoke suite
         shell: pwsh
