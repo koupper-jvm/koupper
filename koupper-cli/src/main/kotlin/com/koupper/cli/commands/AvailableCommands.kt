@@ -12,6 +12,7 @@ object AvailableCommands {
     const val DEFAULT = "default"
     const val MODULE = "module"
     const val JOB = "job"
+    const val PROVIDER = "provider"
 
     fun commands(): Map<String, String> = mapOf(
         NEW to "Creates a module or script",
@@ -19,6 +20,7 @@ object AvailableCommands {
         DEPLOY to "Deploys a .kts script to a remote Octopus daemon",
         HELP to "Displays information about a command",
         MODULE to "Analyzes and inspects existing modules and their structure.",
-        JOB to "Creates and manages background job workers"
+        JOB to "Creates and manages background job workers",
+        PROVIDER to "Lists available service providers and environment requirements"
     )
 }

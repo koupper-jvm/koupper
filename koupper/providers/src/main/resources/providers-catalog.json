@@ -1,0 +1,257 @@
+{
+  "version": "1.0",
+  "providers": [
+    {
+      "id": "db",
+      "serviceProvider": "DBServiceProvider",
+      "description": "Database connectors for PostgreSQL and SQLite sessions.",
+      "bindings": [
+        {
+          "contract": "DBConnector",
+          "implementations": [
+            { "class": "DBPSQLConnector", "tag": "DBPSQLConnector" },
+            { "class": "DBSQLiteConnector", "tag": "DBSQLiteConnector" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "DB_HOST", "required": false, "description": "PostgreSQL host." },
+        { "name": "DB_PORT", "required": false, "description": "PostgreSQL port." },
+        { "name": "DB_DATABASE", "required": true, "description": "Database name/path." },
+        { "name": "DB_USERNAME", "required": false, "description": "PostgreSQL user." },
+        { "name": "DB_PASSWORD", "required": false, "description": "PostgreSQL password." }
+      ],
+      "docs": "https://koupper.com/docs/providers/db"
+    },
+    {
+      "id": "mailing",
+      "serviceProvider": "SenderServiceProvider",
+      "description": "SMTP email sender utilities.",
+      "bindings": [
+        {
+          "contract": "Sender",
+          "implementations": [
+            { "class": "SenderHtmlEmail" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "MAIL_HOST", "required": true, "description": "SMTP host." },
+        { "name": "MAIL_PORT", "required": true, "description": "SMTP port." },
+        { "name": "MAIL_USERNAME", "required": true, "description": "SMTP username/from email." },
+        { "name": "MAIL_PASSWORD", "required": true, "description": "SMTP password." },
+        { "name": "EMAIL_FROM_NAME", "required": false, "description": "Display sender name." },
+        { "name": "DEFAULT_TARGET_EMAIL", "required": false, "description": "Default recipient." },
+        { "name": "DEFAULT_SUBJECT", "required": false, "description": "Default email subject." }
+      ],
+      "docs": "https://koupper.com/docs/providers/mailing"
+    },
+    {
+      "id": "logger",
+      "serviceProvider": "LoggerServiceProvider",
+      "description": "Database-backed application logger.",
+      "bindings": [
+        {
+          "contract": "Logger",
+          "implementations": [
+            { "class": "PSQLDBLogger" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "LOGGER_TABLE_NAME", "required": true, "description": "Target table for log persistence." }
+      ],
+      "docs": "https://koupper.com/docs/providers/logger"
+    },
+    {
+      "id": "http",
+      "serviceProvider": "HttpServiceProvider",
+      "description": "HTTP invoker for outbound API requests.",
+      "bindings": [
+        {
+          "contract": "HtppClient",
+          "implementations": [
+            { "class": "HttpInvoker" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/http"
+    },
+    {
+      "id": "files",
+      "serviceProvider": "FileServiceProvider",
+      "description": "File, text, JSON and YAML handlers.",
+      "bindings": [
+        {
+          "contract": "FileHandler",
+          "implementations": [
+            { "class": "FileHandlerImpl" }
+          ]
+        },
+        {
+          "contract": "TextFileHandler",
+          "implementations": [
+            { "class": "TextFileHandlerImpl" }
+          ]
+        },
+        {
+          "contract": "JSONFileHandler",
+          "implementations": [
+            { "class": "JSONFileHandlerImpl" }
+          ]
+        },
+        {
+          "contract": "YmlFileHandler",
+          "implementations": [
+            { "class": "YmlFileHandlerImpl" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/files"
+    },
+    {
+      "id": "jwt",
+      "serviceProvider": "JWTServiceProvider",
+      "description": "JWT signing and validation utilities.",
+      "bindings": [
+        {
+          "contract": "JWT",
+          "implementations": [
+            { "class": "JWTAgent" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "JWT_SECRET", "required": true, "description": "JWT shared secret key." }
+      ],
+      "docs": "https://koupper.com/docs/providers/jwt"
+    },
+    {
+      "id": "crypto",
+      "serviceProvider": "CryptoServiceProvider",
+      "description": "Symmetric encryption helpers.",
+      "bindings": [
+        {
+          "contract": "Crypt0",
+          "implementations": [
+            { "class": "AESGCM128" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "SHARED_SECRET", "required": true, "description": "Encryption shared secret." }
+      ],
+      "docs": "https://koupper.com/docs/providers/crypto"
+    },
+    {
+      "id": "aws-dynamo",
+      "serviceProvider": "AwsServiceProvider",
+      "description": "DynamoDB data access provider.",
+      "bindings": [
+        {
+          "contract": "DynamoClient",
+          "implementations": [
+            { "class": "DynamoClientImpl" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "DYNAMO_REGION", "required": true, "description": "DynamoDB region." },
+        { "name": "DYNAMO_URL", "required": false, "description": "Local/custom endpoint URL." },
+        { "name": "AWS_ACCESS_KEY_ID", "required": false, "description": "AWS access key (optional for local)." },
+        { "name": "AWS_SECRET_ACCESS_KEY", "required": false, "description": "AWS secret key (optional for local)." },
+        { "name": "AWS_SESSION_TOKEN", "required": false, "description": "AWS session token." }
+      ],
+      "docs": "https://koupper.com/docs/providers/aws-dynamo"
+    },
+    {
+      "id": "aws-s3",
+      "serviceProvider": "AwsS3ServiceProvider",
+      "description": "S3 storage provider for uploads and presigned flows.",
+      "bindings": [
+        {
+          "contract": "S3Client",
+          "implementations": [
+            { "class": "S3ClientImpl" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "QUIZZTEA_S3_BUCKET", "required": true, "description": "S3 bucket name." },
+        { "name": "AWS_REGION", "required": true, "description": "AWS region for S3." },
+        { "name": "S3_URL", "required": false, "description": "Local/custom S3 endpoint URL." },
+        { "name": "AWS_ACCESS_KEY_ID", "required": false, "description": "AWS access key (optional for local)." },
+        { "name": "AWS_SECRET_ACCESS_KEY", "required": false, "description": "AWS secret key (optional for local)." },
+        { "name": "AWS_SESSION_TOKEN", "required": false, "description": "AWS session token." }
+      ],
+      "docs": "https://koupper.com/docs/providers/aws-s3"
+    },
+    {
+      "id": "hashing",
+      "serviceProvider": "HasherServiceProvider",
+      "description": "Password hashing and verification utilities.",
+      "bindings": [
+        {
+          "contract": "Hasher",
+          "implementations": [
+            { "class": "PBKDF2Hasher" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/hashing"
+    },
+    {
+      "id": "ai",
+      "serviceProvider": "AIServiceProvider",
+      "description": "AI model integration provider (OpenAI by default).",
+      "bindings": [
+        {
+          "contract": "AI",
+          "implementations": [
+            { "class": "OpenAIClient", "tag": "openai" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "AI_PROVIDER", "required": false, "description": "AI provider selector (default: openai)." },
+        { "name": "OPENAI_API_KEY", "required": true, "description": "OpenAI API key." },
+        { "name": "OPENAI_API_URL", "required": false, "description": "OpenAI endpoint URL override." },
+        { "name": "OPENAI_CONTENT_TYPE", "required": false, "description": "OpenAI request content type." }
+      ],
+      "docs": "https://koupper.com/docs/providers/ai"
+    },
+    {
+      "id": "templates",
+      "serviceProvider": "TemplateServiceProvider",
+      "description": "Template rendering provider.",
+      "bindings": [
+        {
+          "contract": "TemplateProvider",
+          "implementations": [
+            { "class": "PebbleTemplateProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/templates"
+    },
+    {
+      "id": "rss",
+      "serviceProvider": "RSSServiceProvider",
+      "description": "RSS feed reader provider.",
+      "bindings": [
+        {
+          "contract": "RSSReader",
+          "implementations": [
+            { "class": "RSSReaderImpl" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/rss"
+    }
+  ]
+}

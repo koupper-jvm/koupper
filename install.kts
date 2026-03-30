@@ -39,6 +39,7 @@ val binDirectory = File(koupperHome, "bin")
 val libsDirectory = File(koupperHome, "libs")
 val logsDirectory = File(koupperHome, "logs")
 val helpersDirectory = File(koupperHome, "helpers")
+val catalogDirectory = File(koupperHome, "catalog")
 val templatesDirectory = File(koupperHome, "templates")
 val modelTemplateDirectory = File(templatesDirectory, "model-project")
 
@@ -79,6 +80,7 @@ fun runDoctorAndExit() {
         check("Octopus jar (~/.koupper/libs/octopus.jar)", File(libsDirectory, "octopus.jar").exists()),
         check("Template directory (~/.koupper/templates/model-project)", modelTemplateDirectory.exists()),
         check("Template settings.gradle", File(modelTemplateDirectory, "settings.gradle").exists()),
+        check("Providers catalog (~/.koupper/catalog/providers.json)", File(catalogDirectory, "providers.json").exists()),
         check("Bin shim (~/.koupper/bin/koupper)", File(binDirectory, "koupper").exists()),
         check("PowerShell shim (~/.koupper/bin/koupper.ps1)", File(binDirectory, "koupper.ps1").exists())
     )
@@ -148,10 +150,11 @@ if (forceReinstall) {
     safeDeleteDirectory(binDirectory, "bin directory")
     safeDeleteDirectory(libsDirectory, "libs directory")
     safeDeleteDirectory(helpersDirectory, "helpers directory")
+    safeDeleteDirectory(catalogDirectory, "catalog directory")
     safeDeleteDirectory(templatesDirectory, "templates directory")
 }
 
-arrayOf(binDirectory, libsDirectory, logsDirectory, helpersDirectory, templatesDirectory).forEach {
+arrayOf(binDirectory, libsDirectory, logsDirectory, helpersDirectory, catalogDirectory, templatesDirectory).forEach {
     if (!it.exists()) it.mkdirs()
 }
 
@@ -191,6 +194,19 @@ if (templateSource.exists() && templateSource.isDirectory) {
     println("${icon("✅", "[OK] ")}Template installed at ${templateTarget.absolutePath}")
 } else {
     println("${icon("⚠️", "[!] ")}Template source not found at ${templateSource.absolutePath}. Skipping local template provisioning.")
+}
+
+// 3.2 Provision providers catalog for CLI discovery
+println("${icon("📚", "[*] ")}Provisioning providers catalog...")
+
+val providerCatalogSource = File("koupper${File.separator}providers${File.separator}src${File.separator}main${File.separator}resources${File.separator}providers-catalog.json")
+val providerCatalogTarget = File(catalogDirectory, "providers.json")
+
+if (providerCatalogSource.exists() && providerCatalogSource.isFile) {
+    safeCopy(providerCatalogSource, providerCatalogTarget, "providers catalog")
+    println("${icon("✅", "[OK] ")}Providers catalog installed at ${providerCatalogTarget.absolutePath}")
+} else {
+    println("${icon("⚠️", "[!] ")}Providers catalog source not found at ${providerCatalogSource.absolutePath}. Skipping catalog provisioning.")
 }
 
 // 4. Generate Bin Shims for Windows and Unix
