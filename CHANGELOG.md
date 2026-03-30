@@ -33,6 +33,11 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 - `new` command help now documents parameter and script import flag usage more explicitly.
 - Installer now supports `--force` reinstall cleanup and `--doctor` verification mode.
 - Uninstaller now supports CLI flags `--force` and `--purge` for non-interactive cleanup workflows.
+- Installer now provisions a providers catalog at `~/.koupper/catalog/providers.json` for CLI provider discovery.
+
+### 🔎 Provider Discoverability
+- Added `koupper provider list` to display registered providers with short descriptions.
+- Added `koupper provider info <name>` to display provider contracts, implementations/tags, and env requirements.
 
 ## [1.1.0-monorepo] - 2026-03-28
 
