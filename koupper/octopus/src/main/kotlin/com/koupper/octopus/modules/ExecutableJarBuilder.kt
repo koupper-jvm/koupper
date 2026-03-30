@@ -47,6 +47,7 @@ class ExecutableJarBuilder(
         GradleConfigurator.configure {
             this.rootProjectName = projectName
             this.version = moduleVersion
+            this.projectRootPath = projectRoot.absolutePath
         }
 
         // 4. Resolver process manager en libs/ (local-first, remote fallback)
