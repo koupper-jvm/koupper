@@ -26,7 +26,7 @@ data class SupportTicket(
 )
 
 @Export
-@Logger(destination = "file:ai-support-[yyy-MM-dd]", level = "INFO")
+@Logger(destination = "file:ai-support-[yyyy-MM-dd]", level = "INFO")
 @JobsListener(debug = true, configId = "customer-support")
 val processSupportTicket: (JobEvent, SupportTicket) -> Int = { event, ticket ->
     try {
