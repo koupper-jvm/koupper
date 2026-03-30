@@ -153,11 +153,11 @@ try {
 
     @'
 {"payload":"from-smoke"}
-'@ | Set-Content -Path $standaloneInputJson -Encoding UTF8
+'@ | Set-Content -Path $standaloneInputJson -Encoding ASCII
 
     @'
 {"reportName":"Smoke","region":"Global","items":[{"name":"License","value":99.0},{"name":"Support","value":15.0}]}
-'@ | Set-Content -Path $inlineReportJson -Encoding UTF8
+'@ | Set-Content -Path $inlineReportJson -Encoding ASCII
 
     Run-External "Create standalone script in examples" { Invoke-Koupper new examples/smoke-standalone.kts }
     Run-External "Run standalone script with json payload" { Invoke-Koupper run examples/smoke-standalone.kts --json-file examples/smoke-standalone.input.json }
@@ -178,7 +178,7 @@ import com.koupper.octopus.annotations.Export
 val sampleScript: () -> String = {
     "sample"
 }
-'@ | Set-Content -Path (Join-Path $extDir "sample.kts") -Encoding UTF8
+'@ | Set-Content -Path (Join-Path $extDir "sample.kts") -Encoding ASCII
 
     @'
 package %PACKAGE%
@@ -189,7 +189,7 @@ import com.koupper.octopus.annotations.Export
 val extraScript: () -> String = {
     "extra"
 }
-'@ | Set-Content -Path (Join-Path $extDir "extra.kt") -Encoding UTF8
+'@ | Set-Content -Path (Join-Path $extDir "extra.kt") -Encoding ASCII
 
     Push-Location $workspace
     try {
