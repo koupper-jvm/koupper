@@ -5,6 +5,7 @@ import com.koupper.cli.commands.*
 import com.koupper.cli.commands.AvailableCommands.HELP
 import com.koupper.cli.commands.AvailableCommands.MODULE
 import com.koupper.cli.commands.AvailableCommands.NEW
+import com.koupper.cli.commands.AvailableCommands.PROVIDER
 import com.koupper.cli.commands.AvailableCommands.RUN
 import com.koupper.cli.commands.AvailableCommands.DEPLOY
 import com.koupper.cli.commands.AvailableCommands.JOB
@@ -57,7 +58,8 @@ class CommandManager {
             RUN to RunCommand(),
             DEPLOY to DeployCommand(),
             MODULE to ModuleCommand(),
-            JOB to JobCommand()
+            JOB to JobCommand(),
+            PROVIDER to ProviderCommand()
         )
     }
 

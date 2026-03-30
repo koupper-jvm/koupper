@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `module add-scripts` now includes a direct source-path hint when imports fail.
 - Wildcard script imports now normalize Windows-style paths and support shell-expanded wildcard matches.
 - `job init --force` no longer fails on projects without `shadowJar`; it now creates config safely and suggests `job build-environment`.
+- Added `provider` command with:
+  - `koupper provider list` (provider name + short description)
+  - `koupper provider info <name>` (bindings, tags, required/optional env vars, docs link)
 
 ---
 
