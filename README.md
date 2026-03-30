@@ -186,7 +186,7 @@ import com.koupper.octopus.annotations.Scheduled
 import com.koupper.octopus.annotations.Logger
 
 @Export
-@Logger(destination = "file:disk-maintenance-[yyy-MM-dd]")
+@Logger(destination = "file:disk-maintenance-[yyyy-MM-dd]")
 @Scheduled(debug = false, cron = "0 0 * * *")
 val nightlyLogCleanup: () -> Unit = {
     // Business logic runs silently every midnight!

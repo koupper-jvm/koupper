@@ -17,7 +17,7 @@ import com.koupper.providers.files.FileHandler
 import java.io.File
 
 @Export
-@Logger(destination = "file:queue-health-monitor-[yyy-MM-dd]", level = "WARN")
+@Logger(destination = "file:queue-health-monitor-[yyyy-MM-dd]", level = "WARN")
 @Scheduled(debug = false, rate = 30000) // Runs every 30 seconds
 val monitorLocalQueue: () -> Unit = {
     try {

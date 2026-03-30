@@ -15,7 +15,7 @@ import com.koupper.logging.GlobalLogger.log
 import java.lang.management.ManagementFactory
 
 @Export
-@Logger(destination = "file:metrics-daemon-[yyy-MM-dd]", level = "INFO")
+@Logger(destination = "file:metrics-daemon-[yyyy-MM-dd]", level = "INFO")
 @Scheduled(debug = false, rate = 10000)
 val collectMetrics: () -> Unit = {
     val osInfo = ManagementFactory.getOperatingSystemMXBean()
