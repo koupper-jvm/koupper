@@ -71,6 +71,8 @@ kotlinc -script uninstall.kts -- --purge --force
 
 Installer note: `install.kts` also provisions `~/.koupper/templates/model-project` so `koupper new module` works in local-first mode without downloading template archives.
 
+Version check: run `koupper -v` to print both installed versions (`koupper-cli` and `octopus engine`).
+
 **After execution, just ensure `~/.koupper/bin` is in your system `PATH`.**
 
 ---

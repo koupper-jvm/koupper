@@ -16,7 +16,11 @@ repositories {
 
 tasks.named('jar', Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE // Cambia de INCLUDE a EXCLUDE
-    manifest { attributes 'Main-Class': 'com.koupper.octopus.OctopusKt' }
+    manifest {
+        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+        attributes 'Implementation-Title': 'Koupper Octopus'
+        attributes 'Implementation-Version': project.version
+    }
 
     from sourceSets.main.output
     from({
@@ -54,7 +58,11 @@ tasks.register('verifyFatJar') {
 
 tasks.register('optimized', Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    manifest { attributes 'Main-Class': 'com.koupper.octopus.OctopusKt' }
+    manifest {
+        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+        attributes 'Implementation-Title': 'Koupper Octopus'
+        attributes 'Implementation-Version': project.version
+    }
 
     from sourceSets.main.output
     from({
@@ -89,6 +97,8 @@ tasks.register('fatJar', Jar) {
 
     manifest {
         attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+        attributes 'Implementation-Title': 'Koupper Octopus'
+        attributes 'Implementation-Version': project.version
     }
 
     from sourceSets.main.output
