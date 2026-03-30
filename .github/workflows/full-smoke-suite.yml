@@ -21,9 +21,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Kotlin compiler
+      - name: Setup Kotlin compiler
         shell: pwsh
-        run: choco install kotlin -y
+        run: |
+          $version = "2.0.20"
+          $url = "https://github.com/JetBrains/kotlin/releases/download/v$version/kotlin-compiler-$version.zip"
+          $zip = Join-Path $env:RUNNER_TEMP "kotlin-compiler.zip"
+          $dest = Join-Path $env:RUNNER_TEMP "kotlin"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          "$dest\kotlinc\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Verify toolchain
         shell: pwsh
@@ -34,4 +41,60 @@ jobs:
       - name: Run full smoke suite
         shell: pwsh
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File .\examples\full-smoke-suite.ps1 -ForceInstall
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\examples\full-smoke-suite.ps1 -ForceInstall -KeepArtifacts
+
+      - name: Upload smoke artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts-windows
+          path: |
+            examples/.smoke-workspace/**
+            examples/smoke-standalone.kts
+          if-no-files-found: ignore
+
+  smoke-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Kotlin compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="2.0.20"
+          URL="https://github.com/JetBrains/kotlin/releases/download/v${VERSION}/kotlin-compiler-${VERSION}.zip"
+          ZIP_PATH="$RUNNER_TEMP/kotlin-compiler.zip"
+          DEST="$RUNNER_TEMP/kotlin"
+          curl -L "$URL" -o "$ZIP_PATH"
+          unzip -q "$ZIP_PATH" -d "$DEST"
+          echo "$DEST/kotlinc/bin" >> "$GITHUB_PATH"
+
+      - name: Verify toolchain
+        shell: bash
+        run: |
+          java -version
+          kotlinc -version
+
+      - name: Run full smoke suite
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File ./examples/full-smoke-suite.ps1 -KeepArtifacts
+
+      - name: Upload smoke artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts-linux
+          path: |
+            examples/.smoke-workspace/**
+            examples/smoke-standalone.kts
+          if-no-files-found: ignore

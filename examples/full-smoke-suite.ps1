@@ -66,11 +66,18 @@ function Invoke-Koupper {
     }
 
     $shim = Join-Path $env:USERPROFILE ".koupper\bin\koupper.ps1"
-    if (-not (Test-Path $shim)) {
-        throw "koupper command not found and shim missing at $shim"
+    if (Test-Path $shim) {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $shim @Args
+        return
     }
 
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $shim @Args
+    $unixShim = Join-Path $HOME ".koupper/bin/koupper"
+    if (Test-Path $unixShim) {
+        & $unixShim @Args
+        return
+    }
+
+    throw "koupper command not found and no shim found in ~/.koupper/bin"
 }
 
 Push-Location $repoRoot
