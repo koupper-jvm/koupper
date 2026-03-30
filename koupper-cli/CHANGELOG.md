@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `koupper new <file>.kts` now generates standalone scripts without unresolved `%PACKAGE%` placeholders.
 - `new module` now validates required scaffold files (`settings.gradle`, `build.gradle`) before reporting success.
 - `new module` now fails early if starter scripts are not generated in module extensions.
 - Starter script module templates now generate `processManager.call(::myScript, ...)` to avoid runtime argument-type mismatch.
