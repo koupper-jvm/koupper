@@ -4,6 +4,7 @@ import com.koupper.cli.ANSIColors.ANSI_GREEN_155
 import com.koupper.cli.ANSIColors.ANSI_RESET
 import com.koupper.cli.ANSIColors.ANSI_WHITE
 import com.koupper.cli.ANSIColors.ANSI_YELLOW_229
+import com.koupper.cli.VersionInfo
 import com.koupper.cli.commands.AvailableCommands.DEFAULT
 import com.koupper.cli.commands.AvailableCommands.commands
 
@@ -15,7 +16,8 @@ class DefaultCommand : Command() {
     init {
         super.name = "koupper"
         super.usage = "\n   $name [${ANSI_GREEN_155}command$ANSI_RESET]\n"
-        super.description = "\n   koupper cli ${ANSI_GREEN_155}4.0.0$ANSI_RESET\n"
+        super.description = "\n   koupper cli ${ANSI_GREEN_155}${VersionInfo.cliVersion()}$ANSI_RESET\n" +
+                "   octopus engine ${ANSI_GREEN_155}${VersionInfo.octopusVersion()}$ANSI_RESET\n"
         super.arguments = commands()
         super.additionalInformation = ""
     }
