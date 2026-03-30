@@ -99,13 +99,22 @@ function Invoke-Koupper {
         return
     }
 
-    $shim = Join-Path $env:USERPROFILE ".koupper\bin\koupper.ps1"
-    if (Test-Path $shim) {
+    $shim = $null
+    if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        $shim = Join-Path $env:USERPROFILE ".koupper\bin\koupper.ps1"
+    }
+
+    if ($shim -and (Test-Path $shim)) {
         & powershell -NoProfile -ExecutionPolicy Bypass -File $shim @Args
         return
     }
 
-    $unixShim = Join-Path $HOME ".koupper/bin/koupper"
+    $homeDir = if (-not [string]::IsNullOrWhiteSpace($env:HOME)) { $env:HOME } else { $HOME }
+    if ([string]::IsNullOrWhiteSpace($homeDir)) {
+        throw "Unable to resolve HOME directory to locate koupper shim"
+    }
+
+    $unixShim = Join-Path $homeDir ".koupper/bin/koupper"
     if (Test-Path $unixShim) {
         & $unixShim @Args
         return
