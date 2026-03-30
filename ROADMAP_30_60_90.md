@@ -1,5 +1,7 @@
 # Koupper 30/60/90 Day Roadmap
 
+Enterprise execution add-on (kickoff 2026-03-30): see `ROADMAP_ENTERPRISE_2026_Q2.md`.
+
 ## Why this helps
 
 This roadmap turns your work into an execution plan that helps you:
