@@ -16,7 +16,7 @@ import com.koupper.providers.files.FileHandler
 import java.io.File
 
 @Export
-@Logger(destination = "file:disk-maintenance-[yyy-MM-dd]", level = "INFO")
+@Logger(destination = "file:disk-maintenance-[yyyy-MM-dd]", level = "INFO")
 // Evaluates standard CRON schedules -> 0 0 * * * = Midnight every day
 @Scheduled(debug = false, cron = "0 0 * * *")
 val nightlyLogCleanup: () -> Unit = {
