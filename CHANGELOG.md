@@ -47,6 +47,7 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 - Added `GitHubServiceProvider` with `GitHubClient` operations for issues, pull requests, workflow dispatch/runs, and check-runs.
 - Added provider catalog metadata for `github` including required/optional environment variables.
 - Added runnable example script `examples/github-provider-flow.kts` with JSON input sample.
+- Added JSON-driven orchestration example `examples/github-integration-flow.kts` for PR checks, workflow dispatch/wait, merge, and issue creation.
 
 ## [1.1.0-monorepo] - 2026-03-28
 
