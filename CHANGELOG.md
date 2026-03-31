@@ -35,6 +35,10 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 - Uninstaller now supports CLI flags `--force` and `--purge` for non-interactive cleanup workflows.
 - Installer now provisions a providers catalog at `~/.koupper/catalog/providers.json` for CLI provider discovery.
 
+### 🧪 CI Policy
+- Added `PR Fast Checks` workflow for quick compile validation on every PR.
+- `Full Smoke Suite` now runs on PRs only when label `run-full-ci` is present, and always runs on `push` to `develop` or manual dispatch.
+
 ### 🔎 Provider Discoverability
 - Added `koupper provider list` to display registered providers with short descriptions.
 - Added `koupper provider info <name>` to display provider contracts, implementations/tags, and env requirements.
