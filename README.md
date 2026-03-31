@@ -77,6 +77,7 @@ For command details and provider setup guides, see `https://koupper.com/cli/comm
 GitHub multi-repo automation flow (primary script): `koupper run automation/github-multi-repo-flow.kts --json-file automation/flows/koupper-stack.sample.json`.
 Terminal runtime demo (non-blocking): `koupper run examples/terminal-runtime-demo.kts`.
 Terminal runtime demo with interactive prompt: `koupper run examples/terminal-runtime-demo.kts '{"askPrompt":true}'`.
+Prompt mode with JSON file (recommended on Windows): `koupper run examples/terminal-runtime-demo.kts --json-file examples/terminal-runtime-demo.prompt.input.json`.
 
 **After execution, just ensure `~/.koupper/bin` is in your system `PATH`.**
 
