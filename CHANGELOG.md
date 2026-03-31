@@ -42,6 +42,7 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 ### 🔎 Provider Discoverability
 - Added `koupper provider list` to display registered providers with short descriptions.
 - Added `koupper provider info <name>` to display provider contracts, implementations/tags, and env requirements.
+- Added `terminal` runtime entry in provider catalog so `koupper provider` commands expose interactive terminal capabilities.
 
 ### 🐙 GitHub Provider
 - Added `GitHubServiceProvider` with `GitHubClient` operations for issues, pull requests, workflow dispatch/runs, and check-runs.
@@ -49,6 +50,9 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 - Added runnable example script `examples/github-provider-flow.kts` with JSON input sample.
 - Added JSON-driven orchestration example `examples/github-integration-flow.kts` for PR checks, workflow dispatch/wait, merge, and issue creation.
 - Added primary multi-repo orchestration script `automation/github-multi-repo-flow.kts` and sample plan `automation/flows/koupper-stack.sample.json`.
+
+### 💬 Terminal Runtime
+- Added `examples/terminal-runtime-demo.kts` showing `TerminalIO` prompt/print flow.
 
 ## [1.1.0-monorepo] - 2026-03-28
 
