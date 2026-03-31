@@ -1,0 +1,80 @@
+{
+  "dryRun": true,
+  "continueOnError": false,
+  "targets": [
+    {
+      "name": "koupper-core",
+      "enabled": true,
+      "owner": "koupper-jvm",
+      "repo": "koupper",
+      "pullRequest": {
+        "create": false,
+        "head": "feature/my-koupper-branch",
+        "base": "develop",
+        "number": 53,
+        "merge": false,
+        "mergeMethod": "merge"
+      },
+      "checks": {
+        "wait": true,
+        "ref": "refs/heads/feature/my-koupper-branch",
+        "required": [
+          "PR Fast Checks"
+        ],
+        "timeoutSeconds": 900,
+        "pollIntervalSeconds": 15
+      },
+      "workflow": {
+        "dispatch": true,
+        "workflowId": "full-smoke-suite.yml",
+        "ref": "feature/my-koupper-branch",
+        "inputs": {},
+        "wait": true,
+        "timeoutSeconds": 1800,
+        "pollIntervalSeconds": 20
+      },
+      "issues": [
+        {
+          "title": "refactor(provider): github provider backlog",
+          "body": "Track follow-up refactors for GitHub provider hardening.",
+          "labels": [
+            "refactor",
+            "provider"
+          ],
+          "assignees": []
+        }
+      ]
+    },
+    {
+      "name": "koupper-cli-repo",
+      "enabled": false,
+      "owner": "koupper-jvm",
+      "repo": "koupper-cli",
+      "pullRequest": {
+        "create": false,
+        "head": "feature/my-koupper-cli-branch",
+        "base": "develop",
+        "number": null,
+        "merge": false,
+        "mergeMethod": "merge"
+      },
+      "checks": {
+        "wait": false,
+        "ref": "",
+        "required": [],
+        "timeoutSeconds": 900,
+        "pollIntervalSeconds": 15
+      },
+      "workflow": {
+        "dispatch": false,
+        "workflowId": "",
+        "ref": "develop",
+        "inputs": {},
+        "wait": false,
+        "timeoutSeconds": 1800,
+        "pollIntervalSeconds": 20
+      },
+      "issues": []
+    }
+  ]
+}
