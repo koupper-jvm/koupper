@@ -53,6 +53,7 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 
 ### 💬 Terminal Runtime
 - Added `examples/terminal-runtime-demo.kts` showing `TerminalIO` prompt/print flow.
+- Updated terminal demo to default to non-blocking execution and enable prompt mode via `{"askPrompt":true}`.
 
 ## [1.1.0-monorepo] - 2026-03-28
 
