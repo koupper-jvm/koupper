@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `provider` command with:
   - `koupper provider list` (provider name + short description)
   - `koupper provider info <name>` (bindings, tags, required/optional env vars, docs link)
+- Provider catalog now includes `github` metadata for GitHub issue/PR/workflow automation flows.
 
 ---
 

@@ -4,6 +4,7 @@ import com.koupper.providers.crypto.CryptoServiceProvider
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.providers.db.DBServiceProvider
 import com.koupper.providers.files.FileServiceProvider
+import com.koupper.providers.github.GitHubServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.jwt.JWTServiceProvider
@@ -22,6 +23,7 @@ class ServiceProviderManagerTest : AnnotationSpec() {
                     DBServiceProvider::class,
                     FileServiceProvider::class,
                     HttpServiceProvider::class,
+                    GitHubServiceProvider::class,
                     JWTServiceProvider::class,
                     LoggerServiceProvider::class,
                     SenderServiceProvider::class,

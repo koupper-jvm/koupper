@@ -1,0 +1,7 @@
+{
+  "action": "create-issue",
+  "owner": "koupper-jvm",
+  "repo": "koupper",
+  "title": "docs(provider): validate github provider example",
+  "body": "This issue was created through examples/github-provider-flow.kts"
+}
