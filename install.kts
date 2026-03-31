@@ -256,8 +256,8 @@ if (-not ${'$'}octopusRunning) {
 }
 
 # 2. CLI Execution
-# We pipe to Out-Default to force PowerShell's PSReadLine to track the output lines natively.
-& java "-Dfile.encoding=UTF-8" -jar "${'$'}env:USERPROFILE\.koupper\libs\koupper-cli.jar" ${'$'}args | Out-Default
+# Keep direct stdout/stderr to preserve interactive prompt behavior (TerminalIO.prompt).
+& java "-Dfile.encoding=UTF-8" -jar "${'$'}env:USERPROFILE\.koupper\libs\koupper-cli.jar" ${'$'}args
 """.trimIndent()
 
 val bashFile = File(binDirectory, "koupper")
