@@ -1,0 +1,39 @@
+{
+  "dryRun": true,
+  "continueOnError": false,
+  "targets": [
+    {
+      "name": "koupper-core-pr-fast",
+      "enabled": true,
+      "owner": "koupper-jvm",
+      "repo": "koupper",
+      "pullRequest": {
+        "create": false,
+        "head": "feature/my-branch",
+        "base": "develop",
+        "number": null,
+        "merge": false,
+        "mergeMethod": "merge"
+      },
+      "checks": {
+        "wait": true,
+        "ref": "refs/heads/feature/my-branch",
+        "required": [
+          "PR Fast Checks"
+        ],
+        "timeoutSeconds": 900,
+        "pollIntervalSeconds": 15
+      },
+      "workflow": {
+        "dispatch": false,
+        "workflowId": "",
+        "ref": "feature/my-branch",
+        "inputs": {},
+        "wait": false,
+        "timeoutSeconds": 1800,
+        "pollIntervalSeconds": 20
+      },
+      "issues": []
+    }
+  ]
+}
