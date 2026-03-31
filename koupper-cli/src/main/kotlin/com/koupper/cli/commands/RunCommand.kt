@@ -215,6 +215,7 @@ class RunCommand : Command() {
                             val msg = parts.getOrNull(2).orEmpty()
 
                             print("$msg ")
+                            System.out.flush()
                             val input = readLine().orEmpty()
 
                             writer.write("PROMPT_RESPONSE::$id::$input")
