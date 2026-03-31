@@ -50,6 +50,11 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 - Added runnable example script `examples/github-provider-flow.kts` with JSON input sample.
 - Added JSON-driven orchestration example `examples/github-integration-flow.kts` for PR checks, workflow dispatch/wait, merge, and issue creation.
 - Added primary multi-repo orchestration script `automation/github-multi-repo-flow.kts` and sample plan `automation/flows/koupper-stack.sample.json`.
+- Added issue template pack support in multi-repo flow (`issueTemplatePack.providers`) to auto-generate provider refactor issues.
+- Added production-oriented flow templates:
+  - `automation/flows/flow-pr-fast.json`
+  - `automation/flows/flow-pre-merge-full-smoke.json`
+  - `automation/flows/flow-merge-and-followups.json`
 
 ### 💬 Terminal Runtime
 - Added `examples/terminal-runtime-demo.kts` showing `TerminalIO` prompt/print flow.

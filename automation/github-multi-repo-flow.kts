@@ -14,6 +14,15 @@ data class IssuePlan(
     val assignees: List<String> = emptyList()
 )
 
+data class IssueTemplatePack(
+    val enabled: Boolean = false,
+    val kind: String = "provider-refactor",
+    val providers: List<String> = emptyList(),
+    val labels: List<String> = listOf("refactor", "provider"),
+    val assignees: List<String> = emptyList(),
+    val bodyPrefix: String = ""
+)
+
 data class PullRequestPlan(
     val create: Boolean = false,
     val title: String = "",
@@ -51,7 +60,8 @@ data class RepoFlowTarget(
     val pullRequest: PullRequestPlan = PullRequestPlan(),
     val checks: ChecksPlan = ChecksPlan(),
     val workflow: WorkflowPlan = WorkflowPlan(),
-    val issues: List<IssuePlan> = emptyList()
+    val issues: List<IssuePlan> = emptyList(),
+    val issueTemplatePack: IssueTemplatePack = IssueTemplatePack()
 )
 
 data class MultiRepoFlowInput(
@@ -67,6 +77,39 @@ private fun isTerminal(status: String): Boolean = status.equals("completed", ign
 private fun summarizeChecks(checks: List<GitHubCheckRun>): String {
     if (checks.isEmpty()) return "no check runs found"
     return checks.joinToString(" | ") { "${it.name}:${it.status}/${it.conclusion ?: "n/a"}" }
+}
+
+private fun buildProviderRefactorIssues(pack: IssueTemplatePack): List<IssuePlan> {
+    if (!pack.enabled) return emptyList()
+    if (!pack.kind.equals("provider-refactor", ignoreCase = true)) return emptyList()
+
+    return pack.providers
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .map { provider ->
+            val body = buildString {
+                if (pack.bodyPrefix.isNotBlank()) {
+                    appendLine(pack.bodyPrefix.trim())
+                    appendLine()
+                }
+                appendLine("## Scope")
+                appendLine("Refactor provider `$provider` to improve maintainability and consistency.")
+                appendLine()
+                appendLine("## Acceptance Criteria")
+                appendLine("- [ ] Keep runtime behavior backward compatible or document migration notes")
+                appendLine("- [ ] Validate and document environment variables")
+                appendLine("- [ ] Add/update tests for the provider flow")
+                appendLine("- [ ] Update provider documentation and examples")
+            }
+
+            IssuePlan(
+                title = "refactor(provider): $provider",
+                body = body,
+                labels = pack.labels,
+                assignees = pack.assignees
+            )
+        }
 }
 
 private fun runTarget(
@@ -226,12 +269,15 @@ private fun runTarget(
         }
     }
 
-    if (target.issues.isNotEmpty()) {
+    val generatedIssues = buildProviderRefactorIssues(target.issueTemplatePack)
+    val allIssues = target.issues + generatedIssues
+
+    if (allIssues.isNotEmpty()) {
         if (dryRun) {
-            step("[dry-run][${target.name}] create ${target.issues.size} issues")
+            step("[dry-run][${target.name}] create ${allIssues.size} issues")
         } else {
             val created = mutableListOf<Map<String, Any?>>()
-            target.issues.forEach { issue ->
+            allIssues.forEach { issue ->
                 val createdIssue = gh.createIssue(
                     GitHubIssueRequest(
                         title = issue.title,
