@@ -73,16 +73,10 @@ Installer note: `install.kts` also provisions `~/.koupper/templates/model-projec
 
 Version check: run `koupper -v` to print both installed versions (`koupper-cli` and `octopus engine`).
 Provider discovery: run `koupper provider list` and `koupper provider info <name>` to inspect available service providers and required env vars.
-For command details and provider setup guides, see `https://koupper.com/cli/commands/provider` and `https://koupper.com/docs/providers`.
-GitHub multi-repo automation flow (primary script): `koupper run automation/github-multi-repo-flow.kts --json-file automation/flows/koupper-stack.sample.json`.
-Ready-to-run flow templates:
-- `automation/flows/flow-pr-fast.json`
-- `automation/flows/flow-pre-merge-full-smoke.json`
-- `automation/flows/flow-merge-and-followups.json`
-Issue template pack support: set `issueTemplatePack.providers` to auto-generate provider-refactor issues.
-Terminal runtime demo (non-blocking): `koupper run examples/terminal-runtime-demo.kts`.
-Terminal runtime demo with interactive prompt: `koupper run examples/terminal-runtime-demo.kts '{"askPrompt":true}'`.
-Prompt mode with JSON file (recommended on Windows): `koupper run examples/terminal-runtime-demo.kts --json-file examples/terminal-runtime-demo.prompt.input.json`.
+Official documentation:
+- Commands: `https://koupper.com/cli/commands`
+- Providers catalog + setup: `https://koupper.com/docs/providers`
+- GitHub multi-repo automation flow: `https://koupper.com/automation/github-integration-flow`
 
 **After execution, just ensure `~/.koupper/bin` is in your system `PATH`.**
 
