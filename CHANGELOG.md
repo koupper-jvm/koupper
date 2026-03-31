@@ -43,6 +43,11 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 - Added `koupper provider list` to display registered providers with short descriptions.
 - Added `koupper provider info <name>` to display provider contracts, implementations/tags, and env requirements.
 
+### 🐙 GitHub Provider
+- Added `GitHubServiceProvider` with `GitHubClient` operations for issues, pull requests, workflow dispatch/runs, and check-runs.
+- Added provider catalog metadata for `github` including required/optional environment variables.
+- Added runnable example script `examples/github-provider-flow.kts` with JSON input sample.
+
 ## [1.1.0-monorepo] - 2026-03-28
 
 ### 🧱 Release Governance
