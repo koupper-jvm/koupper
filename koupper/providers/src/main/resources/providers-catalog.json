@@ -204,6 +204,21 @@
       "docs": "https://koupper.com/docs/providers/hashing"
     },
     {
+      "id": "terminal",
+      "serviceProvider": "TerminalRuntime",
+      "description": "Interactive terminal IO bridge for prompt/print during script execution.",
+      "bindings": [
+        {
+          "contract": "TerminalIO",
+          "implementations": [
+            { "class": "TerminalContext (runtime-backed)" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/terminal"
+    },
+    {
       "id": "github",
       "serviceProvider": "GitHubServiceProvider",
       "description": "GitHub API operations for issues, pull requests, checks and workflows.",
