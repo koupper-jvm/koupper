@@ -32,11 +32,8 @@ class ModuleAnalyzer(private val context: String) : Process {
         val version = getVersionFrom(baseDir)
         val basePackage = detectProjectBasePackage(baseDir) ?: "❌ Not found"
 
-        val handlers = listHandlerSourceFiles(baseDir)
-        val impls = handlers.filter { isKHandlerImplementation(it) }
-        val implNames = impls.flatMap { extractKHandlerImplementationNames(it) }.toSet()
-
-        val handlersStatus = if (handlers.isNotEmpty() && impls.isNotEmpty()) "✔️" else "❌"
+        val handlers = discoverHandlers(baseDir)
+        val handlersStatus = if (handlers.khandlerNames.isNotEmpty() || handlers.awsRequestHandlerNames.isNotEmpty()) "✔️" else "❌"
 
         val port = runCatching { extractServerPort(baseDir)?.toInt() }.getOrNull()
         if (port != null) {
@@ -51,19 +48,28 @@ class ModuleAnalyzer(private val context: String) : Process {
             appendLine("  ${ANSI_YELLOW_229}- Base package${ANSI_RESET}  : $basePackage")
             appendLine("")
             appendLine("  ${ANSI_YELLOW_229}- Handlers${ANSI_RESET}      : $handlersStatus")
-            appendLine("      • Total in package   : ${handlers.size}")
-            appendLine("      • KHandler impls     : ${impls.size}")
+            appendLine("      • Total source files       : ${handlers.sourceFiles.size}")
+            appendLine("      • KHandler impls           : ${handlers.khandlerNames.size}")
+            appendLine("      • AWS RequestHandler impls : ${handlers.awsRequestHandlerNames.size}")
             appendLine("")
 
             appendLine("  🗂️ Module Structure:")
             appendLine("")
 
-            if (implNames.isEmpty()) {
-                appendLine("      ${ANSI_RED}No handlers found${ANSI_RESET}")
+            if (handlers.khandlerNames.isEmpty() && handlers.awsRequestHandlerNames.isEmpty()) {
+                appendLine("      ${ANSI_RED}No supported handlers found${ANSI_RESET}")
             } else {
-                appendLine("      ${ANSI_YELLOW_229}Detected:${ANSI_RESET}")
-                implNames.sorted().forEach { n ->
-                    appendLine("        ✔️ ${ANSI_GREEN}$n${ANSI_RESET}")
+                if (handlers.khandlerNames.isNotEmpty()) {
+                    appendLine("      ${ANSI_YELLOW_229}KHandler:${ANSI_RESET}")
+                    handlers.khandlerNames.sorted().forEach { n ->
+                        appendLine("        ✔️ ${ANSI_GREEN}$n${ANSI_RESET}")
+                    }
+                }
+                if (handlers.awsRequestHandlerNames.isNotEmpty()) {
+                    appendLine("      ${ANSI_YELLOW_229}AWS RequestHandler:${ANSI_RESET}")
+                    handlers.awsRequestHandlerNames.sorted().forEach { n ->
+                        appendLine("        ✔️ ${ANSI_GREEN}$n${ANSI_RESET}")
+                    }
                 }
             }
         }
@@ -87,6 +93,12 @@ class ModuleAnalyzer(private val context: String) : Process {
         val name: String,
         val isData: Boolean,
         val header: String
+    )
+
+    private data class HandlerDiscovery(
+        val sourceFiles: List<File>,
+        val khandlerNames: Set<String>,
+        val awsRequestHandlerNames: Set<String>
     )
 
     private fun findTypeDecls(src: String): List<KotlinTypeDecl> {
@@ -114,18 +126,36 @@ class ModuleAnalyzer(private val context: String) : Process {
         return Regex("(^|[^\\w.])KHandler\\b").containsMatchIn(supertypes)
     }
 
-    private fun isKHandlerImplementation(file: File): Boolean {
-        val decls = findTypeDecls(file.readText())
-        return decls.any { !it.isData && headerImplementsKHandler(it.header) }
+    private fun headerImplementsRequestHandler(header: String): Boolean {
+        val idx = header.indexOf(':')
+        if (idx == -1) return false
+        val supertypes = header.substring(idx + 1)
+        return Regex("(^|[^\\w.])(?:[A-Za-z_]\\w*\\.)*RequestHandler\\b").containsMatchIn(supertypes)
     }
 
-    private fun extractKHandlerImplementationNames(file: File): List<String> {
+    private fun extractImplementationNames(file: File, predicate: (String) -> Boolean): List<String> {
         val decls = findTypeDecls(file.readText())
         return decls
             .filter { !it.isData }
-            .filter { headerImplementsKHandler(it.header) }
+            .filter { predicate(it.header) }
             .map { it.name }
             .distinct()
+    }
+
+    private fun discoverHandlers(baseDir: File): HandlerDiscovery {
+        val sourceFiles = listHandlerSourceFiles(baseDir)
+        val khandlerNames = sourceFiles
+            .flatMap { extractImplementationNames(it, ::headerImplementsKHandler) }
+            .toSet()
+        val awsRequestHandlerNames = sourceFiles
+            .flatMap { extractImplementationNames(it, ::headerImplementsRequestHandler) }
+            .toSet()
+
+        return HandlerDiscovery(
+            sourceFiles = sourceFiles,
+            khandlerNames = khandlerNames,
+            awsRequestHandlerNames = awsRequestHandlerNames
+        )
     }
 
     private fun listHandlerSourceFiles(baseDir: File): List<File> {
@@ -134,7 +164,7 @@ class ModuleAnalyzer(private val context: String) : Process {
 
         return src.walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
-            .filter { it.parentFile?.name == "handlers" && it.parentFile?.parentFile?.name == "http" }
+            .filter { it.parentFile?.name == "handlers" }
             .toList()
     }
 
