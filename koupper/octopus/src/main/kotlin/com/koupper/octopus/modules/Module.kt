@@ -34,10 +34,8 @@ fun validateScript(scriptPath: String): Result<File> {
                 val symbol = backend.getSymbol(exportedFunctionName)
                     ?: throw IllegalStateException("No se encontró el símbolo exportado: $exportedFunctionName")
 
-                val symbolType = symbol::class.simpleName ?: symbol::class.qualifiedName ?: "anonymous"
-                println("✅ Script válido, exporta: $exportedFunctionName ($symbolType)")
             } else {
-                println("⚠️ No function annotated with @Export was found.")
+                // Non-exported scripts are ignored during validation.
             }
         }
 
