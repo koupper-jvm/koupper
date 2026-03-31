@@ -52,6 +52,39 @@ class ModuleAnalyzerTest {
     }
 
     @Test
+    fun `discoverHandlers detects AWS handlers via inherited Setup handleRequest override`() {
+        val moduleDir = Files.createTempDirectory("module-analyzer-test").toFile()
+        try {
+            writeKotlinFile(
+                moduleDir,
+                "src/main/kotlin/Setup.kt",
+                """
+                abstract class Setup : com.amazonaws.services.lambda.runtime.RequestHandler<Any, Any>
+                """.trimIndent()
+            )
+
+            writeKotlinFile(
+                moduleDir,
+                "src/main/kotlin/com/example/handlers/SendMailHandler.kt",
+                """
+                package com.example.handlers
+
+                class SendMailHandler : Setup() {
+                    override fun handleRequest(input: Any, context: com.amazonaws.services.lambda.runtime.Context): Any = input
+                }
+                """.trimIndent()
+            )
+
+            val analyzer = ModuleAnalyzer(context = moduleDir.path)
+            val discovery = invokePrivate(analyzer, "discoverHandlers", moduleDir)
+
+            assertEquals(setOf("SendMailHandler"), readSet(discovery, "awsRequestHandlerNames"))
+        } finally {
+            moduleDir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `discoverHandlers ignores files outside handlers directories`() {
         val moduleDir = Files.createTempDirectory("module-analyzer-test").toFile()
         try {
