@@ -204,6 +204,28 @@
       "docs": "https://koupper.com/docs/providers/hashing"
     },
     {
+      "id": "github",
+      "serviceProvider": "GitHubServiceProvider",
+      "description": "GitHub API operations for issues, pull requests, checks and workflows.",
+      "bindings": [
+        {
+          "contract": "GitHubClient",
+          "implementations": [
+            { "class": "GitHubClientImpl" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "GITHUB_TOKEN", "required": true, "description": "GitHub API token (PAT or app token)." },
+        { "name": "GITHUB_OWNER", "required": false, "description": "Default owner/org for operations." },
+        { "name": "GITHUB_REPO", "required": false, "description": "Default repository for operations." },
+        { "name": "GITHUB_API_URL", "required": false, "description": "GitHub API base URL override." },
+        { "name": "GITHUB_USER_AGENT", "required": false, "description": "Custom user agent header." },
+        { "name": "GITHUB_TIMEOUT_SECONDS", "required": false, "description": "HTTP timeout for GitHub requests." }
+      ],
+      "docs": "https://koupper.com/docs/providers/github"
+    },
+    {
       "id": "ai",
       "serviceProvider": "AIServiceProvider",
       "description": "AI model integration provider (OpenAI by default).",
