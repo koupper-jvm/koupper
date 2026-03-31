@@ -75,6 +75,7 @@ Version check: run `koupper -v` to print both installed versions (`koupper-cli` 
 Provider discovery: run `koupper provider list` and `koupper provider info <name>` to inspect available service providers and required env vars.
 For command details and provider setup guides, see `https://koupper.com/cli/commands/provider` and `https://koupper.com/docs/providers`.
 GitHub multi-repo automation flow (primary script): `koupper run automation/github-multi-repo-flow.kts --json-file automation/flows/koupper-stack.sample.json`.
+Terminal runtime demo: `koupper run examples/terminal-runtime-demo.kts`.
 
 **After execution, just ensure `~/.koupper/bin` is in your system `PATH`.**
 
