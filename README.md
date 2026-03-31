@@ -73,6 +73,7 @@ Installer note: `install.kts` also provisions `~/.koupper/templates/model-projec
 
 Version check: run `koupper -v` to print both installed versions (`koupper-cli` and `octopus engine`).
 Provider discovery: run `koupper provider list` and `koupper provider info <name>` to inspect available service providers and required env vars.
+For command details and provider setup guides, see `https://koupper.com/cli/commands/provider` and `https://koupper.com/docs/providers`.
 
 **After execution, just ensure `~/.koupper/bin` is in your system `PATH`.**
 
