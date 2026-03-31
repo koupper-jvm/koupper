@@ -133,6 +133,11 @@ class ModuleAnalyzer(private val context: String) : Process {
         return Regex("(^|[^\\w.])(?:[A-Za-z_]\\w*\\.)*RequestHandler\\b").containsMatchIn(supertypes)
     }
 
+    private fun fileOverridesHandleRequest(file: File): Boolean {
+        val src = stripKotlinComments(file.readText())
+        return Regex("(?m)\\boverride\\s+fun\\s+handleRequest\\s*\\(").containsMatchIn(src)
+    }
+
     private fun extractImplementationNames(file: File, predicate: (String) -> Boolean): List<String> {
         val decls = findTypeDecls(file.readText())
         return decls
@@ -148,7 +153,14 @@ class ModuleAnalyzer(private val context: String) : Process {
             .flatMap { extractImplementationNames(it, ::headerImplementsKHandler) }
             .toSet()
         val awsRequestHandlerNames = sourceFiles
-            .flatMap { extractImplementationNames(it, ::headerImplementsRequestHandler) }
+            .flatMap { file ->
+                val direct = extractImplementationNames(file, ::headerImplementsRequestHandler)
+                if (direct.isNotEmpty() || !fileOverridesHandleRequest(file)) {
+                    direct
+                } else {
+                    extractImplementationNames(file) { true }
+                }
+            }
             .toSet()
 
         return HandlerDiscovery(
