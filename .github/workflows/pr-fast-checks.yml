@@ -30,5 +30,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./koupper/gradlew :octopus:compileKotlin
-          ./koupper-cli/gradlew compileKotlin
+          (cd koupper && ./gradlew :octopus:compileKotlin)
+          (cd koupper-cli && ./gradlew compileKotlin)
