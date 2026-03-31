@@ -214,7 +214,8 @@ class RunCommand : Command() {
                             val id = parts.getOrNull(1).orEmpty()
                             val msg = parts.getOrNull(2).orEmpty()
 
-                            print("$msg ")
+                            println(msg)
+                            print("> ")
                             System.out.flush()
                             val input = readLine().orEmpty()
 
