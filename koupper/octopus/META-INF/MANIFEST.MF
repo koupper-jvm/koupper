@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Main-Class: com.koupper.octopus.OctopusKt
+Automatic-Module-Name: com.koupper.octopus
+
