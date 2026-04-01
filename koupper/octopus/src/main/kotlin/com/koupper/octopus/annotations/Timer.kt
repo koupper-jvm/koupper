@@ -1,0 +1,9 @@
+package com.koupper.octopus.annotations
+
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class Timer(
+    val interval: String = "",
+    val at: String = ""
+)
+
