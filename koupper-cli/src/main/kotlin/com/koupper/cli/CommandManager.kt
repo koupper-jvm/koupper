@@ -136,6 +136,7 @@ fun main(args: Array<String>) {
         val addPromptSpacer = input.getOrNull(1) == RUN
 
         print(response)
+        print(ANSIColors.ANSI_RESET)
         if (!response.endsWith("\n")) {
             println()
         }

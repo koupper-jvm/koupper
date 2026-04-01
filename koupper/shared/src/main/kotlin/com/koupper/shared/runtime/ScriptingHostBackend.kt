@@ -114,11 +114,19 @@ class ScriptingHostBackend(
     // ──────────────────────────────────────────────
 
     override fun eval(code: String): Any {
+        return evalWithSource(code, sourceName = null)
+    }
+
+    fun eval(code: String, sourceName: String): Any {
+        return evalWithSource(code, sourceName)
+    }
+
+    private fun evalWithSource(code: String, sourceName: String?): Any {
         require(code.isNotBlank()) { "Script code must not be blank" }
 
-        // Use a uniquely generated name so the JVM doesn't collide multiple "Script.class" references during nested invocations.
-        val uniqueName = "KoupperScript_${java.util.UUID.randomUUID().toString().replace("-", "")}.kts"
-        val result = host.eval(code.toScriptSource(uniqueName), compilationConfig, evalConfig)
+        val scriptSourceName = sourceName?.takeIf { it.isNotBlank() }
+            ?: "KoupperScript_${java.util.UUID.randomUUID().toString().replace("-", "")}.kts"
+        val result = host.eval(code.toScriptSource(scriptSourceName), compilationConfig, evalConfig)
 
         // Reportar diagnósticos antes de lanzar
         result.reports
@@ -128,7 +136,8 @@ class ScriptingHostBackend(
                 val location = diagnostic.location?.let { loc ->
                     " (line ${loc.start.line}, col ${loc.start.col})"
                 } ?: ""
-                System.err.println("[ScriptingHost][${diagnostic.severity}]$location ${diagnostic.message}")
+                val source = sourceName?.takeIf { it.isNotBlank() }?.let { " [$it]" } ?: ""
+                System.err.println("[ScriptingHost][${diagnostic.severity}]$source$location ${diagnostic.message}")
             }
 
         val evalRes = result.valueOrThrow()
