@@ -105,7 +105,7 @@ class RunCommand : Command() {
         val initFile = args[0] + File.separator + "init.kts"
 
         return if (!File(initFile).exists()) {
-            return "\n ${ANSI_WHITE}'init.kts' file not found. Create one using: ${ANSI_YELLOW_229}koupper new file:init${ANSI_WHITE} or start writing a script.\n"
+            return "\n ${ANSI_WHITE}'init.kts' file not found. Create one using: ${ANSI_YELLOW_229}koupper new file:init${ANSI_WHITE} or start writing a script.${ANSI_RESET}\n"
         } else {
             execute(context, "init.kts")
         }

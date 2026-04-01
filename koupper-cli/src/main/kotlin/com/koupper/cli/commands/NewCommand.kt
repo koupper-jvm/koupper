@@ -308,7 +308,7 @@ class NewCommand : Command() {
                         "Failed to copy file: ${srcFs.name} to ${dest.absolutePath}"
                     }
                 } else {
-                    println("${ANSI_YELLOW_229}Resource specified in path is not a file.")
+                    println("${ANSI_YELLOW_229}Resource specified in path is not a file.${ANSI_RESET}")
                 }
             }
         }
