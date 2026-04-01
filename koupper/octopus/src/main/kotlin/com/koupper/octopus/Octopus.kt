@@ -1399,7 +1399,15 @@ fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
 
     app.singleton(LoggerCore::class, { appLogger })
     app.bind(ScriptExecutor::class, { octopus })
-    app.bind(com.koupper.shared.monitoring.ExecutionMonitor::class, { com.koupper.octopus.monitoring.ResumenArchivosExecutionMonitor() })
+    app.bind(com.koupper.shared.monitoring.ExecutionMonitor::class, {
+        com.koupper.octopus.monitoring.CompositeExecutionMonitor(
+            delegates = listOf(
+                JsonlExecutionMonitor(File(logsDir, "octopus-executions.jsonl")),
+                com.koupper.octopus.monitoring.ResumenArchivosExecutionMonitor()
+            )
+        )
+    })
+    ScriptRunner.monitor = app.getInstance(com.koupper.shared.monitoring.ExecutionMonitor::class)
 
     return octopus
 }
