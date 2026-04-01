@@ -1,0 +1,8 @@
+package %PACKAGE%
+
+import com.koupper.octopus.annotations.Export
+
+@Export
+val script2: (InputScript2) -> Int = { input ->
+    input.statusCode
+}
