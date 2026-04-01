@@ -123,7 +123,13 @@ class RunCommand : Command() {
             return "\n${ANSI_YELLOW_229} The script ${file.name} does not exist.${ANSI_RESET}\n"
         }
 
-        return sendToOctopus(context, filePath, params)
+        val executionContext = if (file.isAbsolute) {
+            file.parentFile?.absolutePath ?: context
+        } else {
+            context
+        }
+
+        return sendToOctopus(executionContext, file.path, params)
     }
 
     private fun sendToOctopus(context: String, script: String, params: String): String {
