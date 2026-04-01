@@ -156,11 +156,11 @@ class ModuleCommand : Command() {
         results += describeHttpConfig()
 
         if (results.isEmpty()) {
-            return "$octopusDependencyInfo\n" +
+            return "\n$octopusDependencyInfo\n" +
                     "$ANSI_YELLOW_229 No info produced for this module.$ANSI_RESET"
         }
 
-        return "$octopusDependencyInfo\n" + results.joinToString("\n")
+        return "\n$octopusDependencyInfo\n" + results.joinToString("\n")
     }
 
     private fun addScriptsToExistingModule(vararg args: String): String {
