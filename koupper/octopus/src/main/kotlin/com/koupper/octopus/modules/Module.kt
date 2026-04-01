@@ -29,7 +29,7 @@ fun validateScript(scriptPath: String): Result<File> {
             if (exportedFunctionName != null) {
                 val backend = ScriptingHostBackend()
 
-                backend.eval(sentence)
+                backend.eval(sentence, scriptFile.absolutePath)
 
                 val symbol = backend.getSymbol(exportedFunctionName)
                     ?: throw IllegalStateException("No se encontró el símbolo exportado: $exportedFunctionName")
@@ -41,8 +41,9 @@ fun validateScript(scriptPath: String): Result<File> {
 
         Result.success(scriptFile)
     } catch (e: Exception) {
-        val fileName = File(scriptPath).name
-        System.err.println("[ScriptingHost][ERROR] Script failed: $fileName")
+        val absolutePath = File(scriptPath).absolutePath
+        System.err.println("[ScriptingHost][ERROR] Script failed: $absolutePath")
+        System.err.println()
         Result.failure(e)
     }
 }
