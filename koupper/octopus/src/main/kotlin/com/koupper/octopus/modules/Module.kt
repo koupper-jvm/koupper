@@ -29,19 +29,21 @@ fun validateScript(scriptPath: String): Result<File> {
             if (exportedFunctionName != null) {
                 val backend = ScriptingHostBackend()
 
-                backend.eval(sentence)
+                backend.eval(sentence, scriptFile.absolutePath)
 
                 val symbol = backend.getSymbol(exportedFunctionName)
                     ?: throw IllegalStateException("No se encontró el símbolo exportado: $exportedFunctionName")
 
-                println("✅ Script válido, exporta: $exportedFunctionName (${symbol::class.simpleName})")
             } else {
-                println("⚠️ No function annotated with @Export was found.")
+                // Non-exported scripts are ignored during validation.
             }
         }
 
         Result.success(scriptFile)
     } catch (e: Exception) {
+        val absolutePath = File(scriptPath).absolutePath
+        System.err.println("[ScriptingHost][ERROR] Script failed: $absolutePath")
+        System.err.println()
         Result.failure(e)
     }
 }
