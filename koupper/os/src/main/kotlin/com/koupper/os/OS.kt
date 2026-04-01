@@ -17,6 +17,7 @@ fun env(
     var value: String? = if (sysEnv.containsKey(variableName)) sysEnv[variableName] else null
 
     val globalEnvFile = System.getProperty("GLOBAL_ENV_FILE")
+        ?: System.getenv("GLOBAL_ENV_FILE")
 
     if (value == null && !globalEnvFile.isNullOrBlank()) {
         val fromGlobal = File(globalEnvFile).getProperty(variableName)
