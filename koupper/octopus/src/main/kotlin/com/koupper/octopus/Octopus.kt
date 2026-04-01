@@ -1407,6 +1407,7 @@ fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
             )
         )
     })
+    ScriptRunner.monitor = app.getInstance(com.koupper.shared.monitoring.ExecutionMonitor::class)
 
     return octopus
 }
