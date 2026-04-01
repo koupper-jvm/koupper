@@ -41,6 +41,8 @@ fun validateScript(scriptPath: String): Result<File> {
 
         Result.success(scriptFile)
     } catch (e: Exception) {
+        val fileName = File(scriptPath).name
+        System.err.println("[ScriptingHost][ERROR] Script failed: $fileName")
         Result.failure(e)
     }
 }

@@ -592,6 +592,6 @@ class ModuleCommand : Command() {
                 }
             }
 
-        return result.toString().trimEnd() + "\n"
+        return result.toString().trimEnd() + "\n\n"
     }
 }
