@@ -40,7 +40,7 @@ private fun readEnvOrGlobalFile(name: String): String? {
     val fromEnv = System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
     if (fromEnv != null) return fromEnv
 
-    val globalEnvFile = System.getProperty("GLOBAL_ENV_FILE")?.trim()
+    val globalEnvFile = (System.getProperty("GLOBAL_ENV_FILE") ?: System.getenv("GLOBAL_ENV_FILE"))?.trim()
     if (!globalEnvFile.isNullOrEmpty()) {
         val fromGlobal = runCatching { File(globalEnvFile).getProperty(name) }.getOrNull()
         if (!fromGlobal.isNullOrBlank() && fromGlobal != "undefined") return fromGlobal.trim()
