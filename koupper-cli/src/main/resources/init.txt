@@ -1,0 +1,15 @@
+import com.koupper.container.app
+import com.koupper.octopus.annotations.Export
+import com.koupper.octopus.process.ModuleProcessor
+
+@Export
+val setup: (ModuleProcessor) -> String = { processor ->
+    processor.name("%MODULE_NAME%")
+        .version("%MODULE_VERSION%")
+        .packageName("%MODULE_PACKAGE%")
+        .template("%MODULE_TEMPLATE%")
+        .artifactType("%MODULE_TYPE%")
+        .run()
+
+    "SUCCESS"
+}
