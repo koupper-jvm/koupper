@@ -11,9 +11,11 @@ import com.koupper.orchestrator.config.JobConfiguration
 import com.koupper.shared.octopus.readTextOrNull
 import com.koupper.shared.octopus.sha256Of
 import com.koupper.shared.octopus.toCliArgs
+import com.koupper.shared.getProperty
 import redis.clients.jedis.Jedis
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
@@ -33,6 +35,32 @@ import kotlin.reflect.KProperty0
 private var enableDebugMode: Boolean = false
 
 fun enableDebugMode() { enableDebugMode = true }
+
+private fun readEnvOrGlobalFile(name: String): String? {
+    val fromEnv = System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
+    if (fromEnv != null) return fromEnv
+
+    val globalEnvFile = System.getProperty("GLOBAL_ENV_FILE")?.trim()
+    if (!globalEnvFile.isNullOrEmpty()) {
+        val fromGlobal = runCatching { File(globalEnvFile).getProperty(name) }.getOrNull()
+        if (!fromGlobal.isNullOrBlank() && fromGlobal != "undefined") return fromGlobal.trim()
+    }
+
+    return null
+}
+
+private fun resolvedAwsAccessKey(config: JobConfiguration): String? =
+    config.sqsAccessKey?.takeIf { it.isNotBlank() }
+        ?: readEnvOrGlobalFile("KQ_SQS_ACCESS_KEY")
+        ?: readEnvOrGlobalFile("AWS_ACCESS_KEY_ID")
+
+private fun resolvedAwsSecretKey(config: JobConfiguration): String? =
+    config.sqsSecretKey?.takeIf { it.isNotBlank() }
+        ?: readEnvOrGlobalFile("KQ_SQS_SECRET_KEY")
+        ?: readEnvOrGlobalFile("AWS_SECRET_ACCESS_KEY")
+
+private fun resolvedAwsSessionToken(): String? =
+    readEnvOrGlobalFile("AWS_SESSION_TOKEN")
 
 @JsonInclude(Include.NON_NULL)
 data class KouTask(
@@ -63,13 +91,20 @@ data class KouTask(
 )
 
 private fun sqsCredsProvider(config: JobConfiguration): AwsCredentialsProvider {
-    val ak =config.sqsAccessKey
-    val sk = config.sqsSecretKey
+    val ak = resolvedAwsAccessKey(config)
+    val sk = resolvedAwsSecretKey(config)
+    val st = resolvedAwsSessionToken()
 
     return if (!ak.isNullOrBlank() && !sk.isNullOrBlank()) {
-        StaticCredentialsProvider.create(
-            AwsBasicCredentials.create(ak, sk)
-        )
+        if (!st.isNullOrBlank()) {
+            StaticCredentialsProvider.create(
+                AwsSessionCredentials.create(ak, sk, st)
+            )
+        } else {
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(ak, sk)
+            )
+        }
     } else {
         DefaultCredentialsProvider.create()
     }
