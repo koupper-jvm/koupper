@@ -1,0 +1,16 @@
+{
+  "mode": "template-apply",
+  "remotePath": "/etc/systemd/system/my-app.service",
+  "template": "[Unit]\nDescription={{SERVICE_NAME}}\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory={{WORKDIR}}\nExecStart=/usr/bin/java -jar {{JAR_PATH}}\nRestart=always\nEnvironment=JAVA_OPTS=${JAVA_OPTS}\n\n[Install]\nWantedBy=multi-user.target\n",
+  "variables": {
+    "SERVICE_NAME": "my-app",
+    "WORKDIR": "/opt/my-app",
+    "JAR_PATH": "/opt/my-app/app.jar",
+    "JAVA_OPTS": "-Xms256m -Xmx512m"
+  },
+  "postWriteCommands": [
+    "sudo systemctl daemon-reload",
+    "sudo systemctl restart my-app",
+    "sudo systemctl status my-app --no-pager"
+  ]
+}
