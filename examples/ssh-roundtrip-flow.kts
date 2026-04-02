@@ -1,8 +1,20 @@
 /**
  * SSH Provider Workflow Demo
  *
- * Runs multiple SSH automation modes from one script: roundtrip edit, directory upload/download,
- * sync with rollback verification, and remote template apply with post-write commands.
+ * Purpose:
+ * - Execute remote automation tasks over SSH from one entrypoint script.
+ *
+ * Modes:
+ * - roundtrip-edit: download remote file -> transform text locally -> upload -> post-upload commands.
+ * - download-dir: recursive remote directory download.
+ * - upload-dir: recursive local directory upload.
+ * - sync-with-rollback: upload/sync, run verification commands, rollback to backup on verification failure.
+ * - template-apply: render template variables, write remote config, run post-write commands, rollback on failure.
+ *
+ * Run examples:
+ * - koupper run examples/ssh-roundtrip-flow.kts --json-file examples/ssh-roundtrip-flow.input.json
+ * - koupper run examples/ssh-roundtrip-flow.kts --json-file examples/ssh-sync-with-rollback.input.json
+ * - koupper run examples/ssh-roundtrip-flow.kts --json-file examples/ssh-template-apply.input.json
  */
 import com.koupper.container.app
 import com.koupper.octopus.annotations.Export
