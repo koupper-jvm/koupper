@@ -1,3 +1,9 @@
+/**
+ * Terminal Runtime Demo
+ *
+ * Demonstrates TerminalIO injection, interactive prompt usage, and output rendering
+ * during script execution from the CLI.
+ */
 import com.koupper.octopus.annotations.Export
 import com.koupper.providers.io.TerminalIO
 
