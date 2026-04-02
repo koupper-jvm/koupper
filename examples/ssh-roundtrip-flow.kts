@@ -2,6 +2,8 @@ import com.koupper.container.app
 import com.koupper.octopus.annotations.Export
 import com.koupper.providers.ssh.SSHClient
 import com.koupper.providers.ssh.SSHRoundTripRequest
+import com.koupper.providers.ssh.SSHSyncRequest
+import com.koupper.providers.ssh.SSHTemplateRequest
 
 data class Input(
     val mode: String,
@@ -11,7 +13,11 @@ data class Input(
     val appendLine: String = "",
     val postUploadCommands: List<String> = emptyList(),
     val remoteDir: String = "",
-    val localDir: String = ""
+    val localDir: String = "",
+    val verifyCommands: List<String> = emptyList(),
+    val template: String = "",
+    val variables: Map<String, String> = emptyMap(),
+    val postWriteCommands: List<String> = emptyList()
 )
 
 @Export
@@ -73,6 +79,49 @@ val sshFlow: (Input) -> Map<String, Any?> = { input ->
             )
         }
 
-        else -> error("Unsupported mode '${input.mode}'. Use roundtrip-edit, download-dir, upload-dir.")
+        "sync-with-rollback" -> {
+            val result = ssh.syncWithRollback(
+                SSHSyncRequest(
+                    localPath = input.localDir.ifBlank { error("localDir is required for sync-with-rollback") },
+                    remotePath = input.remoteDir.ifBlank { error("remoteDir is required for sync-with-rollback") },
+                    recursive = true,
+                    backupRemote = true,
+                    rollbackOnFailure = true,
+                    verifyCommands = input.verifyCommands
+                )
+            )
+
+            mapOf(
+                "ok" to true,
+                "flow" to "sync-with-rollback",
+                "backupPath" to result.backupPath,
+                "verifyCount" to result.verify.size,
+                "rolledBack" to result.rolledBack
+            )
+        }
+
+        "template-apply" -> {
+            val result = ssh.applyTemplate(
+                SSHTemplateRequest(
+                    remotePath = input.remotePath,
+                    template = input.template.ifBlank { error("template is required for template-apply") },
+                    variables = input.variables,
+                    backupRemote = true,
+                    rollbackOnFailure = true,
+                    postWriteCommands = input.postWriteCommands
+                )
+            )
+
+            mapOf(
+                "ok" to true,
+                "flow" to "template-apply",
+                "remotePath" to result.remotePath,
+                "backupPath" to result.backupPath,
+                "postWriteCount" to result.postWrite.size,
+                "rolledBack" to result.rolledBack
+            )
+        }
+
+        else -> error("Unsupported mode '${input.mode}'. Use roundtrip-edit, download-dir, upload-dir, sync-with-rollback, template-apply.")
     }
 }
