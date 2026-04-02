@@ -104,6 +104,75 @@ class OpenSSHClient(
         )
     }
 
+    override fun syncWithRollback(request: SSHSyncRequest): SSHSyncResult {
+        val backupPath = if (request.backupRemote && exists(request.remotePath)) {
+            val b = timestampedBackupPath(request.remotePath)
+            exec("cp -R ${quoteShell(request.remotePath)} ${quoteShell(b)}")
+            b
+        } else {
+            null
+        }
+
+        val upload = upload(request.localPath, request.remotePath, recursive = request.recursive)
+        if (!upload.ok) {
+            throw IllegalStateException("SSH sync upload failed (${upload.exitCode}): ${upload.stderr}")
+        }
+
+        return try {
+            val verify = request.verifyCommands.map { exec(it) }
+            SSHSyncResult(
+                upload = upload,
+                backupPath = backupPath,
+                verify = verify,
+                rolledBack = false
+            )
+        } catch (t: Throwable) {
+            val rolledBack = if (request.rollbackOnFailure && !backupPath.isNullOrBlank()) {
+                rollbackRemotePath(request.remotePath, backupPath)
+                true
+            } else {
+                false
+            }
+            throw IllegalStateException("SSH sync verification failed (rolledBack=$rolledBack): ${t.message}", t)
+        }
+    }
+
+    override fun applyTemplate(request: SSHTemplateRequest): SSHTemplateResult {
+        val rendered = renderTemplate(request.template, request.variables)
+
+        val backupPath = if (request.backupRemote && exists(request.remotePath)) {
+            val b = timestampedBackupPath(request.remotePath)
+            exec("cp ${quoteShell(request.remotePath)} ${quoteShell(b)}")
+            b
+        } else {
+            null
+        }
+
+        val write = writeText(request.remotePath, rendered)
+        if (!write.ok) {
+            throw IllegalStateException("SSH template write failed (${write.exitCode}): ${write.stderr}")
+        }
+
+        return try {
+            val postWrite = request.postWriteCommands.map { exec(it) }
+            SSHTemplateResult(
+                remotePath = request.remotePath,
+                backupPath = backupPath,
+                write = write,
+                postWrite = postWrite,
+                rolledBack = false
+            )
+        } catch (t: Throwable) {
+            val rolledBack = if (request.rollbackOnFailure && !backupPath.isNullOrBlank()) {
+                rollbackRemotePath(request.remotePath, backupPath)
+                true
+            } else {
+                false
+            }
+            throw IllegalStateException("SSH template post-write failed (rolledBack=$rolledBack): ${t.message}", t)
+        }
+    }
+
     private fun sshCommonArgs(): List<String> {
         val args = mutableListOf<String>()
         args += listOf("-p", config.port.toString())
@@ -124,6 +193,23 @@ class OpenSSHClient(
     }
 
     private fun targetHost(): String = "${config.username}@${config.host}"
+
+    private fun timestampedBackupPath(remotePath: String): String = "$remotePath.bak.${System.currentTimeMillis()}"
+
+    private fun rollbackRemotePath(remotePath: String, backupPath: String) {
+        exec("rm -rf ${quoteShell(remotePath)}", SSHExecOptions(failOnNonZeroExit = false))
+        exec("mv ${quoteShell(backupPath)} ${quoteShell(remotePath)}")
+    }
+
+    private fun renderTemplate(template: String, variables: Map<String, String>): String {
+        var output = template
+        variables.forEach { (key, value) ->
+            output = output
+                .replace("{{$key}}", value)
+                .replace("\${$key}", value)
+        }
+        return output
+    }
 
     private fun quoteShell(value: String): String = "'${value.replace("'", "'\\''")}'"
 

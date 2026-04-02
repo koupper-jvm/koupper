@@ -53,6 +53,39 @@ data class SSHRoundTripResult(
     val postUpload: List<SSHCommandResult>
 )
 
+data class SSHSyncRequest(
+    val localPath: String,
+    val remotePath: String,
+    val recursive: Boolean = true,
+    val backupRemote: Boolean = true,
+    val rollbackOnFailure: Boolean = true,
+    val verifyCommands: List<String> = emptyList()
+)
+
+data class SSHSyncResult(
+    val upload: SSHTransferResult,
+    val backupPath: String?,
+    val verify: List<SSHCommandResult>,
+    val rolledBack: Boolean
+)
+
+data class SSHTemplateRequest(
+    val remotePath: String,
+    val template: String,
+    val variables: Map<String, String> = emptyMap(),
+    val backupRemote: Boolean = true,
+    val rollbackOnFailure: Boolean = true,
+    val postWriteCommands: List<String> = emptyList()
+)
+
+data class SSHTemplateResult(
+    val remotePath: String,
+    val backupPath: String?,
+    val write: SSHTransferResult,
+    val postWrite: List<SSHCommandResult>,
+    val rolledBack: Boolean
+)
+
 interface SSHClient {
     val config: SSHConnectionConfig
 
@@ -64,4 +97,6 @@ interface SSHClient {
     fun readText(remotePath: String): String
     fun writeText(remotePath: String, content: String): SSHTransferResult
     fun roundTripEdit(request: SSHRoundTripRequest, transform: (String) -> String): SSHRoundTripResult
+    fun syncWithRollback(request: SSHSyncRequest): SSHSyncResult
+    fun applyTemplate(request: SSHTemplateRequest): SSHTemplateResult
 }
