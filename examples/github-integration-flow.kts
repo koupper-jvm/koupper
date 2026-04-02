@@ -1,3 +1,9 @@
+/**
+ * GitHub Integration Flow Demo
+ *
+ * Orchestrates a multi-step GitHub automation flow (create PR, wait checks, dispatch workflow,
+ * optional merge, follow-up issues) with dry-run support.
+ */
 import com.koupper.container.app
 import com.koupper.octopus.annotations.Export
 import com.koupper.providers.github.GitHubCheckRun
