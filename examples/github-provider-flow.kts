@@ -1,3 +1,9 @@
+/**
+ * GitHub Provider Operations Demo
+ *
+ * Demonstrates direct GitHub provider actions (issue, PR, workflow dispatch, run lookup)
+ * driven by a single input payload and action selector.
+ */
 import com.koupper.container.app
 import com.koupper.octopus.annotations.Export
 import com.koupper.providers.github.GitHubClient

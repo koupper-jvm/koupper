@@ -1,3 +1,9 @@
+/**
+ * SSH Provider Workflow Demo
+ *
+ * Runs multiple SSH automation modes from one script: roundtrip edit, directory upload/download,
+ * sync with rollback verification, and remote template apply with post-write commands.
+ */
 import com.koupper.container.app
 import com.koupper.octopus.annotations.Export
 import com.koupper.providers.ssh.SSHClient
