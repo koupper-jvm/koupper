@@ -87,6 +87,22 @@ data class SSHTemplateResult(
     val rolledBack: Boolean
 )
 
+data class SSHRemoteTreeNode(
+    val name: String,
+    val path: String,
+    val type: String,
+    val depth: Int,
+    val children: List<SSHRemoteTreeNode> = emptyList()
+)
+
+data class SSHRemoteTreeResult(
+    val rootPath: String,
+    val depth: Int,
+    val source: String,
+    val rendered: String,
+    val nodes: List<SSHRemoteTreeNode>
+)
+
 interface SSHClient {
     val config: SSHConnectionConfig
 
@@ -100,4 +116,167 @@ interface SSHClient {
     fun roundTripEdit(request: SSHRoundTripRequest, transform: (String) -> String): SSHRoundTripResult
     fun syncWithRollback(request: SSHSyncRequest): SSHSyncResult
     fun applyTemplate(request: SSHTemplateRequest): SSHTemplateResult
+
+    fun tree(rootPath: String = ".", depth: Int = 3, includeHidden: Boolean = true): SSHRemoteTreeResult {
+        val safeDepth = depth.coerceIn(1, 10)
+        val root = rootPath.trim().ifBlank { "." }
+        val quotedRoot = "'${root.replace("'", "'\\''")}'"
+        val hiddenFilter = if (includeHidden) {
+            ""
+        } else {
+            " ! -name '.*' ! -path '*/.*'"
+        }
+
+        val command = """
+            ROOT=$quotedRoot
+            if command -v tree >/dev/null 2>&1; then
+              echo '__KO_TREE__'
+              tree ${if (includeHidden) "-a" else ""} -L $safeDepth --noreport "${'$'}ROOT"
+            else
+              echo '__KO_FIND__'
+              if find "${'$'}ROOT" -maxdepth 0 -printf '' >/dev/null 2>&1; then
+                find "${'$'}ROOT" -maxdepth $safeDepth$hiddenFilter -printf '%y|%p\\n' | sort
+              else
+                find "${'$'}ROOT" -maxdepth $safeDepth$hiddenFilter -print | sort
+              fi
+            fi
+        """.trimIndent()
+
+        val output = exec(command).stdout
+        val lines = output.lines().filter { it.isNotBlank() }
+        if (lines.isEmpty()) {
+            return SSHRemoteTreeResult(root, safeDepth, "empty", "(no output)", emptyList())
+        }
+
+        val mode = lines.first()
+        val payload = lines.drop(1)
+
+        return when (mode) {
+            "__KO_TREE__" -> {
+                SSHRemoteTreeResult(
+                    rootPath = root,
+                    depth = safeDepth,
+                    source = "tree",
+                    rendered = payload.joinToString("\n").ifBlank { "(no output)" },
+                    nodes = emptyList()
+                )
+            }
+
+            "__KO_FIND__" -> {
+                val nodes = buildNodesFromFindPayload(root, payload)
+                SSHRemoteTreeResult(
+                    rootPath = root,
+                    depth = safeDepth,
+                    source = "find",
+                    rendered = renderNodes(root, nodes).ifBlank { "(no output)" },
+                    nodes = nodes
+                )
+            }
+
+            else -> {
+                SSHRemoteTreeResult(
+                    rootPath = root,
+                    depth = safeDepth,
+                    source = "raw",
+                    rendered = lines.joinToString("\n"),
+                    nodes = emptyList()
+                )
+            }
+        }
+    }
+
+    private fun buildNodesFromFindPayload(root: String, payload: List<String>): List<SSHRemoteTreeNode> {
+        data class MutableNode(
+            val name: String,
+            val path: String,
+            var type: String,
+            val children: MutableMap<String, MutableNode> = linkedMapOf()
+        )
+
+        val rootName = if (root == "/") "/" else root.substringAfterLast('/').ifBlank { root }
+        val rootNode = MutableNode(rootName, root, "d")
+
+        payload.forEach { line ->
+            val (type, path) = if ("|" in line) {
+                val idx = line.indexOf('|')
+                line.substring(0, idx) to line.substring(idx + 1)
+            } else {
+                "?" to line
+            }
+
+            val rel = when {
+                path == root -> ""
+                path.startsWith("$root/") -> path.removePrefix("$root/")
+                root == "/" && path.startsWith("/") -> path.removePrefix("/")
+                else -> path
+            }
+
+            val parts = rel.split('/').filter { it.isNotBlank() }
+            var current = rootNode
+            var currentPath = root
+
+            parts.forEachIndexed { i, part ->
+                currentPath = if (currentPath == "/") "/$part" else "$currentPath/$part"
+                val isLeaf = i == parts.lastIndex
+                val inferredType = when {
+                    !isLeaf -> "d"
+                    type == "d" -> "d"
+                    type == "l" -> "l"
+                    else -> "f"
+                }
+
+                val existing = current.children[part]
+                if (existing == null) {
+                    val created = MutableNode(part, currentPath, inferredType)
+                    current.children[part] = created
+                    current = created
+                } else {
+                    if (existing.type == "f" && inferredType == "d") existing.type = "d"
+                    current = existing
+                }
+            }
+        }
+
+        fun toImmutable(node: MutableNode, depth: Int): SSHRemoteTreeNode {
+            val sortedChildren = node.children.values
+                .sortedWith(compareBy<MutableNode>({ if (it.type == "d") 0 else 1 }, { it.name.lowercase() }))
+                .map { toImmutable(it, depth + 1) }
+
+            return SSHRemoteTreeNode(
+                name = node.name,
+                path = node.path,
+                type = node.type,
+                depth = depth,
+                children = sortedChildren
+            )
+        }
+
+        return rootNode.children.values
+            .sortedWith(compareBy<MutableNode>({ if (it.type == "d") 0 else 1 }, { it.name.lowercase() }))
+            .map { toImmutable(it, 1) }
+    }
+
+    private fun renderNodes(root: String, nodes: List<SSHRemoteTreeNode>): String {
+        val out = mutableListOf<String>()
+        out += root
+
+        fun typeSuffix(type: String): String = when (type) {
+            "d" -> "/"
+            "l" -> "@"
+            else -> ""
+        }
+
+        fun walk(list: List<SSHRemoteTreeNode>, prefix: String) {
+            list.forEachIndexed { i, node ->
+                val isLast = i == list.lastIndex
+                val branch = if (isLast) "└── " else "├── "
+                out += "$prefix$branch${node.name}${typeSuffix(node.type)}"
+                val childPrefix = if (isLast) "$prefix    " else "$prefix│   "
+                walk(node.children, childPrefix)
+            }
+        }
+
+        walk(nodes, "")
+        return out.joinToString("\n")
+    }
 }
