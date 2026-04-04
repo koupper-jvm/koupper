@@ -28,9 +28,9 @@ val sshTreeRoot: (Input) -> String = { input ->
     val command = """
         ROOT='${root.replace("'", "'\\''")}'
         if command -v tree >/dev/null 2>&1; then
-          tree $hiddenFlag -L $depth "$ROOT"
+          tree $hiddenFlag -L $depth "\$ROOT"
         else
-          find "$ROOT" -maxdepth $depth -print | sed "s#^$ROOT#.#"
+          find "\$ROOT" -maxdepth $depth -print | sed "s#^\$ROOT#.#"
         fi
     """.trimIndent()
 
