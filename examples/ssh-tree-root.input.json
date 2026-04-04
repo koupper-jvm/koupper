@@ -3,6 +3,7 @@
   "sshUser": "",
   "sshPort": 22,
   "sshIdentityFile": "",
+  "sshPassword": "",
   "sshStrictHostKeyChecking": false,
   "rootPath": "/var/www",
   "maxDepth": 3,
