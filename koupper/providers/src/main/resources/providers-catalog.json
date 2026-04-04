@@ -307,6 +307,7 @@
         { "name": "SSH_USER", "required": true, "description": "Remote SSH username." },
         { "name": "SSH_PORT", "required": false, "description": "Remote SSH port (default: 22)." },
         { "name": "SSH_IDENTITY_FILE", "required": false, "description": "Private key path for SSH/SCP." },
+        { "name": "SSH_PASSWORD", "required": false, "description": "Password-based auth (use key-based auth when possible)." },
         { "name": "SSH_STRICT_HOST_KEY_CHECKING", "required": false, "description": "Enable strict host key checking (true/false)." },
         { "name": "SSH_CONNECT_TIMEOUT_SECONDS", "required": false, "description": "SSH connect timeout in seconds." },
         { "name": "SSH_COMMAND_TIMEOUT_SECONDS", "required": false, "description": "SSH command/SCP timeout in seconds." }
