@@ -135,7 +135,7 @@ interface SSHClient {
             else
               echo '__KO_FIND__'
               if find "${'$'}ROOT" -maxdepth 0 -printf '' >/dev/null 2>&1; then
-                find "${'$'}ROOT" -maxdepth $safeDepth$hiddenFilter -printf '%y|%p\\n' | sort
+                find "${'$'}ROOT" -maxdepth $safeDepth$hiddenFilter -printf '%y|%p\n' | sort
               else
                 find "${'$'}ROOT" -maxdepth $safeDepth$hiddenFilter -print | sort
               fi
@@ -197,7 +197,11 @@ interface SSHClient {
         val rootName = if (root == "/") "/" else root.substringAfterLast('/').ifBlank { root }
         val rootNode = MutableNode(rootName, root, "d")
 
-        payload.forEach { line ->
+        payload
+            .flatMap { it.split("\\n") }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .forEach { line ->
             val (type, path) = if ("|" in line) {
                 val idx = line.indexOf('|')
                 line.substring(0, idx) to line.substring(idx + 1)
