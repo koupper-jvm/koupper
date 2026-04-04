@@ -130,8 +130,8 @@ interface SSHClient {
         val command = """
             ROOT=$quotedRoot
             if command -v tree >/dev/null 2>&1; then
-              echo '__KO_TREE__'
-              tree ${if (includeHidden) "-a" else ""} -L $safeDepth --noreport "${'$'}ROOT"
+              echo '__KO_TREEPATHS__'
+              tree -n -i -f -F ${if (includeHidden) "-a" else ""} -L $safeDepth --noreport "${'$'}ROOT" | sed '/^\s*$/d'
             else
               echo '__KO_FIND__'
               if find "${'$'}ROOT" -maxdepth 0 -printf '' >/dev/null 2>&1; then
@@ -152,13 +152,14 @@ interface SSHClient {
         val payload = lines.drop(1)
 
         return when (mode) {
-            "__KO_TREE__" -> {
+            "__KO_TREEPATHS__" -> {
+                val nodes = buildNodesFromPathLines(root, payload)
                 SSHRemoteTreeResult(
                     rootPath = root,
                     depth = safeDepth,
                     source = "tree",
-                    rendered = payload.joinToString("\n").ifBlank { "(no output)" },
-                    nodes = emptyList()
+                    rendered = renderNodes(root, nodes).ifBlank { "(no output)" },
+                    nodes = nodes
                 )
             }
 
@@ -254,6 +255,29 @@ interface SSHClient {
         return rootNode.children.values
             .sortedWith(compareBy<MutableNode>({ if (it.type == "d") 0 else 1 }, { it.name.lowercase() }))
             .map { toImmutable(it, 1) }
+    }
+
+    private fun buildNodesFromPathLines(root: String, payload: List<String>): List<SSHRemoteTreeNode> {
+        val converted = payload.mapNotNull { raw ->
+            val line = raw.trim()
+            if (line.isBlank()) return@mapNotNull null
+
+            val marker = line.lastOrNull()
+            val type = when (marker) {
+                '/' -> "d"
+                '@' -> "l"
+                else -> "f"
+            }
+
+            val cleanPath = when (marker) {
+                '/', '@', '*', '=', '|' -> line.dropLast(1)
+                else -> line
+            }
+
+            "$type|$cleanPath"
+        }
+
+        return buildNodesFromFindPayload(root, converted)
     }
 
     private fun renderNodes(root: String, nodes: List<SSHRemoteTreeNode>): String {
