@@ -64,23 +64,17 @@ val sshTreeRoot: (Input?, TerminalIO) -> String = { maybeInput, terminal ->
 
     val depth = input.maxDepth.coerceIn(1, 10)
     val root = input.rootPath.trim().ifBlank { "." }
-    val hiddenFlag = if (input.includeHidden) "-a" else ""
 
-    val command = """
-        ROOT='${root.replace("'", "'\\''")}'
-        if command -v tree >/dev/null 2>&1; then
-          tree $hiddenFlag -L $depth "${'$'}ROOT"
-        else
-          find "${'$'}ROOT" -maxdepth $depth -print | sed "s#^${'$'}ROOT#.#"
-        fi
-    """.trimIndent()
+    val tree = ssh.tree(
+        rootPath = root,
+        depth = depth,
+        includeHidden = input.includeHidden
+    )
 
-    val result = ssh.exec(command)
-    val output = result.stdout.ifBlank { "(no output)" }
+    println("Remote root: ${tree.rootPath}")
+    println("Depth: ${tree.depth}")
+    println("Source: ${tree.source}")
+    println(tree.rendered)
 
-    println("Remote root: $root")
-    println("Depth: $depth")
-    println(output)
-
-    output
+    tree.rendered
 }
