@@ -5,6 +5,7 @@ data class SSHConnectionConfig(
     val username: String,
     val port: Int = 22,
     val identityFile: String? = null,
+    val password: String? = null,
     val strictHostKeyChecking: Boolean = false,
     val connectTimeoutSeconds: Int = 20,
     val commandTimeoutSeconds: Long = 120

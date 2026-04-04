@@ -9,7 +9,7 @@
  */
 import com.koupper.octopus.annotations.Export
 import com.koupper.providers.io.TerminalIO
-import com.koupper.providers.ssh.OpenSSHClient
+import com.koupper.providers.ssh.JschSSHClient
 import com.koupper.providers.ssh.SSHConnectionConfig
 import com.koupper.providers.ssh.SSHClient
 
@@ -18,6 +18,7 @@ data class Input(
     val sshUser: String? = null,
     val sshPort: Int = 22,
     val sshIdentityFile: String? = null,
+    val sshPassword: String? = null,
     val sshStrictHostKeyChecking: Boolean = false,
     val rootPath: String = ".",
     val maxDepth: Int = 3,
@@ -39,13 +40,24 @@ val sshTreeRoot: (Input?, TerminalIO) -> String = { maybeInput, terminal ->
 
     val host = pick(input.sshHost, "SSH_HOST", "SSH host (ip/domain):")
     val user = pick(input.sshUser, "SSH_USER", "SSH username:")
+    val password = input.sshPassword?.takeIf { it.isNotBlank() }
+        ?: System.getenv("SSH_PASSWORD")?.takeIf { it.isNotBlank() }
+        ?: run {
+            if (!input.sshIdentityFile.isNullOrBlank()) null
+            else {
+                var typed = ""
+                terminal.prompt("SSH password (leave empty if key auth is configured):") { typed = it }
+                typed.takeIf { it.isNotBlank() }
+            }
+        }
 
-    val ssh: SSHClient = OpenSSHClient(
+    val ssh: SSHClient = JschSSHClient(
         SSHConnectionConfig(
             host = host,
             username = user,
             port = input.sshPort,
             identityFile = input.sshIdentityFile,
+            password = password,
             strictHostKeyChecking = input.sshStrictHostKeyChecking
         )
     )
