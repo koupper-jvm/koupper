@@ -65,19 +65,25 @@ val sshTreeRoot: (Input?, TerminalIO) -> String = { maybeInput, terminal ->
     val depth = input.maxDepth.coerceIn(1, 10)
     val root = input.rootPath.trim().ifBlank { "." }
 
-    try {
+    fun formatBlock(title: String, body: String): String {
+        val cleanBody = body.trimEnd()
+        return buildString {
+            appendLine("== $title ==")
+            appendLine(cleanBody)
+        }
+    }
+
+    val rendered = try {
         val tree = ssh.tree(
             rootPath = root,
             depth = depth,
             includeHidden = input.includeHidden
         )
 
-        println("Remote root: ${tree.rootPath}")
-        println("Depth: ${tree.depth}")
-        println("Source: ${tree.source}")
-        println(tree.rendered)
-
-        tree.rendered
+        formatBlock(
+            title = "SSH Tree",
+            body = "host=$host user=$user root=${tree.rootPath} depth=${tree.depth} source=${tree.source}\n${tree.rendered}"
+        )
     } catch (t: Throwable) {
         val reason = t.message?.ifBlank { null }
             ?: t.cause?.message?.ifBlank { null }
@@ -90,8 +96,11 @@ val sshTreeRoot: (Input?, TerminalIO) -> String = { maybeInput, terminal ->
             else -> reason
         }
 
-        val message = "SSH tree failed for $user@$host:${input.sshPort}. Hint: $hint"
-        println(message)
-        message
+        formatBlock(
+            title = "SSH Tree Error",
+            body = "target=$user@$host:${input.sshPort}\nreason=$hint"
+        )
     }
+
+    rendered
 }
