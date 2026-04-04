@@ -1,4 +1,9 @@
 {
+  "sshHost": "",
+  "sshUser": "",
+  "sshPort": 22,
+  "sshIdentityFile": "",
+  "sshStrictHostKeyChecking": false,
   "rootPath": "/var/www",
   "maxDepth": 3,
   "includeHidden": true

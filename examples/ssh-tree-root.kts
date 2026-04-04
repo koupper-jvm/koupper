@@ -7,19 +7,48 @@
  * Typical run:
  * - koupper run examples/ssh-tree-root.kts --json-file examples/ssh-tree-root.input.json
  */
-import com.koupper.container.app
 import com.koupper.octopus.annotations.Export
+import com.koupper.providers.io.TerminalIO
+import com.koupper.providers.ssh.OpenSSHClient
+import com.koupper.providers.ssh.SSHConnectionConfig
 import com.koupper.providers.ssh.SSHClient
 
 data class Input(
+    val sshHost: String? = null,
+    val sshUser: String? = null,
+    val sshPort: Int = 22,
+    val sshIdentityFile: String? = null,
+    val sshStrictHostKeyChecking: Boolean = false,
     val rootPath: String = ".",
     val maxDepth: Int = 3,
     val includeHidden: Boolean = true
 )
 
 @Export
-val sshTreeRoot: (Input) -> String = { input ->
-    val ssh = app.getInstance(SSHClient::class)
+val sshTreeRoot: (Input?, TerminalIO) -> String = { maybeInput, terminal ->
+    val input = maybeInput ?: Input()
+
+    fun pick(value: String?, envName: String, prompt: String): String {
+        val env = System.getenv(envName)?.trim()
+        if (!value.isNullOrBlank()) return value.trim()
+        if (!env.isNullOrBlank()) return env
+        var typed = ""
+        terminal.prompt(prompt) { typed = it.trim() }
+        return typed
+    }
+
+    val host = pick(input.sshHost, "SSH_HOST", "SSH host (ip/domain):")
+    val user = pick(input.sshUser, "SSH_USER", "SSH username:")
+
+    val ssh: SSHClient = OpenSSHClient(
+        SSHConnectionConfig(
+            host = host,
+            username = user,
+            port = input.sshPort,
+            identityFile = input.sshIdentityFile,
+            strictHostKeyChecking = input.sshStrictHostKeyChecking
+        )
+    )
 
     val depth = input.maxDepth.coerceIn(1, 10)
     val root = input.rootPath.trim().ifBlank { "." }
