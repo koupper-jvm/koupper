@@ -217,6 +217,7 @@ internal fun daemonResponseJson(
     type: String,
     requestId: String? = null,
     message: String? = null,
+    level: String? = null,
     result: String? = null,
     error: String? = null
 ): String {
@@ -224,6 +225,7 @@ internal fun daemonResponseJson(
         jsonField("type", type),
         jsonField("requestId", requestId),
         jsonField("message", message),
+        jsonField("level", level),
         jsonField("result", result),
         jsonField("error", error)
     ).joinToString(",") + "}"
@@ -841,17 +843,28 @@ fun tokenize(input: String): List<String> {
 private class SessionOutput(private val writer: java.io.BufferedWriter) {
     private val lock = Any()
 
-    fun printLine(text: String, mode: ResponseMode = ResponseMode.LEGACY, requestId: String? = null) {
+    fun printLine(
+        text: String,
+        mode: ResponseMode = ResponseMode.LEGACY,
+        requestId: String? = null,
+        level: String = "INFO"
+    ) {
         synchronized(lock) {
             when (mode) {
                 ResponseMode.LEGACY -> {
-                    writer.write("PRINT::$text")
+                    val normalizedLevel = level.uppercase()
+                    val prefix = when (normalizedLevel) {
+                        "ERROR" -> "PRINT_ERR::"
+                        "DEBUG" -> "PRINT_DEBUG::"
+                        else -> "PRINT::"
+                    }
+                    writer.write("$prefix$text")
                     writer.newLine()
                     writer.flush()
                 }
 
                 ResponseMode.JSON -> {
-                    writer.write(daemonResponseJson(type = "print", requestId = requestId, message = text))
+                    writer.write(daemonResponseJson(type = "print", requestId = requestId, message = text, level = level.lowercase()))
                     writer.newLine()
                     writer.flush()
                 }
@@ -901,11 +914,14 @@ private class SessionOutput(private val writer: java.io.BufferedWriter) {
 }
 
 private object SessionStdoutBridge {
+    private enum class StreamKind { STDOUT, STDERR }
+
     private val installed = AtomicBoolean(false)
     private val sessionOutput = InheritableThreadLocal<SessionOutput?>()
     private val responseMode = InheritableThreadLocal<ResponseMode?>()
     private val requestId = InheritableThreadLocal<String?>()
-    private val threadBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
+    private val stdoutBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
+    private val stderrBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
     private val fallback = PrintStream(object : OutputStream() {
         override fun write(b: Int) {}
     })
@@ -913,9 +929,10 @@ private object SessionStdoutBridge {
     fun installOnce() {
         if (!installed.compareAndSet(false, true)) return
 
-        val routingOut = PrintStream(RoutingOutputStream(), true, Charsets.UTF_8.name())
+        val routingOut = PrintStream(RoutingOutputStream(StreamKind.STDOUT), true, Charsets.UTF_8.name())
+        val routingErr = PrintStream(RoutingOutputStream(StreamKind.STDERR), true, Charsets.UTF_8.name())
         System.setOut(routingOut)
-        System.setErr(routingOut)
+        System.setErr(routingErr)
     }
 
     fun bind(output: SessionOutput, mode: ResponseMode = ResponseMode.LEGACY, currentRequestId: String? = null) {
@@ -925,41 +942,52 @@ private object SessionStdoutBridge {
     }
 
     fun clear() {
-        flushCurrentThreadBuffer()
+        flushCurrentThreadBuffer(StreamKind.STDOUT)
+        flushCurrentThreadBuffer(StreamKind.STDERR)
         sessionOutput.remove()
         responseMode.remove()
         requestId.remove()
-        threadBuffer.remove()
+        stdoutBuffer.remove()
+        stderrBuffer.remove()
     }
 
-    private fun flushCurrentThreadBuffer() {
-        val buffer = threadBuffer.get()
+    private fun bufferFor(stream: StreamKind) = when (stream) {
+        StreamKind.STDOUT -> stdoutBuffer.get()
+        StreamKind.STDERR -> stderrBuffer.get()
+    }
+
+    private fun flushCurrentThreadBuffer(stream: StreamKind) {
+        val buffer = bufferFor(stream)
         if (buffer.size() <= 0) return
         val text = buffer.toString(Charsets.UTF_8.name())
         buffer.reset()
-        emit(text)
+        emit(text, stream)
     }
 
-    private fun emit(text: String) {
+    private fun emit(text: String, stream: StreamKind) {
         val output = sessionOutput.get()
+        val level = when (stream) {
+            StreamKind.STDOUT -> "DEBUG"
+            StreamKind.STDERR -> "ERROR"
+        }
         if (output != null) {
-            output.printLine(text, responseMode.get() ?: ResponseMode.LEGACY, requestId.get())
+            output.printLine(text, responseMode.get() ?: ResponseMode.LEGACY, requestId.get(), level)
         } else {
             fallback.print(text)
         }
     }
 
-    private class RoutingOutputStream : OutputStream() {
+    private class RoutingOutputStream(private val streamKind: StreamKind) : OutputStream() {
         override fun write(b: Int) {
             if (b == '\r'.code) return
 
-            val buffer = threadBuffer.get()
+            val buffer = bufferFor(streamKind)
 
             if (b == '\n'.code) {
                 if (buffer.size() > 0) {
                     val text = buffer.toString(Charsets.UTF_8.name())
                     buffer.reset()
-                    emit(text)
+                    emit(text, streamKind)
                 }
                 return
             }
@@ -968,7 +996,7 @@ private object SessionStdoutBridge {
         }
 
         override fun flush() {
-            flushCurrentThreadBuffer()
+            flushCurrentThreadBuffer(streamKind)
         }
     }
 }
