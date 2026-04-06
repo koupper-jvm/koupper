@@ -350,6 +350,21 @@
       "docs": "https://koupper.com/docs/providers/secrets"
     },
     {
+      "id": "runtime-router",
+      "serviceProvider": "RuntimeRouterServiceProvider",
+      "description": "Runtime HTTP endpoint provider for registering and serving script routes.",
+      "bindings": [
+        {
+          "contract": "RuntimeRouterProvider",
+          "implementations": [
+            { "class": "JdkRuntimeRouterProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/runtime-router"
+    },
+    {
       "id": "ssh",
       "serviceProvider": "SSHServiceProvider",
       "description": "Remote SSH operations for command execution and file transfer workflows.",
