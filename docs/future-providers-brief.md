@@ -24,6 +24,27 @@ Purpose: define a clear backlog of future providers that can be implemented by a
 11. `runtime-router`
 12. `mcp-server`
 
+## Current Implementation Status
+
+Implemented in `koupper` (merged to `develop`):
+
+- `docker`
+- `git`
+- `secrets`
+- `ai-llm-ops`
+- `k8s`
+- `vector-db`
+- `notifications`
+- `observability`
+- `queue-ops`
+- `iac`
+- `runtime-router`
+- `mcp` (covers `mcp-server` scope in this brief)
+
+Notes:
+- Some providers require local binaries/services to fully execute examples (`docker`, `kubectl`, `terraform`).
+- Example scripts are included under `examples/` for each implemented provider.
+
 ## Provider Specifications
 
 ### 1) Docker Provider (`docker`)
