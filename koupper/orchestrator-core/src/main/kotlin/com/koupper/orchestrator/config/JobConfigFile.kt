@@ -1,6 +1,7 @@
 package com.koupper.orchestrator.config
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 
 data class JobDriverConnection(
     val type: String,
@@ -11,6 +12,7 @@ data class QueueConfig(
     val concurrency: Int
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class JobConfiguration(
     val id: String? = null,
     val driver: String = "file",
