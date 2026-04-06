@@ -13,6 +13,7 @@ import com.koupper.providers.github.GitHubServiceProvider
 import com.koupper.providers.git.GitServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.jwt.JWTServiceProvider
+import com.koupper.providers.k8s.K8sServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
 import com.koupper.providers.mcp.MCPServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
@@ -68,6 +69,7 @@ class ServiceProviderManager {
             HttpServiceProvider::class,
             FileServiceProvider::class,
             JWTServiceProvider::class,
+            K8sServiceProvider::class,
             CryptoServiceProvider::class,
             AwsServiceProvider::class,
             AwsS3ServiceProvider::class,
