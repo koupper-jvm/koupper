@@ -85,6 +85,21 @@
       "docs": "https://koupper.com/docs/providers/logger"
     },
     {
+      "id": "mcp",
+      "serviceProvider": "MCPServiceProvider",
+      "description": "MCP-style local tool server provider with HTTP tool discovery and invocation endpoints.",
+      "bindings": [
+        {
+          "contract": "MCPServerProvider",
+          "implementations": [
+            { "class": "LocalMCPServerProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/mcp"
+    },
+    {
       "id": "http",
       "serviceProvider": "HttpServiceProvider",
       "description": "HTTP invoker for outbound API requests.",
