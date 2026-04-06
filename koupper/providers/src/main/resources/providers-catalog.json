@@ -168,6 +168,24 @@
       "docs": "https://koupper.com/docs/providers/http"
     },
     {
+      "id": "iac",
+      "serviceProvider": "IaCServiceProvider",
+      "description": "Terraform-based IaC operations provider with approval guard for apply.",
+      "bindings": [
+        {
+          "contract": "IaCProvider",
+          "implementations": [
+            { "class": "TerraformIaCProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "TERRAFORM_COMMAND", "required": false, "description": "Terraform binary command." },
+        { "name": "TERRAFORM_TIMEOUT_SECONDS", "required": false, "description": "Terraform command timeout in seconds." }
+      ],
+      "docs": "https://koupper.com/docs/providers/iac"
+    },
+    {
       "id": "files",
       "serviceProvider": "FileServiceProvider",
       "description": "File, text, JSON and YAML handlers.",
