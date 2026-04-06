@@ -11,7 +11,8 @@ class JobRunWorkerHandler : JobSubcommandHandler {
         val scriptPath = "$context/job-runner.kts"
         File(scriptPath).writeText(generateJobRunnerScript(configId, jobIdArg))
 
-        return RunCommand().execute(context, "job-runner.kts")
+        val output = RunCommand().execute(context, "job-runner.kts")
+        return if (output.endsWith("\n")) output else "$output\n"
     }
 
     /**
