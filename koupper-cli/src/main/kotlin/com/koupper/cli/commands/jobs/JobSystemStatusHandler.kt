@@ -11,7 +11,6 @@ class JobSystemStatusHandler : JobSubcommandHandler {
         File(scriptPath).writeText(generateJobDisplayerScript(configId))
 
         val statusHeader = buildString {
-            appendLine()
             appendLine("   🧠 Current Job Configuration")
             appendLine("   ─────────────────────────────")
 
@@ -22,8 +21,8 @@ class JobSystemStatusHandler : JobSubcommandHandler {
             }
         }
 
-
-        return statusHeader + RunCommand().execute(context, "job-runner.kts")
+        val output = statusHeader + RunCommand().execute(context, "job-runner.kts")
+        return if (output.endsWith("\n")) output else "$output\n"
     }
 
     private fun generateJobDisplayerScript(configId: String?): String {
