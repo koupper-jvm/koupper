@@ -9,6 +9,7 @@ import com.koupper.providers.docker.DockerServiceProvider
 import com.koupper.providers.files.FileServiceProvider
 import com.koupper.providers.hashing.HasherServiceProvider
 import com.koupper.providers.github.GitHubServiceProvider
+import com.koupper.providers.git.GitServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.jwt.JWTServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
@@ -60,6 +61,7 @@ class ServiceProviderManager {
             AwsServiceProvider::class,
             AwsS3ServiceProvider::class,
             HasherServiceProvider::class,
+            GitServiceProvider::class,
             GitHubServiceProvider::class,
             AIServiceProvider::class,
             TemplateServiceProvider::class,
