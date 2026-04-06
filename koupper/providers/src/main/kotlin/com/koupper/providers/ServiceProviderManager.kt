@@ -5,6 +5,7 @@ import com.koupper.providers.aws.dynamo.AwsServiceProvider
 import com.koupper.providers.aws.s3.AwsS3ServiceProvider
 import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBServiceProvider
+import com.koupper.providers.docker.DockerServiceProvider
 import com.koupper.providers.files.FileServiceProvider
 import com.koupper.providers.hashing.HasherServiceProvider
 import com.koupper.providers.github.GitHubServiceProvider
@@ -49,6 +50,7 @@ class ServiceProviderManager {
     fun listProviders(): List<KClass<*>> {
         return listOf(
             DBServiceProvider::class,
+            DockerServiceProvider::class,
             SenderServiceProvider::class,
             LoggerServiceProvider::class,
             HttpServiceProvider::class,
