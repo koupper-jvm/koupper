@@ -262,6 +262,24 @@
       "docs": "https://koupper.com/docs/providers/github"
     },
     {
+      "id": "git",
+      "serviceProvider": "GitServiceProvider",
+      "description": "Local Git repository automation provider with safe commit defaults.",
+      "bindings": [
+        {
+          "contract": "GitClient",
+          "implementations": [
+            { "class": "GitCliClient" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "GIT_COMMAND", "required": false, "description": "Git command binary (default: git)." },
+        { "name": "GIT_TIMEOUT_SECONDS", "required": false, "description": "Git command timeout in seconds." }
+      ],
+      "docs": "https://koupper.com/docs/providers/git"
+    },
+    {
       "id": "ai",
       "serviceProvider": "AIServiceProvider",
       "description": "AI model integration provider (OpenAI by default).",
