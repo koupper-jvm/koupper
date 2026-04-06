@@ -47,6 +47,27 @@
       "docs": "https://koupper.com/docs/providers/mailing"
     },
     {
+      "id": "docker",
+      "serviceProvider": "DockerServiceProvider",
+      "description": "Docker CLI automation provider for image, container and compose workflows.",
+      "bindings": [
+        {
+          "contract": "DockerClient",
+          "implementations": [
+            { "class": "DockerCliClient" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "DOCKER_COMMAND", "required": false, "description": "Docker command binary (default: docker)." },
+        { "name": "DOCKER_HOST", "required": false, "description": "Docker host endpoint override." },
+        { "name": "DOCKER_CONTEXT", "required": false, "description": "Docker context name override." },
+        { "name": "DOCKER_TIMEOUT_SECONDS", "required": false, "description": "Command timeout in seconds." },
+        { "name": "DOCKER_WORKDIR", "required": false, "description": "Working directory for docker commands." }
+      ],
+      "docs": "https://koupper.com/docs/providers/docker"
+    },
+    {
       "id": "logger",
       "serviceProvider": "LoggerServiceProvider",
       "description": "Database-backed application logger.",
