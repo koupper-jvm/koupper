@@ -100,6 +100,25 @@
       "docs": "https://koupper.com/docs/providers/mcp"
     },
     {
+      "id": "notifications",
+      "serviceProvider": "NotificationsServiceProvider",
+      "description": "Operational notifications provider for console or webhook destinations.",
+      "bindings": [
+        {
+          "contract": "NotificationsProvider",
+          "implementations": [
+            { "class": "ConsoleNotificationsProvider" },
+            { "class": "WebhookNotificationsProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "NOTIFICATIONS_PROVIDER", "required": false, "description": "console (default), webhook, slack, discord, teams" },
+        { "name": "NOTIFICATIONS_WEBHOOK_URL", "required": false, "description": "Webhook URL for webhook-based notification providers." }
+      ],
+      "docs": "https://koupper.com/docs/providers/notifications"
+    },
+    {
       "id": "http",
       "serviceProvider": "HttpServiceProvider",
       "description": "HTTP invoker for outbound API requests.",
