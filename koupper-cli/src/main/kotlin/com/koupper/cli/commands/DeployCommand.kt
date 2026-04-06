@@ -161,9 +161,13 @@ class DeployCommand : Command() {
                             when (type) {
                                 "print" -> {
                                     val message = node.get("message")?.asText().orEmpty()
-                                    val level = node.get("level")?.asText().orEmpty().lowercase()
+                                    val level = node.get("level")?.asText().orEmpty().uppercase()
                                     if (message.isNotEmpty()) {
-                                        if (level == "error") System.err.println(message) else println(message)
+                                        if (level == "WARN" || level == "ERROR") {
+                                            System.err.println(message)
+                                        } else {
+                                            println(message)
+                                        }
                                     }
                                 }
 
