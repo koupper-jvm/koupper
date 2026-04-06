@@ -34,7 +34,7 @@ private fun ensureOk(result: CommandResult, step: String) {
 }
 
 private fun latestRunSnapshot(cwd: File, workflow: String, branch: String): Map<String, String> {
-    val query = ".[0] | \"\\(.databaseId)|\\(.status)|\\(.conclusion)|\\(.url)\""
+    val query = ".[0] | [.databaseId,.status,.conclusion,.url] | @tsv"
     val cmd = runCommand(
         listOf(
             "gh", "run", "list",
@@ -51,7 +51,7 @@ private fun latestRunSnapshot(cwd: File, workflow: String, branch: String): Map<
     val line = cmd.output.lines().firstOrNull { it.isNotBlank() }
         ?: error("no workflow runs found for workflow '$workflow' on branch '$branch'")
 
-    val parts = line.split("|", limit = 4)
+    val parts = line.split("\t", limit = 4)
     if (parts.size < 4) {
         error("unexpected workflow output format: $line")
     }
