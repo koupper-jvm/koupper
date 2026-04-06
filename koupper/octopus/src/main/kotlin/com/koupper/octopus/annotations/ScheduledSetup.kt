@@ -3,6 +3,7 @@ package com.koupper.octopus.annotations
 import com.koupper.container.app
 import com.koupper.logging.LogSpec
 import com.koupper.logging.captureLogs
+import com.koupper.logging.toStreamRoutingConfig
 import com.koupper.logging.withScriptLogger
 import com.koupper.orchestrator.*
 import com.koupper.orchestrator.config.JobConfig
@@ -190,7 +191,7 @@ object ScheduledSetup {
                         val delay = java.time.Duration.between(now, next).toMillis()
                         Thread.sleep(delay)
                         captureLogs<Any?>("Scheduled.Cron", replaySpec!!) { logger ->
-                            withScriptLogger(logger, replaySpec?.mdc!!) {
+                            withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
                                 val result = ScriptRunner.runScript(workerTask, backend.getSymbol(workerTask.functionName))
                                 if (debug) logger.info { "🟢 [CRON] Result: $result" }
                             }
@@ -203,7 +204,7 @@ object ScheduledSetup {
             rate > 0 -> {
                 scheduler.scheduleAtFixedRate({
                     captureLogs<Any?>("Scheduled.Rate", replaySpec!!) { logger ->
-                        withScriptLogger(logger, replaySpec?.mdc!!) {
+                        withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
                             val result = ScriptRunner.runScript(workerTask, backend.getSymbol(workerTask.functionName))
                             if (debug) logger.info { "🟢 [RATE] Result: $result" }
                         }
@@ -215,7 +216,7 @@ object ScheduledSetup {
             delay > 0 -> {
                 scheduler.schedule({
                     captureLogs<Any?>("Scheduled.Delay", replaySpec!!) { logger ->
-                        withScriptLogger(logger, replaySpec?.mdc!!) {
+                        withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
                             val result = ScriptRunner.runScript(workerTask, backend.getSymbol(workerTask.functionName))
                             if (debug) logger.info { "🟢 [DELAY] Result: $result" }
                         }
@@ -230,7 +231,7 @@ object ScheduledSetup {
                 val diff = java.time.Duration.between(now, runAt).toMillis().coerceAtLeast(0)
                 scheduler.schedule({
                     captureLogs<Any?>("Scheduled.At", replaySpec!!) { logger ->
-                        withScriptLogger(logger, replaySpec?.mdc!!) {
+                        withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
                             val result = ScriptRunner.runScript(workerTask, backend.getSymbol(workerTask.functionName))
                             if (debug) logger.info { "🟢 [AT] Result: $result" }
                         }
@@ -241,7 +242,7 @@ object ScheduledSetup {
 
             else -> {
                 captureLogs<Any?>("Scheduled.Immediate", replaySpec!!) { logger ->
-                    withScriptLogger(logger, replaySpec?.mdc!!) {
+                    withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
                         val result = ScriptRunner.runScript(workerTask, backend.getSymbol(workerTask.functionName))
                         if (debug) logger.info { "🟢 [IMMEDIATE] Result: $result" }
                     }

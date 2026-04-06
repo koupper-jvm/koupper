@@ -3,6 +3,7 @@ package com.koupper.octopus
 import com.koupper.logging.LogSpec
 import com.koupper.logging.LoggerFactory
 import com.koupper.logging.captureLogs
+import com.koupper.logging.toStreamRoutingConfig
 import com.koupper.logging.withScriptLogger
 import com.koupper.octopus.annotations.JobsListenerCall
 import com.koupper.octopus.annotations.JobsListenerSetup
@@ -27,6 +28,8 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
             context = diParams.scriptContext,
             level = (annParams["level"] as? String) ?: "DEBUG",
             destination = (annParams["destination"] as? String) ?: "console",
+            stdoutLevel = (annParams["stdoutLevel"] as? String) ?: "INFO",
+            stderrLevel = (annParams["stderrLevel"] as? String) ?: "ERROR",
             mdc = mapOf(
                 "script" to (diParams.scriptPath ?: "unknown"),
                 "export" to diParams.functionName,
@@ -68,7 +71,11 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         )
 
         // IMPORTANTE: Aquí NO usamos captureLogs para que el Dispatcher no mate el archivo
-        val result = withScriptLogger(LoggerFactory.get("Scripts.Dispatcher"), spec.mdc) {
+        val result = withScriptLogger(
+            LoggerFactory.get("Scripts.Dispatcher"),
+            spec.mdc,
+            spec.toStreamRoutingConfig()
+        ) {
             JobsListenerSetup.run(
                 JobsListenerCall(
                     scriptContext = diParams.scriptContext,
@@ -110,7 +117,7 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         val paramsJson = buildParamsJson(functionArgTypeNames, diParams.params?.positionals ?: emptyList(), diParams.params?.params ?: emptyMap(), diParams.params?.flags ?: emptySet())
 
         val (result, _) = captureLogs<Any?>("Scripts.Dispatcher", spec) { logger ->
-            withScriptLogger(logger, spec.mdc) {
+            withScriptLogger(logger, spec.mdc, spec.toStreamRoutingConfig()) {
                 ScheduledSetup.run(
                     JobsListenerCall(
                         scriptContext = diParams.scriptContext,
@@ -158,7 +165,7 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         val paramsJson = buildParamsJson(functionArgTypeNames, diParams.params?.positionals ?: emptyList(), diParams.params?.params ?: emptyMap(), diParams.params?.flags ?: emptySet())
 
         val (result, _) = captureLogs("Scripts.Dispatcher", spec) { logger ->
-            withScriptLogger(logger, spec.mdc) {
+            withScriptLogger(logger, spec.mdc, spec.toStreamRoutingConfig()) {
                 if (diParams.callable != null) {
                     return@captureLogs ScriptRunner.executeFunction(diParams.callable.property, diParams.callable.args.toList()) as T
                 }
