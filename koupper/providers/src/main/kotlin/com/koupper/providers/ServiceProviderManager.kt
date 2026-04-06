@@ -17,6 +17,7 @@ import com.koupper.providers.mcp.MCPServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.notifications.NotificationsServiceProvider
 import com.koupper.providers.observability.ObservabilityServiceProvider
+import com.koupper.providers.queueops.QueueOpsServiceProvider
 import com.koupper.providers.rss.RSSServiceProvider
 import com.koupper.providers.runtime.router.RuntimeRouterServiceProvider
 import com.koupper.providers.secrets.SecretsServiceProvider
@@ -62,6 +63,7 @@ class ServiceProviderManager {
             MCPServiceProvider::class,
             NotificationsServiceProvider::class,
             ObservabilityServiceProvider::class,
+            QueueOpsServiceProvider::class,
             HttpServiceProvider::class,
             FileServiceProvider::class,
             JWTServiceProvider::class,
