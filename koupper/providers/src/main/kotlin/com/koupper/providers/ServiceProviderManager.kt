@@ -15,6 +15,7 @@ import com.koupper.providers.jwt.JWTServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.rss.RSSServiceProvider
+import com.koupper.providers.runtime.router.RuntimeRouterServiceProvider
 import com.koupper.providers.secrets.SecretsServiceProvider
 import com.koupper.providers.ssh.SSHServiceProvider
 import com.koupper.providers.templates.TemplateServiceProvider
@@ -67,6 +68,7 @@ class ServiceProviderManager {
             AIServiceProvider::class,
             TemplateServiceProvider::class,
             RSSServiceProvider::class,
+            RuntimeRouterServiceProvider::class,
             SecretsServiceProvider::class,
             SSHServiceProvider::class,
         )
