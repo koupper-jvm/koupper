@@ -12,6 +12,7 @@ import com.koupper.providers.hashing.HasherServiceProvider
 import com.koupper.providers.github.GitHubServiceProvider
 import com.koupper.providers.git.GitServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
+import com.koupper.providers.iac.IaCServiceProvider
 import com.koupper.providers.jwt.JWTServiceProvider
 import com.koupper.providers.k8s.K8sServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
@@ -68,6 +69,7 @@ class ServiceProviderManager {
             ObservabilityServiceProvider::class,
             QueueOpsServiceProvider::class,
             HttpServiceProvider::class,
+            IaCServiceProvider::class,
             FileServiceProvider::class,
             JWTServiceProvider::class,
             K8sServiceProvider::class,
