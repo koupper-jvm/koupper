@@ -9,6 +9,11 @@ object JobConfig {
         return JobConfiguration(configurations = createListOfConfigurations(context, configId, safeConfigName))
     }
 
+    fun loadRawConfigs(context: String, configId: String? = null, configFileName: String? = "jobs.json"): List<Map<String, Any?>> {
+        val safeConfigName = sanitizeFileName(configFileName ?: "jobs.json")
+        return loadConfigs(context, configId, safeConfigName)
+    }
+
     private fun createListOfConfigurations(context: String, configId: String? = null, configFileName: String): List<JobConfiguration> {
         val configs = loadConfigs(context, configId, configFileName)
         if (configs.isEmpty()) return emptyList()
