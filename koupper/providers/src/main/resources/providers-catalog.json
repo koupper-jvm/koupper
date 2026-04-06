@@ -218,6 +218,24 @@
       "docs": "https://koupper.com/docs/providers/jwt"
     },
     {
+      "id": "k8s",
+      "serviceProvider": "K8sServiceProvider",
+      "description": "Kubernetes operations provider over kubectl for apply/get/logs/rollout workflows.",
+      "bindings": [
+        {
+          "contract": "K8sProvider",
+          "implementations": [
+            { "class": "KubectlK8sProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "KUBECTL_COMMAND", "required": false, "description": "kubectl binary command." },
+        { "name": "KUBECTL_TIMEOUT_SECONDS", "required": false, "description": "Command timeout in seconds." }
+      ],
+      "docs": "https://koupper.com/docs/providers/k8s"
+    },
+    {
       "id": "crypto",
       "serviceProvider": "CryptoServiceProvider",
       "description": "Symmetric encryption helpers.",
