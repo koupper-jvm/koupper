@@ -368,6 +368,24 @@
       "docs": "https://koupper.com/docs/providers/ai"
     },
     {
+      "id": "ai-llm-ops",
+      "serviceProvider": "AILlmOpsServiceProvider",
+      "description": "LLM operations provider with chat, structured output, embeddings, rerank and tool-call helpers.",
+      "bindings": [
+        {
+          "contract": "AILlmOpsProvider",
+          "implementations": [
+            { "class": "DefaultAILlmOpsProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "AI_LLM_OPS_MODE", "required": false, "description": "mock (default) or live" },
+        { "name": "AI_LLM_OPS_FALLBACK", "required": false, "description": "Comma-separated fallback model list." }
+      ],
+      "docs": "https://koupper.com/docs/providers/ai-llm-ops"
+    },
+    {
       "id": "templates",
       "serviceProvider": "TemplateServiceProvider",
       "description": "Template rendering provider.",
