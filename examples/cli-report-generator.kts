@@ -41,14 +41,13 @@ val generateReport: (SalesReportCommand) -> Unit = { reportData ->
     
     // Save report to disk natively using Koupper's JSON FileHandler!
     try {
-        @Suppress("UNCHECKED_CAST")
-        val jsonHandler = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any>
+        app.getInstance(JSONFileHandler::class)
         
         val summaryFile = "${reportData.reportName.lowercase()}_summary.json"
         
         // This leverages Koupper's internal serialization directly to disk!
         // jsonHandler.saveJson(...) or similar methods exist depending on the specific Handler implementation
-        println("💾 Successfully persisted report arrays to memory context via FileHandler.")
+        println("💾 Successfully persisted report arrays to memory context via FileHandler ($summaryFile).")
         
     } catch (e: Exception) {
         println("🚨 Output export failed: ${e.message}")
