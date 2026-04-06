@@ -419,6 +419,21 @@
       "docs": "https://koupper.com/docs/providers/templates"
     },
     {
+      "id": "vector-db",
+      "serviceProvider": "VectorDbServiceProvider",
+      "description": "Vector storage and similarity query provider with local in-memory backend.",
+      "bindings": [
+        {
+          "contract": "VectorDbProvider",
+          "implementations": [
+            { "class": "LocalVectorDbProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/vector-db"
+    },
+    {
       "id": "rss",
       "serviceProvider": "RSSServiceProvider",
       "description": "RSS feed reader provider.",
