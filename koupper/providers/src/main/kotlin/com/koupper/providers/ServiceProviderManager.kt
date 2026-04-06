@@ -13,6 +13,7 @@ import com.koupper.providers.git.GitServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.jwt.JWTServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
+import com.koupper.providers.mcp.MCPServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.rss.RSSServiceProvider
 import com.koupper.providers.runtime.router.RuntimeRouterServiceProvider
@@ -56,6 +57,7 @@ class ServiceProviderManager {
             DockerServiceProvider::class,
             SenderServiceProvider::class,
             LoggerServiceProvider::class,
+            MCPServiceProvider::class,
             HttpServiceProvider::class,
             FileServiceProvider::class,
             JWTServiceProvider::class,
