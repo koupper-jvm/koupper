@@ -92,10 +92,16 @@ internal data class DaemonRequest(
 internal data class DaemonResponse(
     val type: String,
     val requestId: String? = null,
+    val level: String? = null,
     val message: String? = null,
     val result: String? = null,
     val error: String? = null
 )
+
+private enum class OutputStreamType {
+    STDOUT,
+    STDERR
+}
 
 private data class DaemonMetricsSnapshot(
     val uptimeMs: Long,
@@ -216,6 +222,7 @@ internal fun jsonField(name: String, value: String?): String {
 internal fun daemonResponseJson(
     type: String,
     requestId: String? = null,
+    level: String? = null,
     message: String? = null,
     result: String? = null,
     error: String? = null
@@ -223,10 +230,18 @@ internal fun daemonResponseJson(
     return "{" + listOf(
         jsonField("type", type),
         jsonField("requestId", requestId),
+        jsonField("level", level),
         jsonField("message", message),
         jsonField("result", result),
         jsonField("error", error)
     ).joinToString(",") + "}"
+}
+
+private fun loggerStreamLevels(annotations: Map<String, Map<String, Any?>>): StreamRoutingConfig {
+    val loggerAnnotation = annotations["Logger"].orEmpty()
+    val stdoutLevel = LogLevel.parse((loggerAnnotation["stdoutLevel"] as? String), LogLevel.INFO)
+    val stderrLevel = LogLevel.parse((loggerAnnotation["stderrLevel"] as? String), LogLevel.ERROR)
+    return StreamRoutingConfig(stdout = stdoutLevel, stderr = stderrLevel)
 }
 
 internal fun parseJsonCommand(input: String): DaemonRequest? {
@@ -513,8 +528,15 @@ class Octopus(private var container: Container) : ScriptExecutor {
             )
 
 
-            FunctionDispatcher.dispatch<T>(dispatcherInputParams) {
-                result(it)
+            val previousLevels = SessionStdoutBridge.currentStreamLevels()
+            SessionStdoutBridge.setStreamLevels(loggerStreamLevels(annotations))
+
+            try {
+                FunctionDispatcher.dispatch<T>(dispatcherInputParams) {
+                    result(it)
+                }
+            } finally {
+                SessionStdoutBridge.setStreamLevels(previousLevels)
             }
         } catch (e: Throwable) {
             e.printStackTrace(System.out)
@@ -841,17 +863,34 @@ fun tokenize(input: String): List<String> {
 private class SessionOutput(private val writer: java.io.BufferedWriter) {
     private val lock = Any()
 
-    fun printLine(text: String, mode: ResponseMode = ResponseMode.LEGACY, requestId: String? = null) {
+    fun printLine(
+        text: String,
+        level: LogLevel = LogLevel.INFO,
+        mode: ResponseMode = ResponseMode.LEGACY,
+        requestId: String? = null
+    ) {
         synchronized(lock) {
             when (mode) {
                 ResponseMode.LEGACY -> {
-                    writer.write("PRINT::$text")
+                    val prefix = when {
+                        level.priority >= LogLevel.WARN.priority -> "PRINT_ERR::"
+                        level.priority <= LogLevel.DEBUG.priority -> "PRINT_DEBUG::"
+                        else -> "PRINT::"
+                    }
+                    writer.write("$prefix$text")
                     writer.newLine()
                     writer.flush()
                 }
 
                 ResponseMode.JSON -> {
-                    writer.write(daemonResponseJson(type = "print", requestId = requestId, message = text))
+                    writer.write(
+                        daemonResponseJson(
+                            type = "print",
+                            requestId = requestId,
+                            level = level.name,
+                            message = text
+                        )
+                    )
                     writer.newLine()
                     writer.flush()
                 }
@@ -905,8 +944,10 @@ private object SessionStdoutBridge {
     private val sessionOutput = ThreadLocal<SessionOutput?>()
     private val responseMode = ThreadLocal<ResponseMode?>()
     private val requestId = ThreadLocal<String?>()
-    private val threadBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
+    private val stdoutThreadBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
+    private val stderrThreadBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
     private val originalOut = System.out
+    private val originalErr = System.err
     private val fallback = PrintStream(object : OutputStream() {
         override fun write(b: Int) {}
     })
@@ -915,9 +956,25 @@ private object SessionStdoutBridge {
     fun installOnce() {
         if (!installed.compareAndSet(false, true)) return
 
-        val routingOut = PrintStream(RoutingOutputStream(), true, Charsets.UTF_8.name())
+        val routingOut = PrintStream(RoutingOutputStream(OutputStreamType.STDOUT), true, Charsets.UTF_8.name())
+        val routingErr = PrintStream(RoutingOutputStream(OutputStreamType.STDERR), true, Charsets.UTF_8.name())
         System.setOut(routingOut)
-        System.setErr(routingOut)
+        System.setErr(routingErr)
+    }
+
+    fun setStreamLevels(config: StreamRoutingConfig) {
+        StreamRoutingContext.set(config)
+    }
+
+    fun currentStreamLevels(): StreamRoutingConfig = StreamRoutingContext.get()
+
+    private fun currentLevel(streamType: OutputStreamType): LogLevel {
+        val config = StreamRoutingContext.get()
+        return if (streamType == OutputStreamType.STDERR) config.stderr else config.stdout
+    }
+
+    private fun bufferFor(streamType: OutputStreamType): java.io.ByteArrayOutputStream {
+        return if (streamType == OutputStreamType.STDERR) stderrThreadBuffer.get() else stdoutThreadBuffer.get()
     }
 
     fun bind(output: SessionOutput, mode: ResponseMode = ResponseMode.LEGACY, currentRequestId: String? = null) {
@@ -927,34 +984,48 @@ private object SessionStdoutBridge {
     }
 
     fun clear() {
-        flushCurrentThreadBuffer()
+        flushCurrentThreadBuffer(OutputStreamType.STDOUT)
+        flushCurrentThreadBuffer(OutputStreamType.STDERR)
         sessionOutput.remove()
         responseMode.remove()
         requestId.remove()
-        threadBuffer.remove()
+        StreamRoutingContext.clear()
+        stdoutThreadBuffer.remove()
+        stderrThreadBuffer.remove()
     }
 
-    private fun flushCurrentThreadBuffer() {
-        val buffer = threadBuffer.get()
+    private fun flushCurrentThreadBuffer(streamType: OutputStreamType) {
+        val buffer = bufferFor(streamType)
         if (buffer.size() <= 0) return
         val text = buffer.toString(Charsets.UTF_8.name())
         buffer.reset()
-        emit(text)
+        emit(text, streamType)
     }
 
-    private fun emit(text: String) {
+    private fun emit(text: String, streamType: OutputStreamType) {
+        val level = currentLevel(streamType)
         val output = sessionOutput.get()
         if (output != null) {
-            output.printLine(text, responseMode.get() ?: ResponseMode.LEGACY, requestId.get())
+            output.printLine(text, level, responseMode.get() ?: ResponseMode.LEGACY, requestId.get())
         } else {
             if (reentrantGuard.get()) {
-                originalOut.print(text)
+                if (streamType == OutputStreamType.STDERR) {
+                    originalErr.print(text)
+                } else {
+                    originalOut.print(text)
+                }
                 return
             }
 
             reentrantGuard.set(true)
             try {
-                GlobalLogger.log.info { text }
+                when (level) {
+                    LogLevel.TRACE -> GlobalLogger.log.trace { text }
+                    LogLevel.DEBUG -> GlobalLogger.log.debug { text }
+                    LogLevel.INFO -> GlobalLogger.log.info { text }
+                    LogLevel.WARN -> GlobalLogger.log.warn { text }
+                    LogLevel.ERROR -> GlobalLogger.log.error { text }
+                }
             } catch (_: Throwable) {
                 fallback.print(text)
             } finally {
@@ -963,17 +1034,17 @@ private object SessionStdoutBridge {
         }
     }
 
-    private class RoutingOutputStream : OutputStream() {
+    private class RoutingOutputStream(private val streamType: OutputStreamType) : OutputStream() {
         override fun write(b: Int) {
             if (b == '\r'.code) return
 
-            val buffer = threadBuffer.get()
+            val buffer = bufferFor(streamType)
 
             if (b == '\n'.code) {
                 if (buffer.size() > 0) {
                     val text = buffer.toString(Charsets.UTF_8.name())
                     buffer.reset()
-                    emit(text)
+                    emit(text, streamType)
                 }
                 return
             }
@@ -982,7 +1053,7 @@ private object SessionStdoutBridge {
         }
 
         override fun flush() {
-            flushCurrentThreadBuffer()
+            flushCurrentThreadBuffer(streamType)
         }
     }
 }
