@@ -902,13 +902,15 @@ private class SessionOutput(private val writer: java.io.BufferedWriter) {
 
 private object SessionStdoutBridge {
     private val installed = AtomicBoolean(false)
-    private val sessionOutput = InheritableThreadLocal<SessionOutput?>()
-    private val responseMode = InheritableThreadLocal<ResponseMode?>()
-    private val requestId = InheritableThreadLocal<String?>()
+    private val sessionOutput = ThreadLocal<SessionOutput?>()
+    private val responseMode = ThreadLocal<ResponseMode?>()
+    private val requestId = ThreadLocal<String?>()
     private val threadBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
+    private val originalOut = System.out
     private val fallback = PrintStream(object : OutputStream() {
         override fun write(b: Int) {}
     })
+    private val reentrantGuard = ThreadLocal.withInitial { false }
 
     fun installOnce() {
         if (!installed.compareAndSet(false, true)) return
@@ -945,7 +947,19 @@ private object SessionStdoutBridge {
         if (output != null) {
             output.printLine(text, responseMode.get() ?: ResponseMode.LEGACY, requestId.get())
         } else {
-            fallback.print(text)
+            if (reentrantGuard.get()) {
+                originalOut.print(text)
+                return
+            }
+
+            reentrantGuard.set(true)
+            try {
+                GlobalLogger.log.info { text }
+            } catch (_: Throwable) {
+                fallback.print(text)
+            } finally {
+                reentrantGuard.set(false)
+            }
         }
     }
 
