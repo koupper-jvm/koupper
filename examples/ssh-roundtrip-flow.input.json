@@ -1,0 +1,11 @@
+{
+  "mode": "roundtrip-edit",
+  "remotePath": "/etc/nginx/sites-available/my-app.conf",
+  "localWorkingDir": ".koupper/ssh-work",
+  "localFileName": "my-app.conf",
+  "appendLine": "# managed by Koupper SSH flow",
+  "postUploadCommands": [
+    "sudo nginx -t",
+    "sudo systemctl reload nginx"
+  ]
+}

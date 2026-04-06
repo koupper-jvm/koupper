@@ -1,3 +1,22 @@
+/**
+ * GitHub Provider Operations Demo
+ *
+ * Purpose:
+ * - Execute one GitHub API action per run using the GitHub provider.
+ *
+ * Supported actions (input.action):
+ * - create-issue
+ * - create-pr
+ * - dispatch-workflow
+ * - get-run
+ *
+ * Input shape:
+ * - action + action-specific fields (title/head/base/workflowId/runId)
+ * - optional owner/repo override (otherwise uses GITHUB_OWNER/GITHUB_REPO env defaults)
+ *
+ * Typical run:
+ * - koupper run examples/github-provider-flow.kts '{"action":"get-run","owner":"org","repo":"repo","runId":12345}'
+ */
 import com.koupper.container.app
 import com.koupper.octopus.annotations.Export
 import com.koupper.providers.github.GitHubClient
