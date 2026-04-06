@@ -47,14 +47,125 @@ object ScheduledSetup {
         return createScheduledJob()
     }
 
-    private fun createScheduledJob(): String {
-        val configs = JobConfig.loadOrFail(this.jlc.scriptContext, this.workerConfigId, "schedules.json").configurations
-        require(configs!!.isNotEmpty()) { "❌ No schedule configurations found in context ${this.jlc.scriptContext}" }
+    private fun asMap(value: Any?): Map<*, *> = value as? Map<*, *> ?: emptyMap<Any?, Any?>()
 
-        val finalConfig = if (workerConfigId != null) {
-            configs.firstOrNull { it.id == workerConfigId }
-                ?: error("⚠️ No config found for id=$workerConfigId")
-        } else configs.first()
+    private fun toLongOrNull(value: Any?): Long? = when (value) {
+        is Number -> value.toLong()
+        is String -> value.toLongOrNull()
+        else -> null
+    }
+
+    private fun toBoolean(value: Any?, default: Boolean = false): Boolean = when (value) {
+        is Boolean -> value
+        is String -> value.equals("true", ignoreCase = true)
+        else -> default
+    }
+
+    private fun toStringOrNull(value: Any?): String? {
+        val text = value?.toString()?.trim()
+        return text?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+    }
+
+    private fun targetMatches(config: Map<String, Any?>): Boolean {
+        val target = asMap(config["target"])
+        if (target.isEmpty()) return true
+
+        val export = toStringOrNull(target["export"])
+        val script = toStringOrNull(target["script"])
+
+        if (!export.isNullOrBlank() && export != jlc.functionName) return false
+
+        if (!script.isNullOrBlank()) {
+            val currentScriptPath = jlc.scriptPath ?: return false
+            val current = java.nio.file.Paths.get(currentScriptPath).normalize().toString().replace('\\', '/')
+            val expected = java.nio.file.Paths.get(script).normalize().toString().replace('\\', '/')
+            if (!(current == expected || current.endsWith("/$expected") || current.endsWith(expected))) return false
+        }
+
+        return true
+    }
+
+    private fun resolveConfigOverride(rawConfigs: List<Map<String, Any?>>): Map<String, Any?>? {
+        if (rawConfigs.isEmpty()) return null
+
+        val selected = if (!workerConfigId.isNullOrBlank()) {
+            rawConfigs.firstOrNull { it["id"]?.toString() == workerConfigId }
+        } else {
+            rawConfigs.firstOrNull { targetMatches(it) }
+        }
+
+        return selected
+    }
+
+    private data class SchedulePlan(
+        val enabled: Boolean,
+        val debug: Boolean,
+        val cron: String?,
+        val rate: Long,
+        val delay: Long,
+        val at: String?
+    )
+
+    private fun buildSchedulePlan(configOverride: Map<String, Any?>?): SchedulePlan {
+        val nestedSchedule = asMap(configOverride?.get("schedule"))
+        val nestedLogging = asMap(configOverride?.get("logging"))
+
+        val enabled = toBoolean(configOverride?.get("enabled"), default = true)
+
+        val debug =
+            toBoolean(nestedLogging["debug"], default = false) ||
+                toBoolean(configOverride?.get("debug"), default = false) ||
+                scheduledParams["debug"].toString().equals("true", ignoreCase = true)
+
+        val mode = toStringOrNull(nestedSchedule["mode"])?.lowercase()
+
+        val cron = when {
+            mode == "cron" -> toStringOrNull(nestedSchedule["cron"])
+            else -> toStringOrNull(nestedSchedule["cron"]) ?: toStringOrNull(configOverride?.get("cron"))
+                ?: (scheduledParams["cron"] as? String)?.takeIf { it.isNotBlank() }
+        }
+
+        val rate = when {
+            mode == "rate" -> toLongOrNull(nestedSchedule["rateMs"]) ?: toLongOrNull(nestedSchedule["rate"]) ?: 0L
+            else -> toLongOrNull(nestedSchedule["rateMs"]) ?: toLongOrNull(nestedSchedule["rate"]) ?: toLongOrNull(configOverride?.get("rate"))
+                ?: toLongOrNull(scheduledParams["rate"]) ?: 0L
+        }
+
+        val delay = when {
+            mode == "delay" -> toLongOrNull(nestedSchedule["delayMs"]) ?: toLongOrNull(nestedSchedule["delay"]) ?: 0L
+            else -> toLongOrNull(nestedSchedule["delayMs"]) ?: toLongOrNull(nestedSchedule["delay"]) ?: toLongOrNull(configOverride?.get("delay"))
+                ?: toLongOrNull(scheduledParams["delay"]) ?: 0L
+        }
+
+        val at = when {
+            mode == "at" -> toStringOrNull(nestedSchedule["at"])
+            else -> toStringOrNull(nestedSchedule["at"]) ?: toStringOrNull(configOverride?.get("at"))
+                ?: (scheduledParams["at"] as? String)?.takeIf { it.isNotBlank() }
+        }
+
+        return SchedulePlan(
+            enabled = enabled,
+            debug = debug,
+            cron = cron,
+            rate = rate,
+            delay = delay,
+            at = at
+        )
+    }
+
+    private fun createScheduledJob(): String {
+        val rawConfigs = JobConfig.loadRawConfigs(this.jlc.scriptContext, null, "schedules.json")
+        val configOverride = resolveConfigOverride(rawConfigs)
+
+        if (!workerConfigId.isNullOrBlank() && !rawConfigs.isEmpty() && configOverride == null) {
+            error("⚠️ No config found for id=$workerConfigId")
+        }
+
+        val schedulePlan = buildSchedulePlan(configOverride)
+
+        if (!schedulePlan.enabled) {
+            return "⏸️ Scheduled job '${jlc.functionName}' disabled by configuration"
+        }
 
         val functionSignature = extractExportFunctionSignature(this.jlc.code)
         val functionNameAndSignature = mapOf(
@@ -141,13 +252,9 @@ object ScheduledSetup {
             "arg$i" to serialized
         }.toMap()
 
-        val cron = (scheduledParams["cron"] as? String)?.takeIf { it.isNotBlank() }
-        val rate = when (val raw = scheduledParams["rate"]) {
-            is Number -> raw.toLong()
-            is String -> raw.toLongOrNull() ?: 0L
-            else -> 0L
-        }
-        val debug = scheduledParams["debug"].toString().equals("true", ignoreCase = true)
+        val cron = schedulePlan.cron
+        val rate = schedulePlan.rate
+        val debug = schedulePlan.debug
 
         val workerTask = KouTask(
             id = java.util.UUID.randomUUID().toString(),
@@ -165,12 +272,8 @@ object ScheduledSetup {
             fixedRate = rate
         )
 
-        val delay = when (val raw = scheduledParams["delay"]) {
-            is Number -> raw.toLong()
-            is String -> raw.toLongOrNull() ?: 0L
-            else -> 0L
-        }
-        val at = (scheduledParams["at"] as? String)?.takeIf { it.isNotBlank() }
+        val delay = schedulePlan.delay
+        val at = schedulePlan.at
 
         when {
             // 🕒 CRON MODE
