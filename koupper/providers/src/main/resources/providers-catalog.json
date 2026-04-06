@@ -330,6 +330,26 @@
       "docs": "https://koupper.com/docs/providers/rss"
     },
     {
+      "id": "secrets",
+      "serviceProvider": "SecretsServiceProvider",
+      "description": "Secret retrieval provider with env and local JSON file backends.",
+      "bindings": [
+        {
+          "contract": "SecretsClient",
+          "implementations": [
+            { "class": "LocalSecretsClient" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "SECRETS_FILE", "required": false, "description": "JSON file path for persisted secrets." },
+        { "name": "SECRETS_ENV_PREFIX", "required": false, "description": "Environment variable prefix for secret lookup." },
+        { "name": "SECRETS_PERSIST_WRITES", "required": false, "description": "Persist put() writes to file (true/false)." },
+        { "name": "SECRETS_REQUIRE_FILE", "required": false, "description": "Fail when secrets file does not exist (true/false)." }
+      ],
+      "docs": "https://koupper.com/docs/providers/secrets"
+    },
+    {
       "id": "ssh",
       "serviceProvider": "SSHServiceProvider",
       "description": "Remote SSH operations for command execution and file transfer workflows.",
