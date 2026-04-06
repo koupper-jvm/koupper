@@ -287,8 +287,17 @@ data class LogSpec(
     val level: String = "INFO",
     val destination: String = "console",
     val mdc: Map<String, String> = emptyMap(),
-    val async: Boolean = true
+    val async: Boolean = true,
+    val stdoutLevel: String = "INFO",
+    val stderrLevel: String = "ERROR"
 )
+
+fun LogSpec.toStreamRoutingConfig(): StreamRoutingConfig {
+    return StreamRoutingConfig(
+        stdout = LogLevel.parse(stdoutLevel, LogLevel.INFO),
+        stderr = LogLevel.parse(stderrLevel, LogLevel.ERROR)
+    )
+}
 
 private fun configure(kLogger: KLogger, spec: LogSpec): () -> Unit {
     val prevLevel = kLogger.level

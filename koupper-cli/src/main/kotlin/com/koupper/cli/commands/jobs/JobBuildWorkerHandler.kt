@@ -7,7 +7,8 @@ class JobBuildWorkerHandler : JobSubcommandHandler {
     override fun handle(context: String, args: Array<String>): String {
         val scriptPath = "$context/worker-builder.kts"
         File(scriptPath).writeText(generateBuildWorkerScript())
-        return RunCommand().execute(context, "worker-builder.kts")
+        val output = RunCommand().execute(context, "worker-builder.kts")
+        return if (output.endsWith("\n")) output else "$output\n"
     }
 
     private fun generateBuildWorkerScript(): String {
