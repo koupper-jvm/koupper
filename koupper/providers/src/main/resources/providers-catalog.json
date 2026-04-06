@@ -119,6 +119,23 @@
       "docs": "https://koupper.com/docs/providers/notifications"
     },
     {
+      "id": "observability",
+      "serviceProvider": "ObservabilityServiceProvider",
+      "description": "Metrics, events and traces sink provider with local JSONL backend.",
+      "bindings": [
+        {
+          "contract": "ObservabilityProvider",
+          "implementations": [
+            { "class": "LocalObservabilityProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "OBSERVABILITY_SINK_FILE", "required": false, "description": "JSONL output sink path for emitted telemetry." }
+      ],
+      "docs": "https://koupper.com/docs/providers/observability"
+    },
+    {
       "id": "http",
       "serviceProvider": "HttpServiceProvider",
       "description": "HTTP invoker for outbound API requests.",
