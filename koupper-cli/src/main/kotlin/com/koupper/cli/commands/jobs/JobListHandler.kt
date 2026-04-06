@@ -12,7 +12,8 @@ class JobListHandler : JobSubcommandHandler {
 
         File(scriptPath).writeText(generateJobListerScript(configId, jobIdArg))
 
-        return RunCommand().execute(context, "job-list.kts")
+        val output = RunCommand().execute(context, "job-list.kts")
+        return if (output.endsWith("\n")) output else "$output\n"
     }
 
     private fun generateJobListerScript(configId: String?, jobId: String?): String {
