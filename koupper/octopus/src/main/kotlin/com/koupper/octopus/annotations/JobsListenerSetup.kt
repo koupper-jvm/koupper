@@ -3,6 +3,7 @@ package com.koupper.octopus.annotations
 import com.koupper.container.app
 import com.koupper.logging.LogSpec
 import com.koupper.logging.captureLogsAsync
+import com.koupper.logging.toStreamRoutingConfig
 import com.koupper.logging.withScriptLogger
 import com.koupper.octopus.ScriptExecutor
 import com.koupper.octopus.process.JobEvent
@@ -232,7 +233,7 @@ object JobsListenerSetup {
             runOnce = { onJob ->
                 // Usamos la versión Async
                 captureLogsAsync("Thread.Listener", replaySpec!!) { logger, closeLogs ->
-                    withScriptLogger(logger, replaySpec?.mdc!!) {
+                    withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
 
                         logger.info { "🔍 Start polling cycle for jobs in context: [${workerTask.context}]" }
 

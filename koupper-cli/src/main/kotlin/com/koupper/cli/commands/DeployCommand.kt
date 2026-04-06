@@ -161,7 +161,14 @@ class DeployCommand : Command() {
                             when (type) {
                                 "print" -> {
                                     val message = node.get("message")?.asText().orEmpty()
-                                    if (message.isNotEmpty()) println(message)
+                                    val level = node.get("level")?.asText().orEmpty().uppercase()
+                                    if (message.isNotEmpty()) {
+                                        if (level == "WARN" || level == "ERROR") {
+                                            System.err.println(message)
+                                        } else {
+                                            println(message)
+                                        }
+                                    }
                                 }
 
                                 "result" -> {
@@ -193,6 +200,14 @@ class DeployCommand : Command() {
 
                         line.startsWith("PRINT::") -> {
                             println(line.removePrefix("PRINT::"))
+                        }
+
+                        line.startsWith("PRINT_DEBUG::") -> {
+                            println(line.removePrefix("PRINT_DEBUG::"))
+                        }
+
+                        line.startsWith("PRINT_ERR::") -> {
+                            System.err.println(line.removePrefix("PRINT_ERR::"))
                         }
 
                         line.startsWith("ERROR::") -> {
