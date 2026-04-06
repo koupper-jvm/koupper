@@ -114,6 +114,7 @@ project(':providers') {
         implementation "com.auth0:java-jwt:4.4.0"
         implementation "com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion"
         implementation "com.beust:klaxon:5.6"
+        implementation "com.github.mwiede:jsch:0.2.21"
         testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion"
         implementation "software.amazon.awssdk:dynamodb:2.28.9"
         implementation "software.amazon.awssdk:sqs:2.28.9"
