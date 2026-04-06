@@ -1,15 +1,13 @@
 name: Full Smoke Suite
 
 on:
-  pull_request:
-    branches: [develop, main]
   push:
-    branches: [develop]
+    branches: [main, master]
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
   smoke-windows:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-full-ci')
     runs-on: windows-latest
 
     steps:
@@ -55,7 +53,6 @@ jobs:
           if-no-files-found: ignore
 
   smoke-linux:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-full-ci')
     runs-on: ubuntu-latest
 
     steps:
