@@ -1,0 +1,17 @@
+[
+  {
+    "id": "default",
+    "enabled": true,
+    "target": {
+      "script": "logger-scheduled-with-config.kts",
+      "export": "setup"
+    },
+    "schedule": {
+      "mode": "rate",
+      "rateMs": 3000
+    },
+    "logging": {
+      "debug": false
+    }
+  }
+]
