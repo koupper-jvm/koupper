@@ -136,6 +136,23 @@
       "docs": "https://koupper.com/docs/providers/observability"
     },
     {
+      "id": "queue-ops",
+      "serviceProvider": "QueueOpsServiceProvider",
+      "description": "Queue operations provider with local pending/requeue/dead-letter management.",
+      "bindings": [
+        {
+          "contract": "QueueOpsProvider",
+          "implementations": [
+            { "class": "LocalQueueOpsProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "QUEUE_OPS_STORE_FILE", "required": false, "description": "JSON store path for local queue operations backend." }
+      ],
+      "docs": "https://koupper.com/docs/providers/queue-ops"
+    },
+    {
       "id": "http",
       "serviceProvider": "HttpServiceProvider",
       "description": "HTTP invoker for outbound API requests.",
