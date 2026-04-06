@@ -1,3 +1,22 @@
+/**
+ * GitHub Integration Flow Demo
+ *
+ * Purpose:
+ * - Orchestrate end-to-end repository automation in one flow payload.
+ *
+ * Flow capabilities:
+ * - create pull request
+ * - wait for required check runs
+ * - dispatch workflow and optionally wait for completion
+ * - optional PR merge
+ * - optional follow-up issue creation
+ *
+ * Safety:
+ * - supports dryRun=true to print intended actions without mutating GitHub state.
+ *
+ * Typical run:
+ * - koupper run examples/github-integration-flow.kts --json-file examples/github-integration-flow.sample.json
+ */
 import com.koupper.container.app
 import com.koupper.octopus.annotations.Export
 import com.koupper.providers.github.GitHubCheckRun

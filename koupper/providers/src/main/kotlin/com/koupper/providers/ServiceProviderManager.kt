@@ -13,6 +13,7 @@ import com.koupper.providers.jwt.JWTServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.rss.RSSServiceProvider
+import com.koupper.providers.ssh.SSHServiceProvider
 import com.koupper.providers.templates.TemplateServiceProvider
 import kotlin.reflect.KClass
 
@@ -61,6 +62,7 @@ class ServiceProviderManager {
             AIServiceProvider::class,
             TemplateServiceProvider::class,
             RSSServiceProvider::class,
+            SSHServiceProvider::class,
         )
     }
 }
