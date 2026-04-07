@@ -114,6 +114,16 @@ private fun runKoupperScript(cwd: File, relativeScriptPath: String, params: Map<
     return done.get()
 }
 
+private fun ensureStepOk(stepName: String, result: Any?) {
+    val map = result as? Map<*, *>
+        ?: error("$stepName returned non-map result: $result")
+
+    val ok = map["ok"] as? Boolean
+    if (ok != true) {
+        error("$stepName reported failure: $result")
+    }
+}
+
 @Export
 val setup: (Input) -> Map<String, Any?> = { input ->
     val cwd = File(context ?: ".").absoluteFile
@@ -135,6 +145,7 @@ val setup: (Input) -> Map<String, Any?> = { input ->
             "cleanupGeneratedScripts" to input.cleanupGeneratedScripts
         )
     )
+    ensureStepOk("preflight", preflight)
     steps += mapOf("name" to "preflight", "result" to preflight)
 
     val gitStatusFuture = CompletableFuture.supplyAsync {
@@ -199,6 +210,7 @@ val setup: (Input) -> Map<String, Any?> = { input ->
                 "retryDelaySeconds" to input.retryDelaySeconds
             )
         )
+        ensureStepOk("pr-create", prCreate)
         steps += mapOf("name" to "pr-create", "result" to prCreate)
 
         if (input.waitForCi) {
@@ -217,6 +229,7 @@ val setup: (Input) -> Map<String, Any?> = { input ->
                     "retryDelaySeconds" to input.retryDelaySeconds
                 )
             )
+            ensureStepOk("ci-watch", ciWatch)
             steps += mapOf("name" to "ci-watch", "result" to ciWatch)
         }
 
@@ -244,6 +257,7 @@ val setup: (Input) -> Map<String, Any?> = { input ->
                     "retryDelaySeconds" to input.retryDelaySeconds
                 )
             )
+            ensureStepOk("merge-sync", merged)
             steps += mapOf("name" to "merge-sync", "result" to merged)
         }
 
