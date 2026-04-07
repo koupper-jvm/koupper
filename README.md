@@ -1,4 +1,12 @@
-# Koupper
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="koupper-document/docs/public/koupper-logo.svg">
+    <source media="(prefers-color-scheme: light)" srcset="koupper-document/docs/public/koupper-white-mode-logo.svg">
+    <img alt="Koupper Mascot" src="koupper-document/docs/public/koupper-logo.svg" width="200">
+  </picture>
+</p>
+
+<h1 align="center">Koupper</h1>
 
 Koupper is a Kotlin scripting runtime + CLI for local-first automation and production execution.
 
