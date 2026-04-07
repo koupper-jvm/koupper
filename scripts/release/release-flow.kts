@@ -4,12 +4,17 @@ import com.koupper.octopus.ScriptExecutor
 import com.koupper.octopus.annotations.Export
 import java.io.File
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 data class Input(
     val featureBranch: String,
     val baseBranch: String = "develop",
     val syncBase: Boolean = true,
     val requireCleanTree: Boolean = true,
+    val commandTimeoutSeconds: Long = 120,
+    val commandRetries: Int = 1,
+    val retryDelaySeconds: Long = 2,
+    val cleanupGeneratedScripts: Boolean = true,
     val prTitle: String? = null,
     val prBody: String? = null,
     val workflowName: String = "Full Smoke Suite",
@@ -26,15 +31,40 @@ data class CommandResult(
     val output: String
 )
 
-private fun runCommand(args: List<String>, cwd: File): CommandResult {
-    val process = ProcessBuilder(args)
-        .directory(cwd)
-        .redirectErrorStream(true)
-        .start()
+private fun runCommand(
+    args: List<String>,
+    cwd: File,
+    timeoutSeconds: Long,
+    retries: Int,
+    retryDelaySeconds: Long
+): CommandResult {
+    var attempt = 0
+    var last = CommandResult(command = args.joinToString(" "), exitCode = 1, output = "")
 
-    val output = process.inputStream.bufferedReader().readText().trim()
-    val exitCode = process.waitFor()
-    return CommandResult(command = args.joinToString(" "), exitCode = exitCode, output = output)
+    while (attempt <= retries) {
+        val process = ProcessBuilder(args)
+            .directory(cwd)
+            .redirectErrorStream(true)
+            .start()
+
+        val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+        if (!completed) {
+            process.destroyForcibly()
+            last = CommandResult(args.joinToString(" "), 124, "command timed out after ${timeoutSeconds}s")
+        } else {
+            val output = process.inputStream.bufferedReader().readText().trim()
+            last = CommandResult(args.joinToString(" "), process.exitValue(), output)
+        }
+
+        if (last.exitCode == 0 || attempt == retries) {
+            return last
+        }
+
+        Thread.sleep(retryDelaySeconds * 1000)
+        attempt++
+    }
+
+    return last
 }
 
 private fun toJson(value: Any?): String {
@@ -98,22 +128,49 @@ val setup: (Input) -> Map<String, Any?> = { input ->
             "syncBase" to input.syncBase,
             "requireCleanTree" to input.requireCleanTree,
             "createBranchIfMissing" to true,
-            "allowedUntracked" to listOf("docs/future-providers-brief.md")
+            "allowedUntracked" to listOf("docs/future-providers-brief.md"),
+            "commandTimeoutSeconds" to input.commandTimeoutSeconds,
+            "commandRetries" to input.commandRetries,
+            "retryDelaySeconds" to input.retryDelaySeconds,
+            "cleanupGeneratedScripts" to input.cleanupGeneratedScripts
         )
     )
     steps += mapOf("name" to "preflight", "result" to preflight)
 
     val gitStatusFuture = CompletableFuture.supplyAsync {
-        runCommand(listOf("git", "status", "--short", "--branch"), cwd).output
+        runCommand(
+            listOf("git", "status", "--short", "--branch"),
+            cwd,
+            input.commandTimeoutSeconds,
+            input.commandRetries,
+            input.retryDelaySeconds
+        )
     }
     val ghAuthFuture = CompletableFuture.supplyAsync {
-        runCommand(listOf("gh", "auth", "status"), cwd).output
+        runCommand(
+            listOf("gh", "auth", "status"),
+            cwd,
+            input.commandTimeoutSeconds,
+            input.commandRetries,
+            input.retryDelaySeconds
+        )
     }
+
+    val headShaResult = runCommand(
+        listOf("git", "rev-parse", "HEAD"),
+        cwd,
+        input.commandTimeoutSeconds,
+        input.commandRetries,
+        input.retryDelaySeconds
+    )
+    val expectedHeadSha = headShaResult.output.lines().firstOrNull()?.trim().orEmpty()
+
     steps += mapOf(
         "name" to "parallel-checks",
         "result" to mapOf(
-            "gitStatus" to gitStatusFuture.get(),
-            "ghAuth" to ghAuthFuture.get()
+            "gitStatus" to gitStatusFuture.get().output,
+            "ghAuth" to ghAuthFuture.get().output,
+            "expectedHeadSha" to expectedHeadSha
         )
     )
 
@@ -136,7 +193,10 @@ val setup: (Input) -> Map<String, Any?> = { input ->
                 "title" to input.prTitle,
                 "body" to input.prBody,
                 "pushBranch" to true,
-                "draft" to false
+                "draft" to false,
+                "commandTimeoutSeconds" to input.commandTimeoutSeconds,
+                "commandRetries" to input.commandRetries,
+                "retryDelaySeconds" to input.retryDelaySeconds
             )
         )
         steps += mapOf("name" to "pr-create", "result" to prCreate)
@@ -150,7 +210,11 @@ val setup: (Input) -> Map<String, Any?> = { input ->
                     "workflowName" to input.workflowName,
                     "pollSeconds" to 20,
                     "timeoutSeconds" to 2400,
-                    "failOnFailure" to true
+                    "failOnFailure" to true,
+                    "expectedHeadSha" to expectedHeadSha,
+                    "commandTimeoutSeconds" to input.commandTimeoutSeconds,
+                    "commandRetries" to input.commandRetries,
+                    "retryDelaySeconds" to input.retryDelaySeconds
                 )
             )
             steps += mapOf("name" to "ci-watch", "result" to ciWatch)
@@ -159,7 +223,10 @@ val setup: (Input) -> Map<String, Any?> = { input ->
         if (input.mergeAfterCi) {
             val prNumber = runCommand(
                 listOf("gh", "pr", "view", input.featureBranch, "--json", "number", "--jq", ".number"),
-                cwd
+                cwd,
+                input.commandTimeoutSeconds,
+                input.commandRetries,
+                input.retryDelaySeconds
             ).output.trim().toIntOrNull() ?: error("unable to resolve PR number for ${input.featureBranch}")
 
             val merged = runKoupperScript(
@@ -171,7 +238,10 @@ val setup: (Input) -> Map<String, Any?> = { input ->
                     "admin" to input.adminMerge,
                     "deleteBranch" to false,
                     "baseBranch" to input.baseBranch,
-                    "syncBaseLocally" to true
+                    "syncBaseLocally" to true,
+                    "commandTimeoutSeconds" to input.commandTimeoutSeconds,
+                    "commandRetries" to input.commandRetries,
+                    "retryDelaySeconds" to input.retryDelaySeconds
                 )
             )
             steps += mapOf("name" to "merge-sync", "result" to merged)
