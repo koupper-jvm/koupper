@@ -130,7 +130,17 @@ val setup: (Input) -> Map<String, Any?> = { input ->
         "conclusion" to "no-runs"
     )
 
-    val firstSnapshot = latestRunSnapshot(cwd, input)
+    var firstSnapshot = latestRunSnapshot(cwd, input)
+
+    while (firstSnapshot == null) {
+        val elapsed = (System.currentTimeMillis() - start) / 1000
+        if (elapsed >= input.timeoutSeconds) {
+            break
+        }
+
+        Thread.sleep(input.pollSeconds * 1000)
+        firstSnapshot = latestRunSnapshot(cwd, input)
+    }
 
     if (firstSnapshot == null) {
         if (input.allowNoRuns) {
