@@ -64,19 +64,40 @@ private fun ensureOk(result: CommandResult, step: String) {
     }
 }
 
+private fun parseSnapshots(raw: String): List<Map<String, String>> {
+    if (raw.isBlank()) return emptyList()
+
+    return raw.lines()
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .map { line ->
+            val parts = line.split("\t", limit = 5)
+            if (parts.size < 4) {
+                error("unexpected workflow output format: $line")
+            }
+
+            mapOf(
+                "id" to parts[0],
+                "status" to parts[1],
+                "conclusion" to parts[2],
+                "url" to parts[3],
+                "headSha" to (parts.getOrNull(4) ?: "")
+            )
+        }
+}
+
 private fun latestRunSnapshot(cwd: File, input: Input): Map<String, String>? {
-    val query = "map(select(.headSha == \"${input.expectedHeadSha ?: ""}\")) | .[0] | [.databaseId,.status,.conclusion,.url,.headSha] | @tsv"
-    val fallbackQuery = ".[0] | [.databaseId,.status,.conclusion,.url,.headSha] | @tsv"
     val baseArgs = listOf(
         "gh", "run", "list",
         "--workflow", input.workflowName,
         "--branch", input.branch,
         "--limit", "10",
-        "--json", "databaseId,status,conclusion,url,headSha"
+        "--json", "databaseId,status,conclusion,url,headSha",
+        "--jq", ".[] | [.databaseId,.status,.conclusion,.url,.headSha] | @tsv"
     )
 
     val cmd = runCommand(
-        if (!input.expectedHeadSha.isNullOrBlank()) baseArgs + listOf("--jq", query) else baseArgs + listOf("--jq", fallbackQuery),
+        baseArgs,
         cwd,
         input.commandTimeoutSeconds,
         input.commandRetries,
@@ -84,36 +105,17 @@ private fun latestRunSnapshot(cwd: File, input: Input): Map<String, String>? {
     )
     ensureOk(cmd, "read latest workflow run")
 
-    val line = cmd.output.lines().firstOrNull { it.isNotBlank() }
-    val resolvedLine = if (line.isNullOrBlank() && !input.expectedHeadSha.isNullOrBlank()) {
-        val fallback = runCommand(
-            baseArgs + listOf("--jq", fallbackQuery),
-            cwd,
-            input.commandTimeoutSeconds,
-            input.commandRetries,
-            input.retryDelaySeconds
-        )
-        ensureOk(fallback, "fallback workflow query")
-        fallback.output.lines().firstOrNull { it.isNotBlank() }
-    } else {
-        line
+    val snapshots = parseSnapshots(cmd.output)
+    if (snapshots.isEmpty()) {
+        return null
     }
 
-    val resolved = resolvedLine
-        ?: return null
-
-    val parts = resolved.split("\t", limit = 5)
-    if (parts.size < 4) {
-        error("unexpected workflow output format: $resolved")
+    val expected = input.expectedHeadSha?.trim().orEmpty()
+    if (expected.isBlank()) {
+        return snapshots.first()
     }
 
-    return mapOf(
-        "id" to parts[0],
-        "status" to parts[1],
-        "conclusion" to parts[2],
-        "url" to parts[3],
-        "headSha" to (parts.getOrNull(4) ?: "")
-    )
+    return snapshots.firstOrNull { it["headSha"].orEmpty() == expected } ?: snapshots.first()
 }
 
 @Export
@@ -128,7 +130,17 @@ val setup: (Input) -> Map<String, Any?> = { input ->
         "conclusion" to "no-runs"
     )
 
-    val firstSnapshot = latestRunSnapshot(cwd, input)
+    var firstSnapshot = latestRunSnapshot(cwd, input)
+
+    while (firstSnapshot == null) {
+        val elapsed = (System.currentTimeMillis() - start) / 1000
+        if (elapsed >= input.timeoutSeconds) {
+            break
+        }
+
+        Thread.sleep(input.pollSeconds * 1000)
+        firstSnapshot = latestRunSnapshot(cwd, input)
+    }
 
     if (firstSnapshot == null) {
         if (input.allowNoRuns) {

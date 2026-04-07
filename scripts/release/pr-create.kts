@@ -61,6 +61,12 @@ private fun ensureOk(result: CommandResult, step: String) {
     }
 }
 
+private fun existingPrUrl(output: String): String? {
+    if (output.isBlank()) return null
+    if (!output.contains("already exists", ignoreCase = true)) return null
+    return output.lines().map { it.trim() }.firstOrNull { it.startsWith("http") }
+}
+
 private fun resolveCurrentBranch(cwd: File, input: Input): String {
     val current = runCommand(
         listOf("git", "branch", "--show-current"),
@@ -161,9 +167,13 @@ val setup: (Input) -> Map<String, Any?> = { input ->
         input.commandRetries,
         input.retryDelaySeconds
     )
-    ensureOk(created, "create PR")
 
-    val prUrl = created.output.lines().firstOrNull { it.startsWith("http") }
+    val existingUrl = if (created.exitCode != 0) existingPrUrl(created.output) else null
+    if (created.exitCode != 0 && existingUrl == null) {
+        ensureOk(created, "create PR")
+    }
+
+    val prUrl = existingUrl ?: created.output.lines().firstOrNull { it.startsWith("http") }
         ?: run {
             val fallback = runCommand(
                 listOf("gh", "pr", "view", "--json", "url", "--jq", ".url"),
@@ -181,6 +191,7 @@ val setup: (Input) -> Map<String, Any?> = { input ->
         "baseBranch" to input.baseBranch,
         "headBranch" to head,
         "title" to computedTitle,
-        "url" to prUrl
+        "url" to prUrl,
+        "existing" to (existingUrl != null)
     )
 }
