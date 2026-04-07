@@ -100,6 +100,27 @@
       "docs": "https://koupper.com/docs/providers/mcp"
     },
     {
+      "id": "n8n",
+      "serviceProvider": "N8NServiceProvider",
+      "description": "n8n workflow trigger and execution polling provider.",
+      "bindings": [
+        {
+          "contract": "N8NProvider",
+          "implementations": [
+            { "class": "N8NHttpProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "N8N_MODE", "required": false, "description": "mock (default) or live" },
+        { "name": "N8N_WEBHOOK_URL", "required": false, "description": "Default webhook URL for triggerWorkflow in live mode." },
+        { "name": "N8N_API_BASE_URL", "required": false, "description": "n8n API base URL used for execution status queries." },
+        { "name": "N8N_API_KEY", "required": false, "description": "n8n API key for execution status queries." },
+        { "name": "N8N_TIMEOUT_SECONDS", "required": false, "description": "HTTP timeout for n8n requests." }
+      ],
+      "docs": "https://koupper.com/docs/providers/n8n"
+    },
+    {
       "id": "notifications",
       "serviceProvider": "NotificationsServiceProvider",
       "description": "Operational notifications provider for console or webhook destinations.",
