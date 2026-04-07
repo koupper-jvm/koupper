@@ -1,6 +1,7 @@
 import com.koupper.container.context
 import com.koupper.octopus.annotations.Export
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 data class Input(
     val baseBranch: String = "develop",
@@ -8,7 +9,10 @@ data class Input(
     val title: String? = null,
     val body: String? = null,
     val draft: Boolean = false,
-    val pushBranch: Boolean = true
+    val pushBranch: Boolean = true,
+    val commandTimeoutSeconds: Long = 120,
+    val commandRetries: Int = 1,
+    val retryDelaySeconds: Long = 2
 )
 
 data class CommandResult(
@@ -17,15 +21,38 @@ data class CommandResult(
     val output: String
 )
 
-private fun runCommand(args: List<String>, cwd: File): CommandResult {
-    val process = ProcessBuilder(args)
-        .directory(cwd)
-        .redirectErrorStream(true)
-        .start()
+private fun runCommand(
+    args: List<String>,
+    cwd: File,
+    timeoutSeconds: Long,
+    retries: Int,
+    retryDelaySeconds: Long
+): CommandResult {
+    var attempt = 0
+    var last = CommandResult(command = args.joinToString(" "), exitCode = 1, output = "")
 
-    val output = process.inputStream.bufferedReader().readText().trim()
-    val exitCode = process.waitFor()
-    return CommandResult(command = args.joinToString(" "), exitCode = exitCode, output = output)
+    while (attempt <= retries) {
+        val process = ProcessBuilder(args)
+            .directory(cwd)
+            .redirectErrorStream(true)
+            .start()
+
+        val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+        if (!completed) {
+            process.destroyForcibly()
+            last = CommandResult(args.joinToString(" "), 124, "command timed out after ${timeoutSeconds}s")
+        } else {
+            val output = process.inputStream.bufferedReader().readText().trim()
+            last = CommandResult(args.joinToString(" "), process.exitValue(), output)
+        }
+
+        if (last.exitCode == 0 || attempt == retries) return last
+
+        Thread.sleep(retryDelaySeconds * 1000)
+        attempt++
+    }
+
+    return last
 }
 
 private fun ensureOk(result: CommandResult, step: String) {
@@ -34,14 +61,26 @@ private fun ensureOk(result: CommandResult, step: String) {
     }
 }
 
-private fun resolveCurrentBranch(cwd: File): String {
-    val current = runCommand(listOf("git", "branch", "--show-current"), cwd)
+private fun resolveCurrentBranch(cwd: File, input: Input): String {
+    val current = runCommand(
+        listOf("git", "branch", "--show-current"),
+        cwd,
+        input.commandTimeoutSeconds,
+        input.commandRetries,
+        input.retryDelaySeconds
+    )
     ensureOk(current, "resolve current branch")
     return current.output.ifBlank { error("unable to resolve current branch") }
 }
 
-private fun autoBody(cwd: File, base: String, head: String): String {
-    val commits = runCommand(listOf("git", "log", "--oneline", "$base..$head"), cwd)
+private fun autoBody(cwd: File, base: String, head: String, input: Input): String {
+    val commits = runCommand(
+        listOf("git", "log", "--oneline", "$base..$head"),
+        cwd,
+        input.commandTimeoutSeconds,
+        input.commandRetries,
+        input.retryDelaySeconds
+    )
     ensureOk(commits, "collect commits for PR body")
     val bulletLines = commits.output
         .lines()
@@ -50,7 +89,13 @@ private fun autoBody(cwd: File, base: String, head: String): String {
         .take(8)
         .joinToString("\n") { "- $it" }
 
-    val diffStat = runCommand(listOf("git", "diff", "--stat", "$base..$head"), cwd)
+    val diffStat = runCommand(
+        listOf("git", "diff", "--stat", "$base..$head"),
+        cwd,
+        input.commandTimeoutSeconds,
+        input.commandRetries,
+        input.retryDelaySeconds
+    )
     ensureOk(diffStat, "collect diff stat for PR body")
 
     return buildString {
@@ -71,19 +116,34 @@ private fun autoBody(cwd: File, base: String, head: String): String {
 @Export
 val setup: (Input) -> Map<String, Any?> = { input ->
     val cwd = File(context ?: ".").absoluteFile
-    val head = input.headBranch?.takeIf { it.isNotBlank() } ?: resolveCurrentBranch(cwd)
+    val head = input.headBranch?.takeIf { it.isNotBlank() } ?: resolveCurrentBranch(cwd, input)
 
     if (input.pushBranch) {
-        ensureOk(runCommand(listOf("git", "push", "-u", "origin", head), cwd), "push feature branch")
+        ensureOk(
+            runCommand(
+                listOf("git", "push", "-u", "origin", head),
+                cwd,
+                input.commandTimeoutSeconds,
+                input.commandRetries,
+                input.retryDelaySeconds
+            ),
+            "push feature branch"
+        )
     }
 
     val computedTitle = input.title?.takeIf { it.isNotBlank() } ?: run {
-        val latest = runCommand(listOf("git", "log", "-1", "--format=%s"), cwd)
+        val latest = runCommand(
+            listOf("git", "log", "-1", "--format=%s"),
+            cwd,
+            input.commandTimeoutSeconds,
+            input.commandRetries,
+            input.retryDelaySeconds
+        )
         ensureOk(latest, "resolve default PR title")
         latest.output.ifBlank { "chore: update branch $head" }
     }
 
-    val computedBody = input.body?.takeIf { it.isNotBlank() } ?: autoBody(cwd, input.baseBranch, head)
+    val computedBody = input.body?.takeIf { it.isNotBlank() } ?: autoBody(cwd, input.baseBranch, head, input)
 
     val createArgs = mutableListOf(
         "gh", "pr", "create",
@@ -94,12 +154,24 @@ val setup: (Input) -> Map<String, Any?> = { input ->
     )
     if (input.draft) createArgs += "--draft"
 
-    val created = runCommand(createArgs, cwd)
+    val created = runCommand(
+        createArgs,
+        cwd,
+        input.commandTimeoutSeconds,
+        input.commandRetries,
+        input.retryDelaySeconds
+    )
     ensureOk(created, "create PR")
 
     val prUrl = created.output.lines().firstOrNull { it.startsWith("http") }
         ?: run {
-            val fallback = runCommand(listOf("gh", "pr", "view", "--json", "url", "--jq", ".url"), cwd)
+            val fallback = runCommand(
+                listOf("gh", "pr", "view", "--json", "url", "--jq", ".url"),
+                cwd,
+                input.commandTimeoutSeconds,
+                input.commandRetries,
+                input.retryDelaySeconds
+            )
             ensureOk(fallback, "resolve PR URL")
             fallback.output
         }
