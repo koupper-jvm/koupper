@@ -41,6 +41,10 @@ Implemented in `koupper` (merged to `develop`):
 - `runtime-router`
 - `mcp` (covers `mcp-server` scope in this brief)
 
+Additional implemented provider:
+
+- `n8n` (workflow trigger + execution status polling)
+
 Notes:
 - Some providers require local binaries/services to fully execute examples (`docker`, `kubectl`, `terraform`).
 - Example scripts are included under `examples/` for each implemented provider.
