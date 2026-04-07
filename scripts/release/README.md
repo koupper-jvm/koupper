@@ -14,6 +14,10 @@ Purpose: automate the GitHub release lifecycle from Koupper scripts using sequen
   - merges PR using selected strategy and syncs local base branch.
 - `scripts/release/release-flow.kts`
   - orchestrates all previous scripts in one command.
+- `scripts/release/version-bump.kts`
+  - computes/applies semver bump on `koupper/build.gradle`.
+- `scripts/release/tag-release.kts`
+  - creates/pushes annotated `v*` release tags.
 
 ## Quick Usage
 
