@@ -39,4 +39,7 @@ koupper run scripts/release/release-flow.kts '{"featureBranch":"feature/my-next-
 
 - Default base branch is `develop`.
 - `preflight.kts` allows `docs/future-providers-brief.md` as untracked by default.
+- `preflight.kts` can auto-clean untracked generated helper scripts (`job-runner.kts`, `job-list.kts`, `worker-builder.kts`).
+- All scripts support command timeout/retry controls to reduce transient command failures.
+- `ci-watch.kts` can pin to a specific `expectedHeadSha` to avoid reading stale workflow runs.
 - These scripts call `git` and `gh`; make sure both commands are available on your PATH.
