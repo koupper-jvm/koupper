@@ -18,6 +18,7 @@ import com.koupper.providers.k8s.K8sServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
 import com.koupper.providers.mcp.MCPServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
+import com.koupper.providers.n8n.N8NServiceProvider
 import com.koupper.providers.notifications.NotificationsServiceProvider
 import com.koupper.providers.observability.ObservabilityServiceProvider
 import com.koupper.providers.queueops.QueueOpsServiceProvider
@@ -65,6 +66,7 @@ class ServiceProviderManager {
             SenderServiceProvider::class,
             LoggerServiceProvider::class,
             MCPServiceProvider::class,
+            N8NServiceProvider::class,
             NotificationsServiceProvider::class,
             ObservabilityServiceProvider::class,
             QueueOpsServiceProvider::class,
