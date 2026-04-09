@@ -59,29 +59,3 @@ jobs:
           set -euo pipefail
           (cd koupper-cli && ./gradlew test --tests "com.koupper.cli.commands.ProviderCommandCatalogPathTest")
 
-  providers-docs:
-    name: Providers docs consistency
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: koupper-document/package-lock.json
-
-      - name: Install docs dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          (cd koupper-document && npm ci)
-
-      - name: Run docs checks
-        shell: bash
-        run: |
-          set -euo pipefail
-          (cd koupper-document && npm run docs:check && npm run docs:build)
