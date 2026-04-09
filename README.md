@@ -91,6 +91,7 @@ Recommended reading path:
 3. [Provider Catalog](https://koupper.com/docs/providers/)
 4. [Architecture](https://koupper.com/docs/architecture/)
 5. [Production](https://koupper.com/docs/production/hardening)
+6. [Use Cases](https://koupper.com/docs/use-cases)
 
 ## Contributing
 
