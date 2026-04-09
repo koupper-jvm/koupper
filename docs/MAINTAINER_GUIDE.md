@@ -2,6 +2,14 @@
 
 This folder stores maintainer-focused documentation. Public user documentation lives in `koupper-document/docs`.
 
+## Documentation map
+
+| Surface | Path | Audience | Purpose |
+| --- | --- | --- | --- |
+| Public docs | `koupper-document/docs` | Framework users | Product usage, command reference, providers, architecture, production guides |
+| Internal docs | `docs/` | Maintainers | Release routines, governance rules, internal checklists |
+| Examples | `examples/` | Users + maintainers | Runnable reference scripts and smoke assets |
+
 ## Core internal docs
 
 - `DOCUMENTATION_STANDARD.md`: source-of-truth and placement rules for docs.
@@ -18,3 +26,4 @@ This folder stores maintainer-focused documentation. Public user documentation l
 
 - If users should read it, move it to `koupper-document/docs`.
 - If maintainers operate the repo with it, keep it here.
+- If documentation references commands/scripts, point to runnable assets in `examples/`.
