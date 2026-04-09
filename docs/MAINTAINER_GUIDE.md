@@ -13,6 +13,7 @@ This folder stores maintainer-focused documentation. Public user documentation l
 ## Core internal docs
 
 - `DOCUMENTATION_STANDARD.md`: source-of-truth and placement rules for docs.
+- `ICP_PRODUCTIZATION_V1.md`: target customer profile, KPIs, and monetization direction.
 - `SCRIPT_EXECUTION_CONTRACT.md`: runtime contract for script entrypoints and pipeline usage.
 - `PRODUCTION_HARDENING.md`: production baseline for Octopus runtime operations.
 - `CLI_COMMAND_CHECKLIST.md`: release-time manual CLI validation checklist.
