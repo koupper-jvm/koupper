@@ -7,7 +7,9 @@
 <p align="left">
   <a href="https://github.com/koupper-jvm/koupper/blob/develop/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <a href="https://github.com/koupper-jvm/koupper/commits/develop"><img alt="Last commit" src="https://img.shields.io/github/last-commit/koupper-jvm/koupper/develop"></a>
-  <a href="https://github.com/koupper-jvm/koupper/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/koupper-jvm/koupper?style=social"></a>
+  <img alt="Kotlin-first" src="https://img.shields.io/badge/language-Kotlin-7f52ff">
+  <img alt="Runtime" src="https://img.shields.io/badge/runtime-Octopus-0f172a">
+  <img alt="Architecture" src="https://img.shields.io/badge/architecture-provider--first-0284c7">
   <a href="https://koupper.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-koupper.com-0ea5e9"></a>
 </p>
 
