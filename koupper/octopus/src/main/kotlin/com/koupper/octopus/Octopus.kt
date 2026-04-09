@@ -21,6 +21,7 @@ import com.koupper.providers.http.HtppClient
 import com.koupper.providers.io.TerminalContext
 import com.koupper.providers.io.TerminalIO
 import com.koupper.shared.monitoring.JsonlExecutionMonitor
+import com.koupper.shared.octopus.extractExportedDeclarations
 import com.koupper.shared.octopus.extractExportedAnnotations
 import com.koupper.shared.octopus.toCliArgs
 import kotlinx.coroutines.*
@@ -505,6 +506,13 @@ class Octopus(private var container: Container) : ScriptExecutor {
         callable: Callable?,
         result: (value: T) -> Unit,
     ) {
+        val exportedDeclarations = extractExportedDeclarations(sentence)
+        if (exportedDeclarations.size > 1) {
+            val names = exportedDeclarations.joinToString(", ") { it.name }
+            result(castTo<T>("Multiple @Export declarations found: $names. Use exactly one @Export entrypoint (recommended: setup)."))
+            return
+        }
+
         val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence)
             ?: run {
                 result(castTo<T>("No function annotated with @Export was found."))

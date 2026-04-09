@@ -3,6 +3,7 @@ package com.koupper.providers
 import com.koupper.providers.ai.AIServiceProvider
 import com.koupper.providers.aillmops.AILlmOpsServiceProvider
 import com.koupper.providers.aws.dynamo.AwsServiceProvider
+import com.koupper.providers.aws.deploy.AwsDeployServiceProvider
 import com.koupper.providers.aws.s3.AwsS3ServiceProvider
 import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBServiceProvider
@@ -78,6 +79,7 @@ class ServiceProviderManager {
             CryptoServiceProvider::class,
             AwsServiceProvider::class,
             AwsS3ServiceProvider::class,
+            AwsDeployServiceProvider::class,
             HasherServiceProvider::class,
             GitServiceProvider::class,
             GitHubServiceProvider::class,
