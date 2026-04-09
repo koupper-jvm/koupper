@@ -1,0 +1,87 @@
+name: Provider Consistency
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  providers-core:
+    name: Providers core consistency
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure Gradle wrapper is executable
+        shell: bash
+        run: chmod +x ./koupper/gradlew
+
+      - name: Run provider consistency tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd koupper && ./gradlew :providers:test --tests "com.koupper.providers.ProviderCatalogConsistencyTest" --tests "com.koupper.providers.command.CommandRunnerServiceProviderTest")
+
+  providers-cli:
+    name: Providers CLI consistency
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure Gradle wrapper is executable
+        shell: bash
+        run: chmod +x ./koupper-cli/gradlew
+
+      - name: Run CLI provider catalog tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd koupper-cli && ./gradlew test --tests "com.koupper.cli.commands.ProviderCommandCatalogPathTest")
+
+  providers-docs:
+    name: Providers docs consistency
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: koupper-document/package-lock.json
+
+      - name: Install docs dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd koupper-document && npm ci)
+
+      - name: Run docs checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd koupper-document && npm run docs:check && npm run docs:build)
