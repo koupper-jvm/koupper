@@ -1,0 +1,46 @@
+{
+  "environments": {
+    "dev": {
+      "region": "us-east-1",
+      "moduleOrder": ["backend", "frontend"],
+      "modules": {
+        "backend": {
+          "enabled": true,
+          "type": "backend_lambda",
+          "projectPath": "../../koupper",
+          "buildCommand": {
+            "windows": ".\\gradlew.bat :providers:compileKotlin",
+            "unix": "./gradlew :providers:compileKotlin"
+          },
+          "artifactPath": "providers/build/libs/providers.jar",
+          "alias": "dev",
+          "lambdas": ["exampleLambda"]
+        },
+        "frontend": {
+          "enabled": true,
+          "type": "frontend_static",
+          "projectPath": "../../koupper-cli",
+          "buildCommand": {
+            "windows": ".\\gradlew.bat jar -x test",
+            "unix": "./gradlew jar -x test"
+          },
+          "distPath": "build/libs",
+          "bucket": "example-bucket",
+          "cloudfrontDistributionId": "E000000000000"
+        }
+      },
+      "smoke": {
+        "enabled": true,
+        "apis": [
+          {
+            "name": "health",
+            "baseUrl": "https://example.com",
+            "path": "/health",
+            "method": "GET",
+            "expectedStatus": [200]
+          }
+        ]
+      }
+    }
+  }
+}

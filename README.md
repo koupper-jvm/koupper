@@ -39,6 +39,7 @@ koupper provider list
 - Internal docs folder: `docs/`
 - Production hardening: `docs/PRODUCTION_HARDENING.md`
 - CLI checklist: `docs/CLI_COMMAND_CHECKLIST.md`
+- Script execution contract: `docs/SCRIPT_EXECUTION_CONTRACT.md`
 - Release versioning: `docs/release-versioning.md`
 - Documentation ownership standard: `docs/DOCUMENTATION_STANDARD.md`
 
