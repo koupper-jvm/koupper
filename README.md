@@ -1,9 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="koupper-document/docs/public/koupper-logo.svg">
-    <source media="(prefers-color-scheme: light)" srcset="koupper-document/docs/public/koupper-white-mode-logo.svg">
-    <img alt="Koupper Mascot" src="koupper-document/docs/public/koupper-logo.svg" width="200">
-  </picture>
+  <img alt="Koupper Octopus" src="koupper-avatar.gif" width="220">
 </p>
 
 # Koupper
