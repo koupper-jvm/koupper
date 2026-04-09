@@ -4,7 +4,14 @@
 
 # Koupper
 
-Koupper is a Kotlin scripting runtime + CLI for teams that want to ship automation quickly without sacrificing production discipline.
+<p align="left">
+  <a href="https://github.com/koupper-jvm/koupper/blob/develop/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="https://github.com/koupper-jvm/koupper/commits/develop"><img alt="Last commit" src="https://img.shields.io/github/last-commit/koupper-jvm/koupper/develop"></a>
+  <a href="https://github.com/koupper-jvm/koupper/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/koupper-jvm/koupper?style=social"></a>
+  <a href="https://koupper.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-koupper.com-0ea5e9"></a>
+</p>
+
+Koupper is a Kotlin scripting runtime + CLI for teams that want fast iteration and production-grade execution in the same model.
 
 Why it matters:
 
@@ -12,6 +19,10 @@ Why it matters:
 - execute through a stable Octopus runtime contract,
 - scale capabilities through Service Providers,
 - move from local flows to production without rewriting your model.
+
+Tech tags:
+
+`kotlin` `scripting` `automation` `octopus-runtime` `provider-first` `jobs` `deploy`
 
 ## Start here
 
@@ -43,12 +54,27 @@ Expected result:
 - script execution works,
 - provider catalog is discoverable.
 
+## Why Koupper vs typical scripting stacks
+
+- **Single runtime contract**: local CLI, worker jobs, and deploy/runtime routes share the same execution rules.
+- **Provider-first architecture**: integrations are explicit contracts, not scattered SDK calls.
+- **Kotlin type safety**: better maintainability than ad-hoc shell scripts as automation grows.
+- **Production path built-in**: auth/checksum guardrails, hardening docs, and release automation scripts.
+
 ## Why teams choose Koupper
 
 - Kotlin-first, type-safe scripts instead of ad-hoc shell glue.
 - Provider-first architecture for cloud, infra, and workflow capabilities.
 - Local-first developer workflow with production hardening paths.
 - Predictable runtime contract (`@Export` single entrypoint + pipeline orchestration).
+
+## Typical use cases
+
+- script-driven backend workers and async jobs,
+- deployment orchestration and infra workflows,
+- runtime-exposed HTTP routes via providers,
+- operational automations (GitHub, Docker, SSH, notifications, queue ops),
+- AI/LLM pipelines with typed script inputs.
 
 ## Documentation hierarchy
 
@@ -63,6 +89,12 @@ Recommended reading path:
 3. [Provider Catalog](https://koupper.com/docs/providers/)
 4. [Architecture](https://koupper.com/docs/architecture/)
 5. [Production](https://koupper.com/docs/production/hardening)
+
+## Contributing
+
+- Core contribution flow and maintainer docs: `docs/MAINTAINER_GUIDE.md`
+- Documentation governance rules: `docs/DOCUMENTATION_STANDARD.md`
+- Public docs source: `koupper-document/docs`
 
 ## Maintainer docs in this repo
 
