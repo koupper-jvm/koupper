@@ -28,20 +28,25 @@ fun extractAllAnnotations(script: String): Map<String, Map<String, String>> {
     return annotations
 }
 
-fun extractExportedAnnotations(script: String): Pair<String, Map<String, Map<String, String>>>? {
+data class ExportedDeclaration(
+    val name: String,
+    val annotations: Map<String, Map<String, String>>
+)
+
+fun extractExportedDeclarations(script: String): List<ExportedDeclaration> {
     val declWithAnns = Regex(
         """(?s)((?:@\w+(?:\([^)]*\))?\s*)+)(?:public|private|protected|internal\s+)?(?:[A-Za-z0-9_\s]*)(val|fun)\s+(`[^`]+`|[A-Za-z_][A-Za-z0-9_]*)""",
         setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.MULTILINE)
     )
 
     val singleAnn = Regex("""@([\w.]+)\s*(?:\(([^)]*)\))?""")
-    val argRegex  = Regex("""(\w+)\s*=\s*("[^"]*"|'[^']*'|[^,\s)]+)""")
+    val argRegex = Regex("""(\w+)\s*=\s*("[^"]*"|'[^']*'|[^,\s)]+)""")
 
-    for (m in declWithAnns.findAll(script)) {
+    return declWithAnns.findAll(script).mapNotNull { m ->
         val annsBlock = m.groupValues[1]
         val foundAnns = singleAnn.findAll(annsBlock).toList()
         val hasExport = foundAnns.any { it.groupValues[1].endsWith("Export") }
-        if (!hasExport) continue
+        if (!hasExport) return@mapNotNull null
 
         val rawName = m.groupValues[3]
         val name = rawName.trim('`')
@@ -62,9 +67,14 @@ fun extractExportedAnnotations(script: String): Pair<String, Map<String, Map<Str
             annMap[simple] = args
         }
 
-        return name to annMap
-    }
-    return null
+        ExportedDeclaration(name = name, annotations = annMap)
+    }.toList()
+}
+
+fun extractExportedAnnotations(script: String): Pair<String, Map<String, Map<String, String>>>? {
+    val exports = extractExportedDeclarations(script)
+    val first = exports.firstOrNull() ?: return null
+    return first.name to first.annotations
 }
 
 fun extractExportFunctionName(scriptContent: String): String? {
