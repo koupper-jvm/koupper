@@ -24,6 +24,11 @@ Use this for:
 - Contributor checklists and engineering notes
 - Content not intended as public end-user documentation
 
+Structure:
+
+- `docs/MAINTAINER_GUIDE.md`: maintainer index and quick links.
+- `docs/archive/`: historical plans and superseded implementation briefs.
+
 ## Rules for new documentation
 
 - User-facing content goes to `koupper-document/docs` first.
