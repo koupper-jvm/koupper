@@ -7,6 +7,7 @@ This plan extends `ROADMAP_30_60_90.md` with enterprise-focused execution starti
 - `ROADMAP_30_60_90.md` remains the product/adoption north star.
 - This document is the operational enterprise track for reliability, observability, and governance.
 - Both should run in parallel: product growth + enterprise hardening.
+- ICP and productization assumptions are documented in `docs/ICP_PRODUCTIZATION_V1.md`.
 
 ## North star for this cycle
 
