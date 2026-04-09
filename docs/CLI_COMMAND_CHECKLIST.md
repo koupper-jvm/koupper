@@ -2,6 +2,8 @@
 
 This checklist is versioned and intended for manual validation on local machines before release.
 
+Public-facing counterpart: `koupper-document/docs/production/script-execution-checklist.md`.
+
 ## Prerequisites
 
 ```powershell

@@ -87,11 +87,12 @@ Expected result:
 Recommended reading path:
 
 1. [Getting Started](https://koupper.com/docs/getting-started)
-2. [Command Overview](https://koupper.com/docs/commands/)
-3. [Provider Catalog](https://koupper.com/docs/providers/)
-4. [Architecture](https://koupper.com/docs/architecture/)
-5. [Production](https://koupper.com/docs/production/hardening)
-6. [Use Cases](https://koupper.com/docs/use-cases)
+2. [Ideal Customer Profile](https://koupper.com/docs/ideal-customer-profile)
+3. [Use Cases](https://koupper.com/docs/use-cases)
+4. [Command Overview](https://koupper.com/docs/commands/)
+5. [Provider Catalog](https://koupper.com/docs/providers/)
+6. [Architecture](https://koupper.com/docs/architecture/)
+7. [Production](https://koupper.com/docs/production/hardening)
 
 ## Contributing
 
