@@ -335,6 +335,28 @@
       "docs": "https://koupper.com/docs/providers/aws-s3"
     },
     {
+      "id": "aws-deploy",
+      "serviceProvider": "AwsDeployServiceProvider",
+      "description": "AWS deployment orchestration provider for Lambda, static site rollout, preflight checks and API smoke tests.",
+      "bindings": [
+        {
+          "contract": "AwsDeployProvider",
+          "implementations": [
+            { "class": "AwsCliDeployProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "AWS_COMMAND", "required": false, "description": "AWS CLI binary name/path (default: aws)." },
+        { "name": "AWS_REGION", "required": false, "description": "Default AWS region (default: us-east-1)." },
+        { "name": "AWS_DEPLOY_TIMEOUT_SECONDS", "required": false, "description": "Timeout in seconds for each AWS CLI command (default: 300)." },
+        { "name": "AWS_ACCESS_KEY_ID", "required": false, "description": "AWS access key for runtime AWS CLI authentication." },
+        { "name": "AWS_SECRET_ACCESS_KEY", "required": false, "description": "AWS secret key for runtime AWS CLI authentication." },
+        { "name": "AWS_SESSION_TOKEN", "required": false, "description": "AWS session token for temporary credentials." }
+      ],
+      "docs": "https://koupper.com/docs/providers/aws-deploy"
+    },
+    {
       "id": "hashing",
       "serviceProvider": "HasherServiceProvider",
       "description": "Password hashing and verification utilities.",
