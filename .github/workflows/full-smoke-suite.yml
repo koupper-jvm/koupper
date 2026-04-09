@@ -5,10 +5,61 @@ on:
     branches: [main, master]
     tags: ['v*']
   workflow_dispatch:
+  schedule:
+    - cron: '30 7 * * *'
 
 jobs:
+  install-uninstall-e2e-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Kotlin compiler
+        shell: pwsh
+        run: |
+          $version = "2.0.20"
+          $url = "https://github.com/JetBrains/kotlin/releases/download/v$version/kotlin-compiler-$version.zip"
+          $zip = Join-Path $env:RUNNER_TEMP "kotlin-compiler.zip"
+          $dest = Join-Path $env:RUNNER_TEMP "kotlin"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          "$dest\kotlinc\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install Koupper
+        shell: pwsh
+        run: |
+          kotlinc -script install.kts -- --force
+
+      - name: Smoke CLI after install
+        shell: pwsh
+        run: |
+          koupper -v
+          koupper provider info command-runner
+
+      - name: Uninstall Koupper
+        shell: pwsh
+        run: |
+          kotlinc -script uninstall.kts -- --force --purge
+
+      - name: Assert uninstall cleanup
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:USERPROFILE\.koupper") {
+            throw "Expected ~/.koupper to be removed after uninstall"
+          }
+
   smoke-windows:
     runs-on: windows-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -54,6 +105,7 @@ jobs:
 
   smoke-linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout

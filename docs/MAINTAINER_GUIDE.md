@@ -28,3 +28,9 @@ This folder stores maintainer-focused documentation. Public user documentation l
 - If users should read it, move it to `koupper-document/docs`.
 - If maintainers operate the repo with it, keep it here.
 - If documentation references commands/scripts, point to runnable assets in `examples/`.
+
+## CI policy snapshot
+
+- `develop` PRs: fast checks only (`pr-fast-checks.yml`, `provider-consistency.yml`).
+- `main`/release: heavy validation (`full-smoke-suite.yml`, including install/uninstall E2E).
+- Local pre-push quick checks: `scripts/ci/local-quick-checks.ps1` and `scripts/ci/local-quick-checks.sh`.

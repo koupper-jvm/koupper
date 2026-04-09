@@ -26,6 +26,9 @@ Use Koupper release scripts instead of manual git/gh command sequences.
 - Prefer merge only when CI concludes `success`.
 - If CI fails, inspect the failing workflow/job and fix root cause before retry.
 - Keep PR titles and bodies concise and action-oriented.
+- PRs to `develop` use fast CI gates (compile + targeted consistency checks).
+- Heavy validation (full smoke + install/uninstall E2E) runs on `main`/release flows.
+- Run local quick checks before push (`scripts/ci/local-quick-checks.ps1|.sh`).
 
 ## Safety and Scope
 

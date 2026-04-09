@@ -2,11 +2,16 @@ name: PR Fast Checks
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [develop]
+
+concurrency:
+  group: pr-fast-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   fast-checks-linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
