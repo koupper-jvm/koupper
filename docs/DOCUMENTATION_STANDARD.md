@@ -2,6 +2,12 @@
 
 This repository uses two documentation surfaces with different responsibilities.
 
+## README role
+
+- `README.md` is the entry pitch and orientation layer.
+- Keep it concise: value proposition, quick start, links to canonical docs.
+- Do not duplicate full command/provider manuals in README.
+
 ## 1) Public docs site (source of truth for users)
 
 Location: `koupper-document/docs`
