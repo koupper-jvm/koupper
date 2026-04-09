@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Koupper Octopus" src="koupper-avatar.gif" width="220">
+  <img alt="Koupper Octopus" src="koupper-avatar.svg" width="220">
 </p>
 
 # Koupper
