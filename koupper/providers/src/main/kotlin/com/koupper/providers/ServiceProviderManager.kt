@@ -5,6 +5,7 @@ import com.koupper.providers.aillmops.AILlmOpsServiceProvider
 import com.koupper.providers.aws.dynamo.AwsServiceProvider
 import com.koupper.providers.aws.deploy.AwsDeployServiceProvider
 import com.koupper.providers.aws.s3.AwsS3ServiceProvider
+import com.koupper.providers.command.CommandRunnerServiceProvider
 import com.koupper.providers.crypto.CryptoServiceProvider
 import com.koupper.providers.db.DBServiceProvider
 import com.koupper.providers.docker.DockerServiceProvider
@@ -71,6 +72,7 @@ class ServiceProviderManager {
             NotificationsServiceProvider::class,
             ObservabilityServiceProvider::class,
             QueueOpsServiceProvider::class,
+            CommandRunnerServiceProvider::class,
             HttpServiceProvider::class,
             IaCServiceProvider::class,
             FileServiceProvider::class,
