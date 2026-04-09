@@ -43,6 +43,12 @@ data class ProviderEnvVar(
 class ProviderCommand : Command() {
     private val mapper = jacksonObjectMapper()
     private val userHome = System.getProperty("user.home")
+    private val configuredCatalogPath = System.getProperty("koupper.providers.catalog.path")
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: System.getenv("KOUPPER_PROVIDERS_CATALOG")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
     private val catalogPath = "$userHome/.koupper/catalog/providers.json"
 
     init {
@@ -84,19 +90,28 @@ class ProviderCommand : Command() {
     }
 
     private fun loadCatalog(): ProviderCatalog? {
-        val catalogFile = File(catalogPath)
-        if (!catalogFile.exists() || !catalogFile.isFile) {
-            return null
-        }
+        return catalogCandidates()
+            .map(::File)
+            .firstNotNullOfOrNull { file ->
+                if (!file.exists() || !file.isFile) return@firstNotNullOfOrNull null
+                runCatching { mapper.readValue<ProviderCatalog>(file) }.getOrNull()
+            }
+    }
 
-        return runCatching {
-            mapper.readValue<ProviderCatalog>(catalogFile)
-        }.getOrNull()
+    private fun catalogCandidates(): List<String> {
+        val candidates = mutableListOf<String>()
+        configuredCatalogPath?.let { candidates += it }
+        candidates += catalogPath
+        candidates += "koupper/providers/src/main/resources/providers-catalog.json"
+        candidates += "../koupper/providers/src/main/resources/providers-catalog.json"
+        return candidates.distinct()
     }
 
     private fun missingCatalogMessage(): String {
         return "\n${ANSIColors.ANSI_RED}Providers catalog not found at $catalogPath.${ANSI_RESET}\n" +
-                "Run ${ANSI_GREEN_155}kotlinc -script install.kts -- --force${ANSI_RESET} to refresh local artifacts.\n"
+                "Run ${ANSI_GREEN_155}kotlinc -script install.kts -- --force${ANSI_RESET} to refresh local artifacts, " +
+                "or set ${ANSI_GREEN_155}koupper.providers.catalog.path${ANSI_RESET}/" +
+                "${ANSI_GREEN_155}KOUPPER_PROVIDERS_CATALOG${ANSI_RESET}.\n"
     }
 
     private fun listProviders(catalog: ProviderCatalog): String {
