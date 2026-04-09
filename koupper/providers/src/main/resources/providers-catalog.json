@@ -189,6 +189,25 @@
       "docs": "https://koupper.com/docs/providers/http"
     },
     {
+      "id": "command-runner",
+      "serviceProvider": "CommandRunnerServiceProvider",
+      "description": "Generic command execution provider for shell and binary commands with timeout and dry-run support.",
+      "bindings": [
+        {
+          "contract": "CommandRunner",
+          "implementations": [
+            { "class": "DefaultCommandRunner" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "COMMAND_RUNNER_TIMEOUT_SECONDS", "required": false, "description": "Default timeout in seconds for command execution." },
+        { "name": "COMMAND_RUNNER_SHELL_WINDOWS", "required": false, "description": "Shell command used on Windows for shellCommand mode (default: pwsh)." },
+        { "name": "COMMAND_RUNNER_SHELL_UNIX", "required": false, "description": "Shell command used on Unix for shellCommand mode (default: bash)." }
+      ],
+      "docs": "https://koupper.com/docs/providers/command-runner"
+    },
+    {
       "id": "iac",
       "serviceProvider": "IaCServiceProvider",
       "description": "Terraform-based IaC operations provider with approval guard for apply.",
