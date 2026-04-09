@@ -1,14 +1,13 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="koupper-document/docs/public/koupper-logo.svg">
-    <source media="(prefers-color-scheme: light)" srcset="koupper-document/docs/public/koupper-white-mode-logo.svg">
-    <img alt="Koupper Mascot" src="koupper-document/docs/public/koupper-logo.svg" width="200">
-  </picture>
-</p>
+# Koupper
 
-<h1 align="center">Koupper</h1>
+Koupper is a Kotlin scripting runtime + CLI built for teams that want fast script iteration with production-grade execution.
 
-Koupper is a Kotlin scripting runtime + CLI for local-first automation and production execution.
+Core promise:
+
+- write small Kotlin scripts,
+- execute through a stable Octopus runtime contract,
+- scale behavior with Service Providers,
+- move from local flows to production without rewriting the architecture.
 
 ## Start here
 
@@ -34,13 +33,16 @@ koupper run examples/hello-world.kts "Smoke"
 koupper provider list
 ```
 
-## Contributor docs in this repo
+## Why teams choose Koupper
 
-- Internal docs folder: `docs/`
-- Production hardening: `docs/PRODUCTION_HARDENING.md`
-- CLI checklist: `docs/CLI_COMMAND_CHECKLIST.md`
-- Script execution contract: `docs/SCRIPT_EXECUTION_CONTRACT.md`
-- Release versioning: `docs/release-versioning.md`
+- Kotlin-first, type-safe scripts instead of ad-hoc shell glue.
+- Provider-first architecture for cloud, infra, and workflow capabilities.
+- Local-first developer workflow with production hardening paths.
+- Predictable runtime contract (`@Export` single entrypoint + pipeline orchestration).
+
+## Maintainer docs in this repo
+
+- Maintainer index: `docs/MAINTAINER_GUIDE.md`
 - Documentation ownership standard: `docs/DOCUMENTATION_STANDARD.md`
 
 ## License
