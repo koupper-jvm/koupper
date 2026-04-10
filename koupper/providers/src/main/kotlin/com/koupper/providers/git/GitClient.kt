@@ -4,7 +4,8 @@ data class GitCommandResult(
     val command: String,
     val exitCode: Int,
     val stdout: String,
-    val stderr: String
+    val stderr: String,
+    val timedOut: Boolean = false
 )
 
 data class GitDiffRequest(
