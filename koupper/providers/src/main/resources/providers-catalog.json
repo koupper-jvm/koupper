@@ -235,6 +235,12 @@
           "implementations": [
             { "class": "LocalProcessSupervisor" }
           ]
+        },
+        {
+          "contract": "ProcessOrchestrator",
+          "implementations": [
+            { "class": "LocalProcessSupervisor" }
+          ]
         }
       ],
       "env": [
@@ -244,6 +250,36 @@
         { "name": "PROCESS_SUPERVISOR_SHELL_UNIX", "required": false, "description": "Shell binary for shellCommand mode on Unix (default: bash)." }
       ],
       "docs": "https://koupper.com/docs/providers/process-supervisor"
+    },
+    {
+      "id": "job-ops",
+      "serviceProvider": "JobOpsServiceProvider",
+      "description": "Typed job orchestration operations for status/list/run/failed/retry without shelling to CLI.",
+      "bindings": [
+        {
+          "contract": "JobOps",
+          "implementations": [
+            { "class": "DefaultJobOps" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/job-ops"
+    },
+    {
+      "id": "local-e2e",
+      "serviceProvider": "LocalE2EServiceProvider",
+      "description": "Local E2E flow runner for process health, HTTP checks, jobs cycle, and persistence verification.",
+      "bindings": [
+        {
+          "contract": "LocalE2E",
+          "implementations": [
+            { "class": "DefaultLocalE2E" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/local-e2e"
     },
     {
       "id": "files",
@@ -339,6 +375,12 @@
           "contract": "DynamoClient",
           "implementations": [
             { "class": "DynamoClientImpl" }
+          ]
+        },
+        {
+          "contract": "DynamoLocalAdmin",
+          "implementations": [
+            { "class": "DynamoLocalAdminImpl" }
           ]
         }
       ],
