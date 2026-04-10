@@ -7,6 +7,7 @@ import com.koupper.providers.aws.s3.S3ClientImpl
 
 class AwsServiceProvider: ServiceProvider() {
     override fun up() {
+        app.bind(DynamoLocalAdmin::class, { DynamoLocalAdminImpl(app.getInstance(DynamoClient::class)) })
         app.bind(
             DynamoClient::class, { DynamoClientImpl() }
         )
