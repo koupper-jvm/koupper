@@ -14,6 +14,8 @@ Purpose: automate the GitHub release lifecycle from Koupper scripts using sequen
   - merges PR using selected strategy and syncs local base branch.
 - `scripts/release/release-flow.kts`
   - orchestrates all previous scripts in one command.
+- `scripts/release/fast-lane.kts`
+  - creates/updates a PR without local CI waiting and optionally enables GitHub auto-merge.
 - `scripts/release/version-bump.kts`
   - computes/applies semver bump on `koupper/build.gradle`.
 - `scripts/release/tag-release.kts`
@@ -25,6 +27,12 @@ Dry-run orchestration:
 
 ```bash
 koupper run scripts/release/release-flow.kts '{"featureBranch":"feature/my-next-change","dryRun":true}'
+```
+
+Fast lane (no local CI wait, enable auto-merge):
+
+```bash
+koupper run scripts/release/fast-lane.kts '{"featureBranch":"feature/my-next-change","enableAutoMerge":true}'
 ```
 
 Create PR and wait for smoke workflow:
@@ -48,3 +56,4 @@ koupper run scripts/release/release-flow.kts '{"featureBranch":"feature/my-next-
 - All scripts support command timeout/retry controls to reduce transient command failures.
 - `ci-watch.kts` can pin to a specific `expectedHeadSha` to avoid reading stale workflow runs.
 - These scripts call `git` and `gh`; make sure both commands are available on your PATH.
+- Use `fast-lane.kts` for high-velocity `develop` PRs when required checks/auto-merge are configured.
