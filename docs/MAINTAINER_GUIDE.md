@@ -19,6 +19,10 @@ This folder stores maintainer-focused documentation. Public user documentation l
 - `CLI_COMMAND_CHECKLIST.md`: release-time manual CLI validation checklist.
 - `release-versioning.md`: version bump and tagging policy.
 - `NEXT_FEATURES_NOTES.md`: short-term backlog and guardrails for upcoming feature waves.
+- `KOUPPER_FRAMEWORK_MATURITY_PLAYBOOK.md`: strategic execution plan for enterprise hardening and new-agent onboarding.
+- `CONTRACT_VERSIONING_POLICY.md`: governs additive vs breaking API changes and deprecation lifecycle across CLI, providers, and script execution contract.
+- `PROVIDER_AUTHORING_CHECKLIST.md`: four-surface checklist (register + catalog + docs + tests) for every new provider.
+- `migrations/`: per-change migration notes for behavior or default changes that affect existing usage.
 
 ## Archive
 

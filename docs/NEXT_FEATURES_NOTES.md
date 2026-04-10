@@ -2,6 +2,8 @@
 
 This note keeps the next implementation waves scoped and aligned with current `develop` CI/release policy.
 
+Strategic reference for enterprise hardening: `docs/KOUPPER_FRAMEWORK_MATURITY_PLAYBOOK.md`.
+
 ## Current operating baseline
 
 - Branch from `develop`.
@@ -13,8 +15,8 @@ This note keeps the next implementation waves scoped and aligned with current `d
 ## Near-term priorities
 
 1. **Provider developer experience**
-   - Add a provider authoring checklist template (`register + catalog + docs + tests`).
-   - Add provider scaffold command or script for consistent starter files.
+   - ~~Add a provider authoring checklist template (`register + catalog + docs + tests`).~~ Done — `docs/PROVIDER_AUTHORING_CHECKLIST.md`.
+   - Add provider scaffold command or script that generates the starter files from the checklist template.
 
 2. **Installer lifecycle hardening**
    - Add Linux/macOS uninstall E2E parity to heavy workflow.
