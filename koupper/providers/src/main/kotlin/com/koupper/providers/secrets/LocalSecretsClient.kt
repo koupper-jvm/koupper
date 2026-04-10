@@ -52,6 +52,18 @@ class LocalSecretsClient(
         return getOrNull(key) != null
     }
 
+    override fun delete(key: String): Boolean {
+        val removed = cache.remove(key) != null
+        if (removed && config.persistWrites) {
+            persistToFile()
+        }
+        return removed
+    }
+
+    override fun list(): Set<String> {
+        return cache.keys.toSet()
+    }
+
     private fun loadFromFile() {
         if (!file.exists()) {
             if (config.requireFile) {
