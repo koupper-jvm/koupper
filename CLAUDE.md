@@ -75,6 +75,20 @@ koupper run scripts/release/release-flow.kts '{"featureBranch":"feature/my-chang
 
 See `scripts/release/README.md` for full flag reference.
 
+## Deploy Docs
+
+To publish the public documentation site to `koupper.com/docs`:
+
+```bash
+# Dry run first
+koupper run scripts/deploy/deploy-docs.kts '{"dryRun": true}'
+
+# Real deploy — builds VitePress, syncs to S3, invalidates CloudFront
+koupper run scripts/deploy/deploy-docs.kts '{"dryRun": false}'
+```
+
+The docs source lives in `koupper-document/` (separate git repo: `koupper-jvm/koupper-document`). Run this after merging any docs changes to `koupper-document` main.
+
 ## CI Gates
 
 | Target | Gates |
@@ -88,7 +102,7 @@ Merge only when CI concludes `success`. Fix root cause before retrying — do no
 
 Koupper is a **Kotlin scripting runtime + CLI** for automation and infrastructure orchestration. It has three pillars:
 
-### 1. `koupper/` — Octopus Engine (v6.3.1)
+### 1. `koupper/` — Octopus Engine (v6.4.0)
 
 A JVM daemon that compiles, routes, and executes `.kts` scripts. Organized as a multi-module Gradle project:
 
