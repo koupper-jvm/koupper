@@ -10,7 +10,9 @@ class AwsDeployServiceProvider : ServiceProvider() {
             AwsCliDeployProvider(
                 awsCommand = env("AWS_COMMAND", required = false, default = "aws"),
                 defaultRegion = env("AWS_REGION", required = false, default = "us-east-1"),
-                timeoutSeconds = env("AWS_DEPLOY_TIMEOUT_SECONDS", required = false, default = "300").toLong()
+                timeoutSeconds = env("AWS_DEPLOY_TIMEOUT_SECONDS", required = false, default = "300").toLong(),
+                defaultRetryCount = env("AWS_DEPLOY_RETRY_COUNT", required = false, default = "2").toInt(),
+                defaultRetryBackoffMs = env("AWS_DEPLOY_RETRY_BACKOFF_MS", required = false, default = "500").toLong()
             )
         })
     }
