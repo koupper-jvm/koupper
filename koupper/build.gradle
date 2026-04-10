@@ -17,7 +17,7 @@ allprojects {
     }
 }
 
-version = '6.3.1'
+version = '6.4.0'
 def kotlinVersion = '2.0.20'
 def kotestVersion = '5.9.1'
 def mockkVersion = '1.13.12'
