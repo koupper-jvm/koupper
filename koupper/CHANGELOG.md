@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added framework-level IaC execution contract with stable stage output (`ok`, `stage`, `exitCode`, `durationMs`, `warnings`, `errors`, `artifacts`, `nextAction`).
+- Added Terraform lifecycle methods to IaC provider (`init`, `validate`, `plan`, `apply`, `drift`, `output`) with retries/timeouts.
+- Added drift-spec v1 evaluator with support for `required_only` and `exact_match` checks across Dynamo, API, Lambda, SQS, and workers.
+
 ### Changed
 - Module scaffolding bootstrapping now normalizes artifact type aliases (`scripts/jobs/pipelines`) before generating starter execution flow.
 - Local template source resolution now prioritizes versioned `templates/model-project` paths ahead of legacy `model-project` fallback paths.
