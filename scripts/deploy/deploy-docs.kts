@@ -77,7 +77,7 @@ private fun findDocumentDir(cwd: File): File {
 val setup: (Input) -> Map<String, Any?> = { input ->
     val cwd = File(context ?: ".").absoluteFile
     val docsDir = findDocumentDir(cwd)
-    val distDir = File(docsDir, ".vitepress/dist")
+    val distDir = File(docsDir, "docs/.vitepress/dist")
 
     println("=== Koupper Docs Deploy ===")
     println("bucket        : s3://${input.bucket}")
@@ -114,7 +114,7 @@ val setup: (Input) -> Map<String, Any?> = { input ->
     // 3. Sync to S3
     println("\n[3/3] Syncing to s3://${input.bucket}...")
     val sync = run(
-        command = "aws s3 sync \"$distPath\" \"s3://${input.bucket}\" --delete --region ${input.region}",
+        command = "aws s3 sync '$distPath' 's3://${input.bucket}' --delete --region ${input.region}",
         cwd = cwd,
         timeoutSeconds = input.commandTimeoutSeconds,
         dryRun = input.dryRun
@@ -123,7 +123,7 @@ val setup: (Input) -> Map<String, Any?> = { input ->
     // 4. CloudFront invalidation
     println("\nInvalidating CloudFront distribution ${input.distributionId}...")
     val invalidation = run(
-        command = "aws cloudfront create-invalidation --distribution-id ${input.distributionId} --paths \"/*\"",
+        command = "aws cloudfront create-invalidation --distribution-id ${input.distributionId} --paths '/*'",
         cwd = cwd,
         timeoutSeconds = 60,
         dryRun = input.dryRun
