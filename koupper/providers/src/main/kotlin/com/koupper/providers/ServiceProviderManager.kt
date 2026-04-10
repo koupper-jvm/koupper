@@ -23,6 +23,7 @@ import com.koupper.providers.mailing.SenderServiceProvider
 import com.koupper.providers.n8n.N8NServiceProvider
 import com.koupper.providers.notifications.NotificationsServiceProvider
 import com.koupper.providers.observability.ObservabilityServiceProvider
+import com.koupper.providers.process.ProcessSupervisorServiceProvider
 import com.koupper.providers.queueops.QueueOpsServiceProvider
 import com.koupper.providers.rss.RSSServiceProvider
 import com.koupper.providers.runtime.router.RuntimeRouterServiceProvider
@@ -73,6 +74,7 @@ class ServiceProviderManager {
             ObservabilityServiceProvider::class,
             QueueOpsServiceProvider::class,
             CommandRunnerServiceProvider::class,
+            ProcessSupervisorServiceProvider::class,
             HttpServiceProvider::class,
             IaCServiceProvider::class,
             FileServiceProvider::class,
