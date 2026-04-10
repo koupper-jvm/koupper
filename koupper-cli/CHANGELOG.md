@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Infra/reconcile responses now use a stable JSON contract (`ok`, `stage`, `exitCode`, `durationMs`, `warnings`, `errors`, `artifacts`, `nextAction`) for CI automation.
 - Drift now supports a versioned `drift-spec` v1 evaluation mode (`required_only`, `exact_match`) via `--spec` and `--observed-file`.
 - Added command-level timeout/retry flags and output redaction for common secret patterns.
+- `reconcile run` now exposes AWS deploy control flags (`--aws-timeout-seconds`, `--aws-retry-count`, `--aws-retry-backoff-ms`, `--frontend-backup-mode`) and exports them to stage commands.
 
 - `koupper new <file>.kts` now generates standalone scripts without unresolved `%PACKAGE%` placeholders.
 - `new module` now validates required scaffold files (`settings.gradle`, `build.gradle`) before reporting success.

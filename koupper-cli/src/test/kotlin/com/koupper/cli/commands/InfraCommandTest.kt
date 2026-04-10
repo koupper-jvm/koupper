@@ -69,4 +69,20 @@ class InfraCommandTest {
         assertEquals(2, node.path("exitCode").asInt())
         assertTrue(node.path("artifacts").path("driftSpec").path("missing").isArray)
     }
+
+    @Test
+    fun `reconcile flag parser should reject invalid frontend backup mode`() {
+        val command = ReconcileCommand { _, _, _ -> com.koupper.cli.commands.infra.ExecResult(0, "", "", false) }
+
+        val output = command.execute(
+            ".",
+            "run",
+            "--frontend-backup-mode=unknown",
+            "--json"
+        )
+
+        val node = mapper.readTree(output)
+        assertTrue(node.path("ok").asBoolean().not())
+        assertEquals(2, node.path("exitCode").asInt())
+    }
 }
