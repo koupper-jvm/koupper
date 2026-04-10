@@ -35,6 +35,7 @@ import java.net.URL
 import java.nio.file.Paths
 import java.security.MessageDigest
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -185,6 +186,37 @@ private object DaemonMetrics {
         unauthorizedCommands = unauthorizedCommands.get(),
         invalidCommands = invalidCommands.get()
     )
+}
+
+private data class ActiveExecution(
+    val requestId: String,
+    val thread: Thread,
+    val scriptPath: String,
+    val startedAt: Long = System.currentTimeMillis()
+)
+
+private object ActiveExecutions {
+    private val executions = ConcurrentHashMap<String, ActiveExecution>()
+
+    fun register(requestId: String, scriptPath: String) {
+        executions[requestId] = ActiveExecution(
+            requestId = requestId,
+            thread = Thread.currentThread(),
+            scriptPath = scriptPath
+        )
+    }
+
+    fun unregister(requestId: String?) {
+        if (requestId.isNullOrBlank()) return
+        executions.remove(requestId)
+    }
+
+    fun cancel(requestId: String?): Boolean {
+        if (requestId.isNullOrBlank()) return false
+        val execution = executions[requestId] ?: return false
+        execution.thread.interrupt()
+        return true
+    }
 }
 
 private fun structuredEvent(event: String, fields: Map<String, Any?> = emptyMap()): String {
@@ -373,6 +405,14 @@ internal fun parseIncomingCommand(command: String): IncomingCommand? {
             )
         }
 
+        if (type == "CANCEL") {
+            return IncomingCommand(
+                mode = ResponseMode.JSON,
+                requestId = req.requestId,
+                commandType = "CANCEL"
+            )
+        }
+
         return IncomingCommand(
             mode = ResponseMode.JSON,
             requestId = req.requestId,
@@ -547,10 +587,18 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 SessionStdoutBridge.setStreamLevels(previousLevels)
             }
         } catch (e: Throwable) {
+            if (e is InterruptedException) {
+                result(castTo<T>("Script interrupted by cancellation request"))
+                return
+            }
             e.printStackTrace(System.out)
             var rootCause = e
             while (rootCause.cause != null) {
                 rootCause = rootCause.cause!!
+            }
+            if (rootCause is InterruptedException) {
+                result(castTo<T>("Script interrupted by cancellation request"))
+                return
             }
             rootCause.printStackTrace(System.out)
 
@@ -1161,6 +1209,15 @@ fun listenForExternalCommands(
                     SessionStdoutBridge.bind(sessionOutput, parsedCommand.mode, parsedCommand.requestId)
 
                     when {
+                        parsedCommand.commandType == "CANCEL" -> {
+                            val cancelled = ActiveExecutions.cancel(parsedCommand.requestId)
+                            sessionOutput.result(
+                                "{\"ok\":${if (cancelled) "true" else "false"},\"requestId\":\"${parsedCommand.requestId ?: ""}\",\"cancelled\":${if (cancelled) "true" else "false"}}",
+                                parsedCommand.mode,
+                                parsedCommand.requestId
+                            )
+                        }
+
                         parsedCommand.commandType == "UPDATING_CHECK" -> {
                             checkForUpdates()
                         }
@@ -1325,6 +1382,10 @@ fun listenForExternalCommands(
                         parsedCommand.scriptPath.endsWith(".kts") || parsedCommand.scriptPath.endsWith(".kt") -> {
                             DaemonMetrics.onScriptStarted()
                             val startedAt = System.nanoTime()
+                            val requestId = parsedCommand.requestId
+                            if (!requestId.isNullOrBlank()) {
+                                ActiveExecutions.register(requestId, parsedCommand.scriptPath)
+                            }
 
                             try {
                                 sessionLogger.info {
@@ -1378,6 +1439,7 @@ fun listenForExternalCommands(
                                 }
                                 sessionOutput.error(e.message ?: "Script execution failed", parsedCommand.mode, parsedCommand.requestId)
                             } finally {
+                                ActiveExecutions.unregister(requestId)
                                 System.out.flush()
                                 it.shutdownOutput()
                             }
