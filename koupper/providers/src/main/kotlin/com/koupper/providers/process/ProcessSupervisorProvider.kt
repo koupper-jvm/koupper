@@ -13,6 +13,15 @@ import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
+data class ProcessHealthPolicy(
+    val acceptedStatusCodes: Set<Int> = emptySet(),
+    val acceptedStatusMin: Int = 200,
+    val acceptedStatusMax: Int = 399,
+    val retries: Int = 0,
+    val retryDelayMs: Long = 250,
+    val timeoutMs: Long = 1500
+)
+
 data class ProcessStartRequest(
     val name: String,
     val executable: String? = null,
@@ -21,8 +30,9 @@ data class ProcessStartRequest(
     val workingDirectory: String = ".",
     val environment: Map<String, String> = emptyMap(),
     val healthUrl: String? = null,
-    val healthTimeoutMs: Long = 1500,
-    val appendLogs: Boolean = true
+    val healthPolicy: ProcessHealthPolicy = ProcessHealthPolicy(),
+    val appendLogs: Boolean = true,
+    val ensureHealthyOnStart: Boolean = false
 )
 
 data class ProcessStartResult(
@@ -31,14 +41,34 @@ data class ProcessStartResult(
     val startedAt: Long,
     val logPath: String,
     val command: String,
-    val alreadyRunning: Boolean = false
+    val alreadyRunning: Boolean = false,
+    val healthyAtStart: Boolean? = null
 )
 
 data class ProcessStatusRequest(
     val name: String? = null,
     val pid: Long? = null,
     val healthUrl: String? = null,
-    val healthTimeoutMs: Long = 1500
+    val healthPolicy: ProcessHealthPolicy = ProcessHealthPolicy(),
+    val autoPruneStale: Boolean = true
+)
+
+data class ProcessListRequest(
+    val autoPruneStale: Boolean = true
+)
+
+data class ProcessStopManyRequest(
+    val names: List<String> = emptyList(),
+    val pids: List<Long> = emptyList(),
+    val force: Boolean = false,
+    val waitTimeoutMs: Long = 10000
+)
+
+data class ProcessStatusManyRequest(
+    val names: List<String> = emptyList(),
+    val pids: List<Long> = emptyList(),
+    val healthPolicy: ProcessHealthPolicy = ProcessHealthPolicy(),
+    val autoPruneStale: Boolean = true
 )
 
 data class ProcessHealthResult(
@@ -46,6 +76,7 @@ data class ProcessHealthResult(
     val healthy: Boolean,
     val statusCode: Int? = null,
     val responseTimeMs: Long,
+    val attempts: Int,
     val error: String? = null
 )
 
@@ -91,13 +122,16 @@ data class ProcessLogsRequest(
     val name: String? = null,
     val pid: Long? = null,
     val path: String? = null,
-    val tailLines: Int = 200
+    val tailLines: Int = 200,
+    val maxBytes: Int = 64 * 1024,
+    val stripAnsi: Boolean = true
 )
 
 data class ProcessLogsResult(
     val name: String? = null,
     val pid: Long? = null,
     val logPath: String,
+    val truncated: Boolean,
     val lines: List<String>
 )
 
@@ -109,9 +143,13 @@ data class ProcessCleanupResult(
 
 interface ProcessSupervisor {
     fun start(request: ProcessStartRequest): ProcessStartResult
+    fun startMany(requests: List<ProcessStartRequest>): List<ProcessStartResult>
     fun status(request: ProcessStatusRequest): ProcessStatusResult
+    fun statusMany(request: ProcessStatusManyRequest): List<ProcessStatusResult>
     fun list(): List<ProcessListItem>
+    fun list(request: ProcessListRequest): List<ProcessListItem>
     fun stop(request: ProcessStopRequest): ProcessStopResult
+    fun stopMany(request: ProcessStopManyRequest): List<ProcessStopResult>
     fun logs(request: ProcessLogsRequest): ProcessLogsResult
     fun cleanup(): ProcessCleanupResult
 }
@@ -146,6 +184,7 @@ class LocalProcessSupervisor(
     private val lock = Any()
     private val managedProcesses = ConcurrentHashMap<Long, Process>()
     private val httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()
+    private val ansiPattern = Regex("\\u001B\\[[;\\d]*m")
 
     override fun start(request: ProcessStartRequest): ProcessStartResult {
         val normalizedName = request.name.trim()
@@ -155,13 +194,21 @@ class LocalProcessSupervisor(
             val registry = readRegistry()
             val existing = registry.processes.firstOrNull { it.name == normalizedName }
             if (existing != null && isRunning(existing.pid)) {
+                val healthy = if (request.ensureHealthyOnStart) {
+                    val healthTarget = request.healthUrl?.takeIf { it.isNotBlank() } ?: existing.healthUrl
+                    healthTarget?.let { doHealthCheck(it, request.healthPolicy).healthy }
+                } else {
+                    null
+                }
+
                 return ProcessStartResult(
                     processId = existing.pid,
                     name = existing.name,
                     startedAt = existing.startedAt,
                     logPath = existing.logPath,
                     command = existing.command,
-                    alreadyRunning = true
+                    alreadyRunning = true,
+                    healthyAtStart = healthy
                 )
             }
 
@@ -177,6 +224,19 @@ class LocalProcessSupervisor(
 
             val process = builder.start()
             val startedAt = System.currentTimeMillis()
+            val healthTarget = request.healthUrl?.takeIf { it.isNotBlank() }
+
+            val healthyAtStart = if (request.ensureHealthyOnStart && healthTarget != null) {
+                val health = doHealthCheck(healthTarget, request.healthPolicy)
+                if (!health.healthy) {
+                    process.destroyForcibly()
+                    error("Process '${request.name}' failed startup health check (${health.error ?: health.statusCode})")
+                }
+                true
+            } else {
+                null
+            }
+
             val record = StoredProcess(
                 name = normalizedName,
                 pid = process.pid(),
@@ -185,7 +245,7 @@ class LocalProcessSupervisor(
                 envKeys = request.environment.keys.sorted(),
                 startedAt = startedAt,
                 logPath = processFile.absolutePath,
-                healthUrl = request.healthUrl?.takeIf { it.isNotBlank() }
+                healthUrl = healthTarget
             )
 
             managedProcesses[process.pid()] = process
@@ -203,19 +263,28 @@ class LocalProcessSupervisor(
                 startedAt = startedAt,
                 logPath = processFile.absolutePath,
                 command = renderedCommand,
-                alreadyRunning = false
+                alreadyRunning = false,
+                healthyAtStart = healthyAtStart
             )
         }
     }
 
+    override fun startMany(requests: List<ProcessStartRequest>): List<ProcessStartResult> {
+        return requests.map { start(it) }
+    }
+
     override fun status(request: ProcessStatusRequest): ProcessStatusResult {
+        if (request.autoPruneStale) {
+            pruneStaleLocked()
+        }
+
         val record = resolveRecord(request.name, request.pid)
         val running = isRunning(record.pid)
         val now = System.currentTimeMillis()
         val uptime = if (running) now - record.startedAt else null
 
         val healthTarget = request.healthUrl?.takeIf { it.isNotBlank() } ?: record.healthUrl
-        val health = healthTarget?.let { doHealthCheck(it, request.healthTimeoutMs) }
+        val health = healthTarget?.let { doHealthCheck(it, request.healthPolicy) }
 
         return ProcessStatusResult(
             name = record.name,
@@ -230,7 +299,38 @@ class LocalProcessSupervisor(
         )
     }
 
-    override fun list(): List<ProcessListItem> {
+    override fun statusMany(request: ProcessStatusManyRequest): List<ProcessStatusResult> {
+        val byNames = request.names.map { name ->
+            status(
+                ProcessStatusRequest(
+                    name = name,
+                    healthPolicy = request.healthPolicy,
+                    autoPruneStale = request.autoPruneStale
+                )
+            )
+        }
+
+        val byPids = request.pids.map { pid ->
+            status(
+                ProcessStatusRequest(
+                    pid = pid,
+                    healthPolicy = request.healthPolicy,
+                    autoPruneStale = request.autoPruneStale
+                )
+            )
+        }
+
+        return (byNames + byPids)
+            .distinctBy { "${it.name}:${it.pid}" }
+    }
+
+    override fun list(): List<ProcessListItem> = list(ProcessListRequest())
+
+    override fun list(request: ProcessListRequest): List<ProcessListItem> {
+        if (request.autoPruneStale) {
+            pruneStaleLocked()
+        }
+
         return readRegistry().processes.map { record ->
             ProcessListItem(
                 name = record.name,
@@ -282,6 +382,35 @@ class LocalProcessSupervisor(
         }
     }
 
+    override fun stopMany(request: ProcessStopManyRequest): List<ProcessStopResult> {
+        val byNames = request.names.mapNotNull { name ->
+            runCatching {
+                stop(
+                    ProcessStopRequest(
+                        name = name,
+                        force = request.force,
+                        waitTimeoutMs = request.waitTimeoutMs
+                    )
+                )
+            }.getOrNull()
+        }
+
+        val byPids = request.pids.mapNotNull { pid ->
+            runCatching {
+                stop(
+                    ProcessStopRequest(
+                        pid = pid,
+                        force = request.force,
+                        waitTimeoutMs = request.waitTimeoutMs
+                    )
+                )
+            }.getOrNull()
+        }
+
+        return (byNames + byPids)
+            .distinctBy { "${it.name}:${it.pid}" }
+    }
+
     override fun logs(request: ProcessLogsRequest): ProcessLogsResult {
         val targetPath = when {
             !request.path.isNullOrBlank() -> request.path
@@ -292,14 +421,46 @@ class LocalProcessSupervisor(
         }
 
         val file = File(targetPath)
-        val lines = if (file.exists()) tail(file, request.tailLines.coerceAtLeast(1)) else emptyList()
+        if (!file.exists()) {
+            return ProcessLogsResult(
+                name = request.name,
+                pid = request.pid,
+                logPath = file.absolutePath,
+                truncated = false,
+                lines = emptyList()
+            )
+        }
+
+        val maxBytes = request.maxBytes.coerceAtLeast(1)
+        val bytes = file.readBytes()
+        val truncated = bytes.size > maxBytes
+        val slice = if (truncated) {
+            bytes.copyOfRange(bytes.size - maxBytes, bytes.size)
+        } else {
+            bytes
+        }
+
+        val allLines = String(slice, Charsets.UTF_8)
+            .lineSequence()
+            .filter { it.isNotEmpty() }
+            .toList()
+
+        val tailed = if (allLines.size > request.tailLines.coerceAtLeast(1)) {
+            allLines.takeLast(request.tailLines.coerceAtLeast(1))
+        } else {
+            allLines
+        }
+
+        val finalLines = if (request.stripAnsi) tailed.map { stripAnsi(it) } else tailed
+
         val record = runCatching { resolveRecord(request.name, request.pid) }.getOrNull()
 
         return ProcessLogsResult(
             name = record?.name,
             pid = record?.pid,
             logPath = file.absolutePath,
-            lines = lines
+            truncated = truncated,
+            lines = finalLines
         )
     }
 
@@ -315,6 +476,16 @@ class LocalProcessSupervisor(
                 remaining = alive.size,
                 removedNames = orphaned.map { it.name }.sorted()
             )
+        }
+    }
+
+    private fun pruneStaleLocked() {
+        synchronized(lock) {
+            val registry = readRegistry()
+            val alive = registry.processes.filter { isRunning(it.pid) }
+            if (alive.size != registry.processes.size) {
+                writeRegistry(ProcessRegistry(processes = alive))
+            }
         }
     }
 
@@ -352,32 +523,56 @@ class LocalProcessSupervisor(
         return listOf(request.executable?.trim().orEmpty()).plus(request.args).joinToString(" ").trim()
     }
 
-    private fun doHealthCheck(url: String, timeoutMs: Long): ProcessHealthResult {
-        val started = System.currentTimeMillis()
-        return try {
-            val request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofMillis(timeoutMs.coerceAtLeast(1)))
-                .GET()
-                .build()
-            val response = httpClient.send(request, HttpResponse.BodyHandlers.discarding())
-            val elapsed = System.currentTimeMillis() - started
-            ProcessHealthResult(
-                url = url,
-                healthy = response.statusCode() in 200..399,
-                statusCode = response.statusCode(),
-                responseTimeMs = elapsed,
-                error = null
-            )
-        } catch (ex: Exception) {
-            val elapsed = System.currentTimeMillis() - started
-            ProcessHealthResult(
-                url = url,
-                healthy = false,
-                statusCode = null,
-                responseTimeMs = elapsed,
-                error = ex.message
-            )
+    private fun doHealthCheck(url: String, policy: ProcessHealthPolicy): ProcessHealthResult {
+        var attempt = 0
+        var lastCode: Int? = null
+        var lastError: String? = null
+        var elapsed = 0L
+
+        val maxAttempts = policy.retries.coerceAtLeast(0) + 1
+        while (attempt < maxAttempts) {
+            attempt += 1
+            val started = System.currentTimeMillis()
+            try {
+                val request = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofMillis(policy.timeoutMs.coerceAtLeast(1)))
+                    .GET()
+                    .build()
+
+                val response = httpClient.send(request, HttpResponse.BodyHandlers.discarding())
+                elapsed = System.currentTimeMillis() - started
+                val code = response.statusCode()
+                lastCode = code
+                val accepted = code in policy.acceptedStatusCodes || code in policy.acceptedStatusMin..policy.acceptedStatusMax
+                if (accepted) {
+                    return ProcessHealthResult(
+                        url = url,
+                        healthy = true,
+                        statusCode = code,
+                        responseTimeMs = elapsed,
+                        attempts = attempt,
+                        error = null
+                    )
+                }
+                lastError = "status=$code"
+            } catch (ex: Exception) {
+                elapsed = System.currentTimeMillis() - started
+                lastError = ex.message
+            }
+
+            if (attempt < maxAttempts) {
+                Thread.sleep(policy.retryDelayMs.coerceAtLeast(0))
+            }
         }
+
+        return ProcessHealthResult(
+            url = url,
+            healthy = false,
+            statusCode = lastCode,
+            responseTimeMs = elapsed,
+            attempts = maxAttempts,
+            error = lastError
+        )
     }
 
     private fun isRunning(pid: Long): Boolean {
@@ -433,16 +628,7 @@ class LocalProcessSupervisor(
         }
     }
 
-    private fun tail(file: File, tailLines: Int): List<String> {
-        val queue = ArrayDeque<String>(tailLines)
-        file.bufferedReader().useLines { sequence ->
-            sequence.forEach { line ->
-                if (queue.size == tailLines) queue.removeFirst()
-                queue.addLast(line)
-            }
-        }
-        return queue.toList()
-    }
+    private fun stripAnsi(value: String): String = ansiPattern.replace(value, "")
 
     private fun isWindows(): Boolean = System.getProperty("os.name").lowercase().contains("win")
 }

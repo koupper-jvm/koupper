@@ -102,6 +102,7 @@ project(':providers') {
         implementation project(':container')
         implementation project(':os')
         implementation project(':shared')
+        implementation project(':orchestrator-core')
 
         implementation "com.sun.mail:jakarta.mail:2.0.1"
         implementation "io.zeko:zeko-sql-builder:1.2.4"
