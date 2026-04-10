@@ -21,7 +21,11 @@ data class InfraCliOptions(
     val policy: String = "strict",
     val deployCommand: String? = null,
     val smokeCommand: String? = null,
-    val rollbackCommand: String? = null
+    val rollbackCommand: String? = null,
+    val awsTimeoutSeconds: Long? = null,
+    val awsRetryCount: Int? = null,
+    val awsRetryBackoffMs: Long? = null,
+    val frontendBackupMode: String? = null
 )
 
 data class CliCommandResult(
@@ -50,7 +54,8 @@ object InfraSupport {
     private val allowedStages = setOf("infra", "preflight", "deploy", "smoke", "rollback")
     private val knownFlags = setOf(
         "--dir", "--var-file", "--backend-config", "--auto-approve", "--timeout", "--json", "--retry", "--retry-delay-ms",
-        "--spec", "--observed-file", "--stages", "--policy", "--deploy-command", "--smoke-command", "--rollback-command"
+        "--spec", "--observed-file", "--stages", "--policy", "--deploy-command", "--smoke-command", "--rollback-command",
+        "--aws-timeout-seconds", "--aws-retry-count", "--aws-retry-backoff-ms", "--frontend-backup-mode"
     )
 
     fun parseOptions(context: String, args: List<String>): Pair<InfraCliOptions?, List<String>> {
@@ -93,6 +98,26 @@ object InfraSupport {
         val retryDelayMs = values["--retry-delay-ms"]?.lastOrNull()?.toLongOrNull() ?: 250L
         if (retryDelayMs < 0) errors += "--retry-delay-ms must be zero or greater"
 
+        val awsTimeoutSeconds = values["--aws-timeout-seconds"]?.lastOrNull()?.toLongOrNull()
+        if (values["--aws-timeout-seconds"] != null && (awsTimeoutSeconds == null || awsTimeoutSeconds <= 0)) {
+            errors += "--aws-timeout-seconds must be greater than zero"
+        }
+
+        val awsRetryCount = values["--aws-retry-count"]?.lastOrNull()?.toIntOrNull()
+        if (values["--aws-retry-count"] != null && (awsRetryCount == null || awsRetryCount < 0)) {
+            errors += "--aws-retry-count must be zero or greater"
+        }
+
+        val awsRetryBackoffMs = values["--aws-retry-backoff-ms"]?.lastOrNull()?.toLongOrNull()
+        if (values["--aws-retry-backoff-ms"] != null && (awsRetryBackoffMs == null || awsRetryBackoffMs < 0)) {
+            errors += "--aws-retry-backoff-ms must be zero or greater"
+        }
+
+        val frontendBackupMode = values["--frontend-backup-mode"]?.lastOrNull()?.lowercase(Locale.getDefault())
+        if (frontendBackupMode != null && frontendBackupMode !in setOf("full", "incremental", "disabled")) {
+            errors += "--frontend-backup-mode must be one of: full, incremental, disabled"
+        }
+
         val policy = values["--policy"]?.lastOrNull() ?: "strict"
         if (policy !in allowedPolicies) {
             errors += "--policy must be one of: strict, continue_on_error, abort_on_failure"
@@ -126,7 +151,11 @@ object InfraSupport {
             policy = policy,
             deployCommand = values["--deploy-command"]?.lastOrNull(),
             smokeCommand = values["--smoke-command"]?.lastOrNull(),
-            rollbackCommand = values["--rollback-command"]?.lastOrNull()
+            rollbackCommand = values["--rollback-command"]?.lastOrNull(),
+            awsTimeoutSeconds = awsTimeoutSeconds,
+            awsRetryCount = awsRetryCount,
+            awsRetryBackoffMs = awsRetryBackoffMs,
+            frontendBackupMode = frontendBackupMode
         ) to emptyList()
     }
 
