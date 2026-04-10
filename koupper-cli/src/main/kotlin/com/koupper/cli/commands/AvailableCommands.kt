@@ -13,6 +13,8 @@ object AvailableCommands {
     const val MODULE = "module"
     const val JOB = "job"
     const val PROVIDER = "provider"
+    const val INFRA = "infra"
+    const val RECONCILE = "reconcile"
 
     fun commands(): Map<String, String> = mapOf(
         NEW to "Creates a module or script",
@@ -21,6 +23,8 @@ object AvailableCommands {
         HELP to "Displays information about a command",
         MODULE to "Analyzes and inspects existing modules and their structure.",
         JOB to "Creates and manages background job workers",
-        PROVIDER to "Lists available service providers and environment requirements"
+        PROVIDER to "Lists available service providers and environment requirements",
+        INFRA to "Runs Terraform-based infrastructure lifecycle commands",
+        RECONCILE to "Orchestrates infra/preflight/deploy/smoke/rollback pipelines"
     )
 }
