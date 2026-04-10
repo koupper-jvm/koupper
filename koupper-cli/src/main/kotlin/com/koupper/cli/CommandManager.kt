@@ -6,8 +6,10 @@ import com.koupper.cli.commands.AvailableCommands.HELP
 import com.koupper.cli.commands.AvailableCommands.MODULE
 import com.koupper.cli.commands.AvailableCommands.NEW
 import com.koupper.cli.commands.AvailableCommands.PROVIDER
+import com.koupper.cli.commands.AvailableCommands.RECONCILE
 import com.koupper.cli.commands.AvailableCommands.RUN
 import com.koupper.cli.commands.AvailableCommands.DEPLOY
+import com.koupper.cli.commands.AvailableCommands.INFRA
 import com.koupper.cli.commands.AvailableCommands.JOB
 import com.koupper.cli.commands.jobs.JobCommand
 import kotlinx.coroutines.delay
@@ -59,7 +61,9 @@ class CommandManager {
             DEPLOY to DeployCommand(),
             MODULE to ModuleCommand(),
             JOB to JobCommand(),
-            PROVIDER to ProviderCommand()
+            PROVIDER to ProviderCommand(),
+            INFRA to InfraCommand(),
+            RECONCILE to ReconcileCommand()
         )
     }
 
