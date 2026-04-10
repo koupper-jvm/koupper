@@ -37,6 +37,11 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 - Added setup helper scripts (`scripts/setup/install.sh`, `scripts/setup/install.ps1`) for one-command prerequisite check + install flow.
 - Setup helpers now support optional dependency auto-install/update mode (`--auto-install-deps` / `-AutoInstallDeps`) with confirmation and non-interactive mode.
 
+### ▶️ Live Run Mode
+- Added `koupper run --serve` for long-running script sessions (local servers/listeners) with attached CLI output.
+- Added daemon-side cancellation command support so `Ctrl+C` in serve mode can interrupt active execution by request id.
+- Added runtime-router live example script: `examples/runtime-router-live-server.kts`.
+
 ### 🧪 CI Policy
 - Added `PR Fast Checks` workflow for quick compile validation on every PR.
 - Added `Provider Consistency` workflow for fast provider/core/CLI parity checks on PRs to `develop`.
