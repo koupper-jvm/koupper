@@ -20,6 +20,8 @@ If the user says "go to reception" or "read bootstrap", this is the file to read
   - `koupper-document/docs/production/release-workflow.md`
 - If task touches maintainer governance/policy, also read:
   - `docs/MAINTAINER_GUIDE.md`
+- If task touches framework maturity/enterprise hardening, also read:
+  - `docs/KOUPPER_FRAMEWORK_MATURITY_PLAYBOOK.md`
 
 ## Delivery policy
 
