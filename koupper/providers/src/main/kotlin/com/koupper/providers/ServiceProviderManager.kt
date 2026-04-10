@@ -16,7 +16,9 @@ import com.koupper.providers.git.GitServiceProvider
 import com.koupper.providers.http.HttpServiceProvider
 import com.koupper.providers.iac.IaCServiceProvider
 import com.koupper.providers.jwt.JWTServiceProvider
+import com.koupper.providers.jobops.JobOpsServiceProvider
 import com.koupper.providers.k8s.K8sServiceProvider
+import com.koupper.providers.locale2e.LocalE2EServiceProvider
 import com.koupper.providers.logger.LoggerServiceProvider
 import com.koupper.providers.mcp.MCPServiceProvider
 import com.koupper.providers.mailing.SenderServiceProvider
@@ -75,6 +77,8 @@ class ServiceProviderManager {
             QueueOpsServiceProvider::class,
             CommandRunnerServiceProvider::class,
             ProcessSupervisorServiceProvider::class,
+            JobOpsServiceProvider::class,
+            LocalE2EServiceProvider::class,
             HttpServiceProvider::class,
             IaCServiceProvider::class,
             FileServiceProvider::class,
