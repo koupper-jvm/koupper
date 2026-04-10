@@ -53,6 +53,13 @@ koupper -v
 
 The setup scripts validate prerequisites first (Java 17+, `kotlinc`, Git) and print exact download links when something is missing.
 
+Optional automatic dependency mode:
+
+- macOS/Linux: `./scripts/setup/install.sh --auto-install-deps`
+- Windows: `./scripts/setup/install.ps1 -AutoInstallDeps`
+
+In auto mode, the installer validates current versions first and asks before updating incompatible prerequisites.
+
 ## 60-second quick smoke
 
 ```bash
