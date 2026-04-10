@@ -18,6 +18,7 @@ This folder stores maintainer-focused documentation. Public user documentation l
 - `PRODUCTION_HARDENING.md`: production baseline for Octopus runtime operations.
 - `CLI_COMMAND_CHECKLIST.md`: release-time manual CLI validation checklist.
 - `release-versioning.md`: version bump and tagging policy.
+- `NEXT_FEATURES_NOTES.md`: short-term backlog and guardrails for upcoming feature waves.
 
 ## Archive
 
