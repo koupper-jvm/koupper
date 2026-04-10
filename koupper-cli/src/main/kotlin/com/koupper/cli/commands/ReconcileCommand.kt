@@ -14,8 +14,10 @@ class ReconcileCommand(
         super.name = RECONCILE
         super.usage = "\n" + """
    koupper reconcile run [--dir=.] [--stages=infra,preflight,deploy,smoke,rollback] [--policy=strict]
-                        [--var-file=...] [--backend-config=...] [--auto-approve]
-                        [--deploy-command="..."] [--smoke-command="..."] [--rollback-command="..."] [--json]
+                         [--var-file=...] [--backend-config=...] [--auto-approve]
+                         [--deploy-command="..."] [--smoke-command="..."] [--rollback-command="..."]
+                         [--aws-timeout-seconds=900] [--aws-retry-count=4] [--aws-retry-backoff-ms=800]
+                         [--frontend-backup-mode=incremental] [--json]
         """
         super.description = "\n   Runs end-to-end reconcile stages with policy-driven failure handling\n"
         super.arguments = mapOf(
@@ -24,7 +26,11 @@ class ReconcileCommand(
             "--policy=<mode>" to "strict | continue_on_error | abort_on_failure.",
             "--deploy-command=<shell>" to "Agnostic deploy stage command.",
             "--smoke-command=<shell>" to "Agnostic smoke verification command.",
-            "--rollback-command=<shell>" to "Agnostic rollback command used when needed."
+            "--rollback-command=<shell>" to "Agnostic rollback command used when needed.",
+            "--aws-timeout-seconds=<n>" to "Exports AWS_DEPLOY_TIMEOUT_SECONDS to stage commands.",
+            "--aws-retry-count=<n>" to "Exports AWS_DEPLOY_RETRY_COUNT to stage commands.",
+            "--aws-retry-backoff-ms=<n>" to "Exports AWS_DEPLOY_RETRY_BACKOFF_MS to stage commands.",
+            "--frontend-backup-mode=<mode>" to "Exports AWS_FRONTEND_BACKUP_MODE (full|incremental|disabled)."
         )
         super.additionalInformation = "\n   For more info: https://koupper.com/docs/commands/reconcile"
     }
@@ -131,7 +137,13 @@ class ReconcileCommand(
             artifacts = mapOf(
                 "policy" to options.policy,
                 "stages" to stageResults,
-                "requestedStages" to options.stages
+                "requestedStages" to options.stages,
+                "awsControls" to mapOf(
+                    "awsTimeoutSeconds" to options.awsTimeoutSeconds,
+                    "awsRetryCount" to options.awsRetryCount,
+                    "awsRetryBackoffMs" to options.awsRetryBackoffMs,
+                    "frontendBackupMode" to options.frontendBackupMode
+                )
             ),
             nextAction = if (stageResults.all { it.exitCode == 0 }) null else "Inspect failed stage artifacts and rerun reconcile"
         )
@@ -150,12 +162,33 @@ class ReconcileCommand(
                 artifacts = mapOf("skipped" to true)
             )
         }
+        val commandWithEnv = withAwsControlEnv(command, options)
         val shellCommand = if (isWindows()) {
-            listOf("pwsh", "-NoProfile", "-Command", command)
+            listOf("pwsh", "-NoProfile", "-Command", commandWithEnv)
         } else {
-            listOf("bash", "-lc", command)
+            listOf("bash", "-lc", commandWithEnv)
         }
         return InfraSupport.executeWithRetry(stage, options, shellCommand, executor)
+    }
+
+    private fun withAwsControlEnv(command: String, options: com.koupper.cli.commands.infra.InfraCliOptions): String {
+        val assignments = linkedMapOf<String, String>()
+        options.awsTimeoutSeconds?.let { assignments["AWS_DEPLOY_TIMEOUT_SECONDS"] = it.toString() }
+        options.awsRetryCount?.let { assignments["AWS_DEPLOY_RETRY_COUNT"] = it.toString() }
+        options.awsRetryBackoffMs?.let { assignments["AWS_DEPLOY_RETRY_BACKOFF_MS"] = it.toString() }
+        options.frontendBackupMode?.let { assignments["AWS_FRONTEND_BACKUP_MODE"] = it }
+
+        if (assignments.isEmpty()) {
+            return command
+        }
+
+        return if (isWindows()) {
+            val exports = assignments.entries.joinToString("; ") { (k, v) -> "\$env:$k='${v.replace("'", "''")}'" }
+            "$exports; $command"
+        } else {
+            val exports = assignments.entries.joinToString(" ") { (k, v) -> "$k='${v.replace("'", "'\\''")}'" }
+            "$exports $command"
+        }
     }
 
     override fun name(): String = RECONCILE
