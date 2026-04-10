@@ -29,6 +29,13 @@ Dry-run orchestration:
 koupper run scripts/release/release-flow.kts '{"featureBranch":"feature/my-next-change","dryRun":true}'
 ```
 
+Default `release-flow.kts` behavior is optimized for `develop` velocity:
+
+- `waitForCi=false`
+- `workflowName="PR Fast Checks"`
+
+If you need blocking CI wait + merge in one command, pass it explicitly.
+
 Fast lane (no local CI wait, enable auto-merge):
 
 ```bash
