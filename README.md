@@ -38,9 +38,20 @@ Tech tags:
 ```bash
 git clone https://github.com/koupper-jvm/koupper.git
 cd koupper
-kotlinc -script install.kts -- --force
+./scripts/setup/install.sh
 koupper -v
 ```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/koupper-jvm/koupper.git
+cd koupper
+./scripts/setup/install.ps1
+koupper -v
+```
+
+The setup scripts validate prerequisites first (Java 17+, `kotlinc`, Git) and print exact download links when something is missing.
 
 ## 60-second quick smoke
 
