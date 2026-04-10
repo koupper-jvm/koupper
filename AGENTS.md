@@ -2,6 +2,14 @@
 
 This file defines the default automation flow for coding agents working in this repository.
 
+## Bootstrap Entry (Mandatory)
+
+Before making any changes, every agent must read:
+
+1. `docs/AGENT_BOOTSTRAP.md`
+
+`docs/AGENT_BOOTSTRAP.md` is the single reception file and defines any additional required reads based on task scope.
+
 ## Branching and Base
 
 - Always start from `develop`.
