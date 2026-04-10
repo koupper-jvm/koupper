@@ -42,6 +42,7 @@ koupper run scripts/release/release-flow.kts '{"featureBranch":"feature/my-next-
 ## Notes
 
 - Default base branch is `develop`.
+- Run local quick checks before push: `scripts/ci/local-quick-checks.ps1 -Target all` or `scripts/ci/local-quick-checks.sh all`.
 - `preflight.kts` allows `docs/future-providers-brief.md` as untracked by default.
 - `preflight.kts` can auto-clean untracked generated helper scripts (`job-runner.kts`, `job-list.kts`, `worker-builder.kts`).
 - All scripts support command timeout/retry controls to reduce transient command failures.
