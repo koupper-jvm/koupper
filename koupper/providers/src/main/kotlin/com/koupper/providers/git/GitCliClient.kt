@@ -82,14 +82,27 @@ class GitCliClient(
     }
 
     private fun run(args: List<String>, repoPath: String): GitCommandResult {
-        val process = ProcessBuilder(args)
-            .directory(File(repoPath))
-            .start()
+        val process = try {
+            ProcessBuilder(args).directory(File(repoPath)).start()
+        } catch (error: Throwable) {
+            return GitCommandResult(
+                command = args.joinToString(" "),
+                exitCode = 127,
+                stdout = "",
+                stderr = error.message ?: "failed to start git process"
+            )
+        }
 
         val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
         if (!completed) {
             process.destroyForcibly()
-            throw IllegalStateException("Git command timed out after ${timeoutSeconds}s: ${args.joinToString(" ")}")
+            return GitCommandResult(
+                command = args.joinToString(" "),
+                exitCode = 124,
+                stdout = "",
+                stderr = "git command timed out after ${timeoutSeconds}s",
+                timedOut = true
+            )
         }
 
         return GitCommandResult(

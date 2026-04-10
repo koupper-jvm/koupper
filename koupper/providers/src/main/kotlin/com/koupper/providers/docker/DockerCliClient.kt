@@ -8,7 +8,8 @@ class DockerCliClient(
     private val host: String? = null,
     private val dockerContext: String? = null,
     private val timeoutSeconds: Long = 300,
-    private val workingDirectory: String = "."
+    private val workingDirectory: String = ".",
+    private val commandRunner: ((List<String>) -> DockerCommandResult)? = null
 ) : DockerClient {
 
     override fun build(request: DockerBuildRequest): DockerCommandResult {
@@ -90,43 +91,47 @@ class DockerCliClient(
     }
 
     private fun run(args: List<String>): DockerCommandResult {
+        commandRunner?.let { return it(args) }
+
         val processBuilder = ProcessBuilder(args)
         processBuilder.directory(File(workingDirectory))
 
         val env = processBuilder.environment()
-        if (!host.isNullOrBlank()) {
-            env["DOCKER_HOST"] = host
-        }
-        if (!dockerContext.isNullOrBlank()) {
-            env["DOCKER_CONTEXT"] = dockerContext
-        }
+        if (!host.isNullOrBlank()) env["DOCKER_HOST"] = host
+        if (!dockerContext.isNullOrBlank()) env["DOCKER_CONTEXT"] = dockerContext
 
-        val process = processBuilder.start()
-
-        val stdoutReader = process.inputStream.bufferedReader()
-        val stderrReader = process.errorStream.bufferedReader()
+        val process = try {
+            processBuilder.start()
+        } catch (error: Throwable) {
+            return DockerCommandResult(
+                command = args.joinToString(" "),
+                exitCode = 127,
+                stdout = "",
+                stderr = error.message ?: "failed to start docker process"
+            )
+        }
 
         val stdoutFuture = ThreadResult<String>()
         val stderrFuture = ThreadResult<String>()
-
-        Thread { stdoutFuture.value = stdoutReader.readText() }.start()
-        Thread { stderrFuture.value = stderrReader.readText() }.start()
+        Thread { stdoutFuture.value = process.inputStream.bufferedReader().readText() }.start()
+        Thread { stderrFuture.value = process.errorStream.bufferedReader().readText() }.start()
 
         val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
         if (!completed) {
             process.destroyForcibly()
-            throw IllegalStateException("Docker command timed out after ${timeoutSeconds}s: ${args.joinToString(" ")}")
+            return DockerCommandResult(
+                command = args.joinToString(" "),
+                exitCode = 124,
+                stdout = "",
+                stderr = "docker command timed out after ${timeoutSeconds}s"
+            )
         }
-
-        val exitCode = process.exitValue()
-        val stdout = stdoutFuture.await().trim()
-        val stderr = stderrFuture.await().trim()
 
         return DockerCommandResult(
             command = args.joinToString(" "),
-            exitCode = exitCode,
-            stdout = stdout,
-            stderr = stderr
+            exitCode = process.exitValue(),
+            stdout = stdoutFuture.await().trim(),
+            stderr = stderrFuture.await().trim()
         )
     }
 }
