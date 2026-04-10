@@ -37,7 +37,9 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 
 ### 🧪 CI Policy
 - Added `PR Fast Checks` workflow for quick compile validation on every PR.
-- `Full Smoke Suite` now runs on PRs only when label `run-full-ci` is present, and always runs on `push` to `develop` or manual dispatch.
+- Added `Provider Consistency` workflow for fast provider/core/CLI parity checks on PRs to `develop`.
+- `Full Smoke Suite` now acts as heavy validation for `main`/release flows (PR to `main`, push to `main`, tags, manual dispatch, nightly schedule).
+- Added `install-uninstall-e2e-windows` heavy gate to validate installer/uninstaller lifecycle before release merges.
 
 ### 🔎 Provider Discoverability
 - Added `koupper provider list` to display registered providers with short descriptions.
