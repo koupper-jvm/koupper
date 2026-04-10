@@ -16,6 +16,8 @@ Use Koupper release scripts instead of manual git/gh command sequences.
   - `koupper run scripts/release/preflight.kts '{"featureBranch":"feature/my-change"}'`
 - Full flow dry run:
   - `koupper run scripts/release/release-flow.kts '{"featureBranch":"feature/my-change","dryRun":true}'`
+- Fast lane (recommended for `develop`):
+  - `koupper run scripts/release/fast-lane.kts '{"featureBranch":"feature/my-change","enableAutoMerge":true}'`
 - Create PR and wait for CI:
   - `koupper run scripts/release/release-flow.kts '{"featureBranch":"feature/my-change","waitForCi":true,"mergeAfterCi":false}'`
 - Create PR, wait for CI, then merge:
