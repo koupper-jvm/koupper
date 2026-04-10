@@ -1558,7 +1558,8 @@ fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
         com.koupper.octopus.monitoring.CompositeExecutionMonitor(
             delegates = listOf(
                 JsonlExecutionMonitor(File(logsDir, "octopus-executions.jsonl")),
-                com.koupper.octopus.monitoring.ResumenArchivosExecutionMonitor()
+                com.koupper.octopus.monitoring.ResumenArchivosExecutionMonitor(),
+                com.koupper.octopus.monitoring.ObservabilityExecutionMonitor()
             )
         )
     })
