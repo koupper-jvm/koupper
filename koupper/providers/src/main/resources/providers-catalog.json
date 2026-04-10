@@ -418,7 +418,7 @@
     {
       "id": "aws-deploy",
       "serviceProvider": "AwsDeployServiceProvider",
-      "description": "AWS deployment orchestration provider for Lambda, static site rollout, preflight checks and API smoke tests.",
+      "description": "AWS deployment orchestration provider for Lambda, static site rollout, preflight checks and API smoke tests with retry/backoff and waiter support.",
       "bindings": [
         {
           "contract": "AwsDeployProvider",
@@ -430,7 +430,10 @@
       "env": [
         { "name": "AWS_COMMAND", "required": false, "description": "AWS CLI binary name/path (default: aws)." },
         { "name": "AWS_REGION", "required": false, "description": "Default AWS region (default: us-east-1)." },
-        { "name": "AWS_DEPLOY_TIMEOUT_SECONDS", "required": false, "description": "Timeout in seconds for each AWS CLI command (default: 300)." },
+        { "name": "AWS_DEPLOY_TIMEOUT_SECONDS", "required": false, "description": "Base timeout in seconds for AWS CLI deploy actions (default: 300)." },
+        { "name": "AWS_DEPLOY_RETRY_COUNT", "required": false, "description": "Retry count for transient AWS CLI failures (default: 2)." },
+        { "name": "AWS_DEPLOY_RETRY_BACKOFF_MS", "required": false, "description": "Base retry backoff in milliseconds for transient AWS CLI failures (default: 500)." },
+        { "name": "AWS_FRONTEND_BACKUP_MODE", "required": false, "description": "Frontend backup mode for static site deploys: full, incremental, or disabled (default: incremental)." },
         { "name": "AWS_ACCESS_KEY_ID", "required": false, "description": "AWS access key for runtime AWS CLI authentication." },
         { "name": "AWS_SECRET_ACCESS_KEY", "required": false, "description": "AWS secret key for runtime AWS CLI authentication." },
         { "name": "AWS_SESSION_TOKEN", "required": false, "description": "AWS session token for temporary credentials." }
