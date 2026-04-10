@@ -34,6 +34,8 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 - Installer now supports `--force` reinstall cleanup and `--doctor` verification mode.
 - Uninstaller now supports CLI flags `--force` and `--purge` for non-interactive cleanup workflows.
 - Installer now provisions a providers catalog at `~/.koupper/catalog/providers.json` for CLI provider discovery.
+- Added setup helper scripts (`scripts/setup/install.sh`, `scripts/setup/install.ps1`) for one-command prerequisite check + install flow.
+- Setup helpers now support optional dependency auto-install/update mode (`--auto-install-deps` / `-AutoInstallDeps`) with confirmation and non-interactive mode.
 
 ### 🧪 CI Policy
 - Added `PR Fast Checks` workflow for quick compile validation on every PR.
@@ -45,6 +47,11 @@ All notable changes to the entire Monorepo infrastructure will be documented her
 - Added `koupper provider list` to display registered providers with short descriptions.
 - Added `koupper provider info <name>` to display provider contracts, implementations/tags, and env requirements.
 - Added `terminal` runtime entry in provider catalog so `koupper provider` commands expose interactive terminal capabilities.
+
+### ⚙️ Process Supervision Provider
+- Added `process-supervisor` provider for detached local long-running process management.
+- Added persisted process metadata store (`~/.koupper/processes.json`) and per-process logs directory (`~/.koupper/process-logs`).
+- Added script examples for local process lifecycle management (`scripts/local-up.kts`, `scripts/local-status.kts`, `scripts/local-down.kts`, `scripts/local-logs.kts`).
 
 ### 🐙 GitHub Provider
 - Added `GitHubServiceProvider` with `GitHubClient` operations for issues, pull requests, workflow dispatch/runs, and check-runs.
