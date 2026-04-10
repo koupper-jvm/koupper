@@ -7,7 +7,8 @@ data class K8sResult(
     val command: String,
     val exitCode: Int,
     val stdout: String,
-    val stderr: String
+    val stderr: String,
+    val timedOut: Boolean = false
 )
 
 interface K8sProvider {
@@ -49,11 +50,26 @@ class KubectlK8sProvider(
     }
 
     private fun run(args: List<String>): K8sResult {
-        val process = ProcessBuilder(args).directory(File(".")).start()
+        val process = try {
+            ProcessBuilder(args).directory(File(".")).start()
+        } catch (error: Throwable) {
+            return K8sResult(
+                command = args.joinToString(" "),
+                exitCode = 127,
+                stdout = "",
+                stderr = error.message ?: "failed to start kubectl process"
+            )
+        }
         val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
         if (!completed) {
             process.destroyForcibly()
-            throw IllegalStateException("kubectl command timed out: ${args.joinToString(" ")}")
+            return K8sResult(
+                command = args.joinToString(" "),
+                exitCode = 124,
+                stdout = "",
+                stderr = "kubectl command timed out after ${timeoutSeconds}s",
+                timedOut = true
+            )
         }
         return K8sResult(
             command = args.joinToString(" "),
