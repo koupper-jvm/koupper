@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Added framework-level `infra` command group with `init`, `validate`, `plan`, `apply`, `drift`, and `output` subcommands.
+- Added `reconcile run` orchestrator command with configurable stages (`infra`, `preflight`, `deploy`, `smoke`, `rollback`) and policies (`strict`, `continue_on_error`, `abort_on_failure`).
+- Infra/reconcile responses now use a stable JSON contract (`ok`, `stage`, `exitCode`, `durationMs`, `warnings`, `errors`, `artifacts`, `nextAction`) for CI automation.
+- Drift now supports a versioned `drift-spec` v1 evaluation mode (`required_only`, `exact_match`) via `--spec` and `--observed-file`.
+- Added command-level timeout/retry flags and output redaction for common secret patterns.
+
 - `koupper new <file>.kts` now generates standalone scripts without unresolved `%PACKAGE%` placeholders.
 - `new module` now validates required scaffold files (`settings.gradle`, `build.gradle`) before reporting success.
 - `new module` now fails early if starter scripts are not generated in module extensions.
