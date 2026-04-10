@@ -26,6 +26,42 @@ All notable changes to the entire Monorepo infrastructure will be documented her
   - `octopus 6.3.1`
   - `koupper-cli 4.7.1`
 
+## [6.4.0-monorepo] - 2026-04-10
+
+### 🏗️ Infrastructure & Reconcile Framework
+- Added `koupper infra init|validate|plan|apply|drift|output` command suite for Terraform-backed infrastructure lifecycle management.
+- Added `koupper reconcile run` with stage policies and structured JSON output contracts.
+- Added `IaCProvider` with full retry/timeout/backoff controls, `evaluateDriftSpec` for drift spec v1 validation, and deprecated legacy `terraformPlan/Apply/Output/driftCheck` methods.
+- Added drift spec documentation and reconcile runbook (`docs/production/drift-spec-v1.md`, `reconcile-runbook.md`).
+
+### 🔐 AWS Deploy Hardening
+- Added timeout/retry/backoff controls and Lambda waiter support to `AwsDeployProvider`.
+- Added frontend backup modes (`full|incremental|disabled`) and structured per-action result metadata.
+- Added `preflight`, `smokeTestApis`, and `callerIdentity` operations to the AWS deploy contract.
+
+### 🔒 Contract Versioning & Governance
+- Added `docs/CONTRACT_VERSIONING_POLICY.md`: defines additive/behavior/breaking change taxonomy, deprecation annotation format, migration note format, and provider interface addition rules.
+- Added `docs/PROVIDER_AUTHORING_CHECKLIST.md`: four-surface checklist (register + catalog + docs + tests) for every new service provider.
+- Added `docs/migrations/` directory with structured migration notes for behavior changes.
+- Added `docs/KOUPPER_FRAMEWORK_MATURITY_PLAYBOOK.md`: strategic execution plan for enterprise hardening and agent onboarding.
+
+### 🔑 Secrets Provider
+- Added `SecretsClient.delete(key)` and `SecretsClient.list()` to complete the secrets contract.
+- `LocalSecretsClient` persists deletes to file when `persistWrites=true`.
+
+### 🐳 K8s Provider Fix
+- `KubectlK8sProvider` timeout now returns structured `K8sResult(exitCode=124, timedOut=true)` instead of throwing `IllegalStateException`. Launch failures return `exitCode=127`. Migration note in `docs/migrations/`.
+
+### 🧪 Tests
+- Added `SecretsClientTest` (9 cases) and `K8sProviderTest` (3 cases).
+
+### 📦 Release Alignment
+- Monorepo stable snapshot aligned to:
+  - `octopus 6.4.0`
+  - `koupper-cli 4.7.1`
+
+---
+
 ## [Unreleased]
 
 ### 🧰 Scaffolding and Tooling
