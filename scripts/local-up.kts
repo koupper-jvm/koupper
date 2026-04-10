@@ -1,5 +1,6 @@
 import com.koupper.container.app
 import com.koupper.octopus.annotations.Export
+import com.koupper.providers.process.ProcessHealthPolicy
 import com.koupper.providers.process.ProcessStartRequest
 import com.koupper.providers.process.ProcessSupervisor
 
@@ -10,6 +11,11 @@ data class ServiceInput(
     val args: List<String> = emptyList(),
     val workingDirectory: String = ".",
     val healthUrl: String? = null,
+    val ensureHealthyOnStart: Boolean = false,
+    val healthAcceptedStatusCodes: Set<Int> = emptySet(),
+    val healthRetries: Int = 0,
+    val healthRetryDelayMs: Long = 250,
+    val healthTimeoutMs: Long = 1500,
     val env: Map<String, String> = emptyMap()
 )
 
@@ -23,8 +29,8 @@ data class Input(
 @Export
 val up: (Input) -> Map<String, Any?> = { input ->
     val supervisor = app.getInstance(ProcessSupervisor::class)
-    val started = input.services.map { service ->
-        val result = supervisor.start(
+    val started = supervisor.startMany(
+        input.services.map { service ->
             ProcessStartRequest(
                 name = service.name,
                 shellCommand = service.shellCommand,
@@ -32,18 +38,27 @@ val up: (Input) -> Map<String, Any?> = { input ->
                 args = service.args,
                 workingDirectory = service.workingDirectory,
                 healthUrl = service.healthUrl,
+                healthPolicy = ProcessHealthPolicy(
+                    acceptedStatusCodes = service.healthAcceptedStatusCodes,
+                    retries = service.healthRetries,
+                    retryDelayMs = service.healthRetryDelayMs,
+                    timeoutMs = service.healthTimeoutMs
+                ),
+                ensureHealthyOnStart = service.ensureHealthyOnStart,
                 environment = service.env
             )
-        )
+        }
+    ).map { result ->
 
         mapOf(
             "name" to result.name,
             "processId" to result.processId,
-            "alreadyRunning" to result.alreadyRunning,
-            "startedAt" to result.startedAt,
-            "logPath" to result.logPath,
-            "command" to result.command
-        )
+                "alreadyRunning" to result.alreadyRunning,
+                "healthyAtStart" to result.healthyAtStart,
+                "startedAt" to result.startedAt,
+                "logPath" to result.logPath,
+                "command" to result.command
+            )
     }
 
     mapOf(
