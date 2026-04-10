@@ -226,6 +226,26 @@
       "docs": "https://koupper.com/docs/providers/iac"
     },
     {
+      "id": "process-supervisor",
+      "serviceProvider": "ProcessSupervisorServiceProvider",
+      "description": "Local long-running process supervisor for detached dev servers with persisted metadata and log access.",
+      "bindings": [
+        {
+          "contract": "ProcessSupervisor",
+          "implementations": [
+            { "class": "LocalProcessSupervisor" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "PROCESS_SUPERVISOR_STORE_PATH", "required": false, "description": "Path to process metadata store file (default: ~/.koupper/processes.json)." },
+        { "name": "PROCESS_SUPERVISOR_LOG_DIR", "required": false, "description": "Directory for process log files (default: ~/.koupper/process-logs)." },
+        { "name": "PROCESS_SUPERVISOR_SHELL_WINDOWS", "required": false, "description": "Shell binary for shellCommand mode on Windows (default: pwsh)." },
+        { "name": "PROCESS_SUPERVISOR_SHELL_UNIX", "required": false, "description": "Shell binary for shellCommand mode on Unix (default: bash)." }
+      ],
+      "docs": "https://koupper.com/docs/providers/process-supervisor"
+    },
+    {
       "id": "files",
       "serviceProvider": "FileServiceProvider",
       "description": "File, text, JSON and YAML handlers.",
