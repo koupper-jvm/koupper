@@ -359,22 +359,44 @@ object JobRunner {
 
             val pkg = task.packageName?.trimEnd('.')
             val basePrefix = if (pkg.isNullOrBlank()) "" else "$pkg."
+
+            // Strip only the file extension (.class, .kt). Do NOT strip a trailing "Kt"
+            // here — it may be part of the real filename casing on disk.
             val fileBase = task.fileName
                 .removeSuffix(".class")
                 .removeSuffix(".kt")
-                .removeSuffix("Kt")
+
+            // Kotlin compiles "myFile.kt" to "myFileKt.class", preserving the exact case
+            // of the source filename. The SQS payload may carry a differently-cased
+            // fileName (e.g. PascalCase vs camelCase), so we try both variants before
+            // giving up.  Resolution order:
+            //   1. Exact fileBase + "Kt"   — fileBase already has correct leading case
+            //   2. lowercase-first + "Kt"  — payload has uppercase-first, file is lower
+            //   3. uppercase-first + "Kt"  — payload has lowercase-first, file is upper
+            //   4–6. Same trio without "Kt" — objects / @JvmName / explicit class names
+            // functionName is never used to derive the class name.
+            fun String.lcFirst() = replaceFirstChar { it.lowercase() }
+            fun String.ucFirst() = replaceFirstChar { it.uppercase() }
 
             val candidates = linkedSetOf(
                 "${basePrefix}${fileBase}Kt",
-                "${basePrefix}${fileBase}"
+                "${basePrefix}${fileBase.lcFirst()}Kt",
+                "${basePrefix}${fileBase.ucFirst()}Kt",
+                "${basePrefix}${fileBase}",
+                "${basePrefix}${fileBase.lcFirst()}",
+                "${basePrefix}${fileBase.ucFirst()}"
             )
-            if (task.fileName != fileBase) {
-                candidates += "${basePrefix}${task.fileName.removeSuffix(".class")}"
-            }
+
+            println("[compiled] class candidates: ${candidates.joinToString()}")
 
             val clazz = candidates.asSequence()
-                .mapNotNull { fqcn -> try { loader.loadClass(fqcn) } catch (_: ClassNotFoundException) { null } }
-                .firstOrNull() ?: error("No se encontró clase para ${task.functionName}. Probé: $candidates")
+                .mapNotNull { fqcn ->
+                    try { loader.loadClass(fqcn).also { println("[compiled] resolved class: $fqcn") } }
+                    catch (_: ClassNotFoundException) { null }
+                }
+                .firstOrNull() ?: error(
+                    "No class found for job '${task.id}' fn='${task.functionName}'. Tried: $candidates"
+                )
 
             println("🧪 Campos disponibles en ${clazz.name}:")
             clazz.declaredFields.forEach { println(" - ${it.name}") }
