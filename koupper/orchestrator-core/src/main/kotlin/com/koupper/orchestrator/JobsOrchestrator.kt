@@ -914,10 +914,11 @@ object SqsJobDriver : JobDriver {
         val region = Region.of(config.sqsRegion)
         val results = mutableListOf<JobResult>()
 
-        // Keep client open until all ackFn/releaseFn lambdas have been invoked by the caller.
-        // The caller (runPendingJobs) invokes ackFn on success and releaseFn on failure so the
-        // message is either deleted (ack) or left to re-appear after the visibility timeout
-        // (release — no explicit action required on standard SQS).
+        // The receive loop uses a short-lived client that is closed once all messages
+        // are collected.  Each ackFn opens its own ephemeral client for the deleteMessage
+        // call — this avoids the "Connection pool shut down" error that occurs when a
+        // lambda captures the shared client and tries to use it after the use{} block
+        // has already closed it.
         val sqsClient = SqsClient.builder()
             .region(region)
             .credentialsProvider(sqsCredsProvider(config))
@@ -945,13 +946,24 @@ object SqsJobDriver : JobDriver {
                 msgs.forEach { msg ->
                     try {
                         val task = JobSerializer.deserialize(msg.body())
+                        val receiptHandle = msg.receiptHandle()
+                        val queueUrlCopy = queueUrl
+
+                        // Each ackFn creates its own client so it is not bound to the
+                        // lifecycle of the receive client above.
                         val ackFn: () -> Unit = {
-                            it.deleteMessage(
-                                DeleteMessageRequest.builder()
-                                    .queueUrl(queueUrl)
-                                    .receiptHandle(msg.receiptHandle())
-                                    .build()
-                            )
+                            SqsClient.builder()
+                                .region(region)
+                                .credentialsProvider(sqsCredsProvider(config))
+                                .build()
+                                .use { ackClient ->
+                                    ackClient.deleteMessage(
+                                        DeleteMessageRequest.builder()
+                                            .queueUrl(queueUrlCopy)
+                                            .receiptHandle(receiptHandle)
+                                            .build()
+                                    )
+                                }
                         }
                         // releaseFn is a no-op: message becomes visible again after visibility timeout
                         results.add(JobResult.Ok(config.id, task, ackFn = ackFn, releaseFn = {}))
