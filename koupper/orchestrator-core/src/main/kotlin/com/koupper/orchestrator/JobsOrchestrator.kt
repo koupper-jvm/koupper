@@ -391,8 +391,15 @@ object JobRunner {
 
             val clazz = candidates.asSequence()
                 .mapNotNull { fqcn ->
-                    try { loader.loadClass(fqcn).also { println("[compiled] resolved class: $fqcn") } }
-                    catch (_: ClassNotFoundException) { null }
+                    try {
+                        loader.loadClass(fqcn).also { println("[compiled] resolved class: $fqcn") }
+                    } catch (_: ClassNotFoundException) {
+                        null
+                    } catch (_: NoClassDefFoundError) {
+                        null
+                    } catch (_: LinkageError) {
+                        null
+                    }
                 }
                 .firstOrNull() ?: error(
                     "No class found for job '${task.id}' fn='${task.functionName}'. Tried: $candidates"
