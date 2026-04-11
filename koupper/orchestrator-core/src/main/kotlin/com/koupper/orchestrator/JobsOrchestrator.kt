@@ -229,17 +229,28 @@ object JobRunner {
             when (res) {
                 is JobResult.Ok -> {
                     val task = res.task
-
                     val taskContext = task.context?.takeIf { it.isNotBlank() } ?: context
-                    val scriptPath = resolveTaskScriptPath(task)
 
-                    if (scriptPath == null) {
-                        return@map JobResult.Error(
-                            "❌ Missing script metadata for job '${task.id}'. packageName/scriptPath is required."
-                        )
+                    val execResult = try {
+                        if (task.sourceType == "compiled") {
+                            println("[job-worker] branch=compiled job=${task.id} fn=${task.functionName}")
+                            runCompiled(taskContext, task)
+                        } else {
+                            println("[job-worker] branch=script job=${task.id}")
+                            val scriptPath = resolveTaskScriptPath(task) ?: run {
+                                res.releaseFn?.invoke()
+                                return@map JobResult.Error(
+                                    "❌ Missing script metadata for job '${task.id}'. packageName/scriptPath is required."
+                                )
+                            }
+                            runScriptContent(taskContext, scriptPath, task.params.toCliArgs())
+                        }
+                    } catch (e: Exception) {
+                        res.releaseFn?.invoke()
+                        return@map JobResult.Error("❌ Execution failed for job '${task.id}': ${e.message}", e)
                     }
 
-                    val result = runScriptContent(taskContext, scriptPath, task.params.toCliArgs())
+                    res.ackFn?.invoke()
                     JobInfo(
                         configId = res.configName,
                         id = res.task.id,
@@ -250,7 +261,7 @@ object JobRunner {
                         version = res.task.contextVersion,
                         origin = res.task.origin,
                         packg = res.task.packageName,
-                        resultOfExecution = result
+                        resultOfExecution = execResult
                     )
                 }
                 is JobResult.Error -> res
@@ -449,7 +460,12 @@ object JobRunner {
 }
 
 sealed class JobResult {
-    data class Ok(val configName: String?, val task: KouTask) : JobResult()
+    data class Ok(
+        val configName: String?,
+        val task: KouTask,
+        val ackFn: (() -> Unit)? = null,
+        val releaseFn: (() -> Unit)? = null
+    ) : JobResult()
     data class Error(val message: String, val exception: Exception? = null) : JobResult()
 }
 
@@ -869,6 +885,10 @@ object SqsJobDriver : JobDriver {
         val region = Region.of(config.sqsRegion)
         val results = mutableListOf<JobResult>()
 
+        // Keep client open until all ackFn/releaseFn lambdas have been invoked by the caller.
+        // The caller (runPendingJobs) invokes ackFn on success and releaseFn on failure so the
+        // message is either deleted (ack) or left to re-appear after the visibility timeout
+        // (release — no explicit action required on standard SQS).
         val sqsClient = SqsClient.builder()
             .region(region)
             .credentialsProvider(sqsCredsProvider(config))
@@ -896,14 +916,16 @@ object SqsJobDriver : JobDriver {
                 msgs.forEach { msg ->
                     try {
                         val task = JobSerializer.deserialize(msg.body())
-                        results.add(JobResult.Ok(config.id, task))
-
-                        it.deleteMessage(
-                            DeleteMessageRequest.builder()
-                                .queueUrl(queueUrl)
-                                .receiptHandle(msg.receiptHandle())
-                                .build()
-                        )
+                        val ackFn: () -> Unit = {
+                            it.deleteMessage(
+                                DeleteMessageRequest.builder()
+                                    .queueUrl(queueUrl)
+                                    .receiptHandle(msg.receiptHandle())
+                                    .build()
+                            )
+                        }
+                        // releaseFn is a no-op: message becomes visible again after visibility timeout
+                        results.add(JobResult.Ok(config.id, task, ackFn = ackFn, releaseFn = {}))
                     } catch (e: Exception) {
                         results.add(JobResult.Error("❌ Failed SQS job: ${e.message}", e))
                     }
