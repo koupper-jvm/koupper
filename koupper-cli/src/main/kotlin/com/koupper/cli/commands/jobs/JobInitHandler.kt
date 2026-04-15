@@ -1,7 +1,6 @@
 package com.koupper.cli.commands.jobs
 
 import com.koupper.cli.ANSIColors.ANSI_GREEN_155
-import com.koupper.cli.ANSIColors.ANSI_RED
 import com.koupper.cli.ANSIColors.ANSI_RESET
 import com.koupper.cli.ANSIColors.ANSI_YELLOW_229
 import java.io.File
@@ -19,33 +18,17 @@ class JobInitHandler : JobSubcommandHandler {
         targetFile.writeText(
             """
             {
+              "id": "local-file",
               "driver": "file",
               "queue": "default",
-              "queues": {
-                "default": {
-                  "concurrency": 1
-                }
-              }
+              "for-all-projects": true
             }
             """.trimIndent()
         )
 
-        val isWindows = System.getProperty("os.name").lowercase().contains("win")
-        val gradleCommand = if (isWindows) listOf("cmd", "/c", "gradlew.bat") else listOf("./gradlew")
-
-        val process = ProcessBuilder()
-            .directory(File(context))
-            .command(gradleCommand + listOf("clean", "shadowJar"))
-            .inheritIO()
-            .start()
-
-        val exitCode = process.waitFor()
-        if (exitCode != 0) {
-            return "${ANSI_RED}✖ Failed to build JAR automatically (exit code $exitCode).${ANSI_RESET}"
-        }
-
         return """
             ${ANSI_GREEN_155}✔ jobs.json created at ${targetFile.absolutePath}.${ANSI_RESET}
+            ${ANSI_YELLOW_229}Tip:${ANSI_RESET} run ${ANSI_GREEN_155}koupper job build-environment${ANSI_RESET} when you want to build worker artifacts.
         """.trimIndent()
     }
 }

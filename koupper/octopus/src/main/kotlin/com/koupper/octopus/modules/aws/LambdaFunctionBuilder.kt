@@ -2,15 +2,13 @@ package com.koupper.octopus.modules.aws
 
 import com.koupper.container.app
 import com.koupper.octopus.modifiers.GradleConfigurator
+import com.koupper.octopus.modules.prepareTemplateProject
+import com.koupper.octopus.modules.resolveAndCopyProcessManagerJar
 import com.koupper.octopus.modules.Module
 import com.koupper.octopus.modules.locateScriptsInPackage
 import com.koupper.os.env
 import com.koupper.providers.files.FileHandler
-import com.koupper.providers.files.TextFileHandler
-import com.koupper.providers.files.downloadFile
 import java.io.File
-import java.net.URL
-import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
 
@@ -36,31 +34,26 @@ class LambdaFunctionBuilder(
     }
 
     override fun build() {
-        val modelProject = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"))
-
-        File("${modelProject.name}.zip").delete()
+        val modelProject = prepareTemplateProject(context, projectName, this.fileHandler)
 
         GradleConfigurator.configure {
             this.rootProjectName = projectName
             this.version = moduleVersion
+            this.projectRootPath = modelProject.absolutePath
         }
 
         print("\u001B[38;5;155m\nRequesting an optimized process manager... \u001B[0m")
 
-        File("$projectName/libs").mkdir()
-
-        downloadFile(
-            URL(env("OPTIMIZED_PROCESS_MANAGER_URL")),
-            "$projectName/libs/octopus-${env("OCTOPUS_VERSION")}.jar"
-        )
+        val libsDir = File(modelProject, "libs")
+        libsDir.mkdirs()
+        val octopusVersion = env("OCTOPUS_VERSION", context, required = false, allowEmpty = true, default = "latest")
+        resolveAndCopyProcessManagerJar(context, libsDir, "octopus-$octopusVersion.jar")
 
         println("\u2713") 
 
         println("\u001B[38;5;155mOptimized process manager located successfully.\u001B[0m")
 
-        locateScriptsInPackage(context, scripts, Paths.get(modelProject.name).absolutePathString(),this.packageName)
-
-        Files.move(Paths.get(modelProject.name), Paths.get(projectName))
+        locateScriptsInPackage(context, scripts, Paths.get(modelProject.absolutePath).absolutePathString(), this.packageName)
     }
 
     class Builder {

@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),  
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Added framework-level IaC execution contract with stable stage output (`ok`, `stage`, `exitCode`, `durationMs`, `warnings`, `errors`, `artifacts`, `nextAction`).
+- Added Terraform lifecycle methods to IaC provider (`init`, `validate`, `plan`, `apply`, `drift`, `output`) with retries/timeouts.
+- Added drift-spec v1 evaluator with support for `required_only` and `exact_match` checks across Dynamo, API, Lambda, SQS, and workers.
+- Added AWS deploy action envelope metadata for stage-level outcomes (`ok`, `action`, `exitCode`, `durationMs`, `attempts`, `warnings`, `errors`, `nextAction`).
+
+### Changed
+- Module scaffolding bootstrapping now normalizes artifact type aliases (`scripts/jobs/pipelines`) before generating starter execution flow.
+- Local template source resolution now prioritizes versioned `templates/model-project` paths ahead of legacy `model-project` fallback paths.
+- Hardened `AwsCliDeployProvider` with configurable timeout/retry/backoff controls, Lambda update waiters, and static-site backup strategy modes (`full`, `incremental`, `disabled`).
+
+### Fixed
+- Local template extraction now normalizes single-root zip archives so scaffold files land at the expected module root.
+- Script module bootstrapping now uses property references (`::myScript`) in `processManager.call(...)` to match `ScriptExecutor` API expectations.
+- Script argument type resolution now infers script host class names when explicit metadata is missing, reducing runtime `argument type mismatch` for inline script models.
+- Script argument type resolution now handles fully-qualified inline model names by falling back to script-local nested class lookup.
+- Job/script argument binding now prefers parameter types extracted from source signatures when runtime metadata contains fully-qualified aliases.
+
 ---
 
 ## [6.3.1] - 2026-03-28

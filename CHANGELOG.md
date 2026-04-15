@@ -1,59 +1,68 @@
-# 🐙 Koupper Framework - Global Changelog
+# Koupper Changelog
 
-**Koupper** is an agile, scripting-first ecosystem for Kotlin. It is designed to act as a Modular Backend Platform where you can deploy reactive daemons, HTTP APIs, and asynchronous Job Workers using plain `.kts` or `.kt` scripts empowered by annotations.
-
-This repository serves as the **Monorepo** orchestrating three core pillars:
-1. **`koupper` (Octopus Engine):** The JVM-based daemon that compiles, routes, and executes your scripts.
-2. **`koupper-cli`:** The terminal interface to manage, dispatch, and configure your modules.
-3. **`.koupper`:** The boilerplate runtime folder that resides in `$KOUPPER_HOME`.
-
-All notable changes to the entire Monorepo infrastructure will be documented here.
+All notable changes to the Koupper monorepo are documented here.
+Versioning follows the Octopus engine version (`koupper/build.gradle`).
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [1.2.1-monorepo] - 2026-03-28
+## [Unreleased]
 
-### 🔐 Deploy Security Hardening
-- Remote deploy now enforces token-authenticated execution and payload checksum verification.
-- Runtime deploy guardrails were added to reject oversized payloads with explicit limits.
+---
 
-### 🧪 Stability
-- Added DEPLOY-focused socket integration coverage for success/failure auth and hash paths.
-- Added production hardening guidance document and linked it from the root README.
+## [6.4.0] - 2026-04-10
 
-### 📦 Release Alignment
-- Monorepo stable snapshot aligned to:
-  - `octopus 6.3.1`
-  - `koupper-cli 4.7.1`
+### Added
+- `koupper infra init|validate|plan|apply|drift|output` — Terraform-backed infrastructure lifecycle suite with retry/timeout/backoff controls and drift spec v1 evaluation.
+- `koupper reconcile run` — reconcile command with stage policies and stable JSON output contracts.
+- AWS deploy hardening: Lambda waiter support, timeout/retry/backoff per action, frontend backup modes (`full|incremental|disabled`), structured per-action result metadata, `preflight`, `smokeTestApis`, and `callerIdentity` operations.
+- `docs/CONTRACT_VERSIONING_POLICY.md` — governs additive/behavior/breaking change taxonomy, deprecation lifecycle, and migration note format.
+- `docs/PROVIDER_AUTHORING_CHECKLIST.md` — four-surface checklist (register + catalog + docs + tests) for every new service provider.
+- `docs/migrations/` — directory for per-change migration notes on behavior changes.
+- `docs/KOUPPER_FRAMEWORK_MATURITY_PLAYBOOK.md` — strategic enterprise hardening execution plan.
+- `SecretsClient.delete(key)` and `SecretsClient.list()` — completes the secrets contract.
+- `ObservabilityExecutionMonitor` — wires runtime script execution lifecycle (trace, metric, failure event) to `ObservabilityProvider` via the existing `CompositeExecutionMonitor` chain.
+- `CLAUDE.md` — Claude Code guidance file for AI-assisted development sessions.
 
-## [1.1.0-monorepo] - 2026-03-28
+### Fixed
+- `KubectlK8sProvider` timeout now returns `K8sResult(exitCode=124, timedOut=true)` instead of throwing `IllegalStateException`. Launch failures return `exitCode=127`. Migration note in `docs/migrations/`.
+- `MCPServerProvider` — replaced `com.sun.net.httpserver` (internal JDK API) with `ServerSocket` + `CachedThreadPool` using only `java.net` standard library.
 
-### 🧱 Release Governance
-- Introduced explicit release-track guidance for independent artifacts (`koupper` / Octopus and `koupper-cli`) aligned with Semantic Versioning.
-- Established stable release tagging convention for production cuts:
-  - `octopus-v<version>`
-  - `cli-v<version>`
-  - optional platform snapshot tag `koupper-v<version>`
+### Release alignment
+- `octopus 6.4.0` / `koupper-cli 4.7.1`
 
-### ✅ Stability and Hardening
-- Completed a focused hardening wave across socket protocol handling, parser reliability, daemon/client output isolation, and test coverage.
-- Added smoke and integration-oriented coverage to reduce regressions in CLI-to-Octopus request flows.
-- Stabilized environment-dependent test suites to avoid flaky outcomes in CI and local execution.
+---
 
-## [1.0.0-monorepo] - 2026-03-26
+## [6.3.1] - 2026-03-28
 
-### 🌟 Architectural Milestones
-- **Monorepo Migration:** Consolidated `koupper`, `koupper-cli`, and the template folder into a single unified repository (`koupper-infrastructure`) to guarantee version parity between the execution engine, the CLI bindings, and the user template constraints.
-- **`.koupper` Boilerplate:** Officially renamed the template copy folder (`koupper-copy`) to `.koupper` to act as the pure system stub.
+### Added
+- `koupper run --serve` for long-running script sessions with attached CLI output and daemon-side cancellation via `Ctrl+C`.
+- `koupper provider list` and `koupper provider info <name>` — provider discoverability from installed catalog.
+- `process-supervisor` provider for detached local long-running process management with persisted metadata and per-process logs.
+- GitHub provider (`GitHubServiceProvider`) with `GitHubClient` operations: issues, pull requests, workflow dispatch/runs, and check-runs.
+- Terminal runtime demo and interactive prompt visibility fix for PowerShell.
+- Setup helpers (`scripts/setup/install.sh`, `scripts/setup/install.ps1`) with optional `--auto-install-deps` mode.
+- `--force` reinstall and `--doctor` verification mode in installer.
+- `--force` and `--purge` flags in uninstaller.
+- Installer provisions providers catalog at `~/.koupper/catalog/providers.json`.
+- `install-uninstall-e2e-windows` heavy CI gate added to `full-smoke-suite.yml`.
+- `PR Fast Checks` and `Provider Consistency` workflows for fast CI on `develop` PRs.
+- Remote deploy token authentication and payload checksum verification.
+- Deploy payload size limits with explicit rejection for oversized payloads.
 
-### 🚀 Core Framework Upgrades (Octopus & CLI)
-- **Advanced Native JSON Mapping for CLI**: Completely overhauled the CLI Socket dispatcher to support raw JSON string injection via Terminal (e.g. `{"email": "test@test.com"}`). The CLI now deeply cleans external PowerShell quotes, and the Octopus Engine leverages a highly permissive Jackson configuration to seamlessly deserialize complex JSON structures directly into nested Kotlin POJOs on the fly.
-- **Event-Driven Background Workers Logging**: Refactored the internal Daemon logger. Deprecated untraceable standard `println` usages across asynchronous tasks (`@Scheduled`, `@JobsListener`, and `ScriptRunner`). Injected explicit, professional lifecycle logging tracking using `GlobalLogger` to gracefully trace daemon heartbeats in rotated `.log` files cleanly.
-- **Socket Exception Bubbling (Anti-Silent Failures)**: Hardened the `Octopus.kt` internal execution loop. If the Jackson engine or Script Mapper encounters a fatal error, the backend now forcefully captures the `Exception` and flushes it upstream via the `<ERROR::>` network marker. The CLI crashes transparently with the stacktrace instead of failing silently.
-- **UTF-8 Byte Preservation (Emojis Support)**: Restored a pristine standard character boundary on all TCP Socket Streams. `System.out` capturing now correctly buffers bytes via `ByteArrayOutputStream("UTF-8")` guaranteeing multi-byte characters like emojis (`🚀`, `📍`, `📊`) natively survive through the CLI rendering pipeline cross-OS.
-- **CLI Visual Polish**: The CLI tool now injects an elegant line break immediately after transmitting the command to the local server, separating interactive command prompts from real-time script evaluation responses cleanly.
+### Release alignment
+- `octopus 6.3.1` / `koupper-cli 4.7.1`
 
-### 🔮 Future Roadmap (Proposed Improvements)
-- **REST / gRPC Interop**: Evolve the raw `Socket:9998` TCP communication pipeline into a lightweight Ktor REST API to standardize incoming parameter serialization naturally.
-- **Dual SLF4J Conflict Resolution**: Actively exclude the `slf4j-nop` bindings in the Gradle build trees to silence runtime instantiation warnings on startup.
-- **Live Job Metrics Database Integration**: Upgrade `koupper job status` to dynamically read from the internal SQLite index showing accurate Real-Time *Completed* & *Failed* counts instead of basic queue capacity checks.
+---
+
+## [6.0.0] - 2026-03-26
+
+### Added
+- Monorepo migration: consolidated `koupper`, `koupper-cli`, and `.koupper` template into a single repository for version parity.
+- Advanced JSON mapping for CLI socket dispatcher — raw JSON string injection with deep PowerShell quote cleanup and permissive Jackson deserialization into nested Kotlin POJOs.
+- Event-driven background worker logging — deprecated untraceable `println` usage across async tasks; injected `GlobalLogger` lifecycle tracking with rolling log files.
+- Socket exception bubbling — fatal Jackson/mapper errors now flush upstream via `<ERROR::>` marker instead of failing silently.
+- UTF-8 byte preservation across TCP socket streams — emoji and multi-byte characters survive the CLI rendering pipeline cross-OS.
+- Release governance: semver policy, stable tagging convention (`octopus-v*`, `cli-v*`), and independent artifact versioning.
+
+---

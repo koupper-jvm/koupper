@@ -1,0 +1,656 @@
+{
+  "version": "1.0",
+  "providers": [
+    {
+      "id": "db",
+      "serviceProvider": "DBServiceProvider",
+      "description": "Database connectors for PostgreSQL and SQLite sessions.",
+      "bindings": [
+        {
+          "contract": "DBConnector",
+          "implementations": [
+            { "class": "DBPSQLConnector", "tag": "DBPSQLConnector" },
+            { "class": "DBSQLiteConnector", "tag": "DBSQLiteConnector" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "DB_HOST", "required": false, "description": "PostgreSQL host." },
+        { "name": "DB_PORT", "required": false, "description": "PostgreSQL port." },
+        { "name": "DB_DATABASE", "required": true, "description": "Database name/path." },
+        { "name": "DB_USERNAME", "required": false, "description": "PostgreSQL user." },
+        { "name": "DB_PASSWORD", "required": false, "description": "PostgreSQL password." }
+      ],
+      "docs": "https://koupper.com/docs/providers/db"
+    },
+    {
+      "id": "mailing",
+      "serviceProvider": "SenderServiceProvider",
+      "description": "SMTP email sender utilities.",
+      "bindings": [
+        {
+          "contract": "Sender",
+          "implementations": [
+            { "class": "SenderHtmlEmail" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "MAIL_HOST", "required": true, "description": "SMTP host." },
+        { "name": "MAIL_PORT", "required": true, "description": "SMTP port." },
+        { "name": "MAIL_USERNAME", "required": true, "description": "SMTP username/from email." },
+        { "name": "MAIL_PASSWORD", "required": true, "description": "SMTP password." },
+        { "name": "EMAIL_FROM_NAME", "required": false, "description": "Display sender name." },
+        { "name": "DEFAULT_TARGET_EMAIL", "required": false, "description": "Default recipient." },
+        { "name": "DEFAULT_SUBJECT", "required": false, "description": "Default email subject." }
+      ],
+      "docs": "https://koupper.com/docs/providers/mailing"
+    },
+    {
+      "id": "docker",
+      "serviceProvider": "DockerServiceProvider",
+      "description": "Docker CLI automation provider for image, container and compose workflows.",
+      "bindings": [
+        {
+          "contract": "DockerClient",
+          "implementations": [
+            { "class": "DockerCliClient" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "DOCKER_COMMAND", "required": false, "description": "Docker command binary (default: docker)." },
+        { "name": "DOCKER_HOST", "required": false, "description": "Docker host endpoint override." },
+        { "name": "DOCKER_CONTEXT", "required": false, "description": "Docker context name override." },
+        { "name": "DOCKER_TIMEOUT_SECONDS", "required": false, "description": "Command timeout in seconds." },
+        { "name": "DOCKER_WORKDIR", "required": false, "description": "Working directory for docker commands." }
+      ],
+      "docs": "https://koupper.com/docs/providers/docker"
+    },
+    {
+      "id": "logger",
+      "serviceProvider": "LoggerServiceProvider",
+      "description": "Database-backed application logger.",
+      "bindings": [
+        {
+          "contract": "Logger",
+          "implementations": [
+            { "class": "PSQLDBLogger" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "LOGGER_TABLE_NAME", "required": true, "description": "Target table for log persistence." }
+      ],
+      "docs": "https://koupper.com/docs/providers/logger"
+    },
+    {
+      "id": "mcp",
+      "serviceProvider": "MCPServiceProvider",
+      "description": "MCP-style local tool server provider with HTTP tool discovery and invocation endpoints.",
+      "bindings": [
+        {
+          "contract": "MCPServerProvider",
+          "implementations": [
+            { "class": "LocalMCPServerProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/mcp"
+    },
+    {
+      "id": "n8n",
+      "serviceProvider": "N8NServiceProvider",
+      "description": "n8n workflow trigger and execution polling provider.",
+      "bindings": [
+        {
+          "contract": "N8NProvider",
+          "implementations": [
+            { "class": "N8NHttpProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "N8N_MODE", "required": false, "description": "mock (default) or live" },
+        { "name": "N8N_WEBHOOK_URL", "required": false, "description": "Default webhook URL for triggerWorkflow in live mode." },
+        { "name": "N8N_API_BASE_URL", "required": false, "description": "n8n API base URL used for execution status queries." },
+        { "name": "N8N_API_KEY", "required": false, "description": "n8n API key for execution status queries." },
+        { "name": "N8N_TIMEOUT_SECONDS", "required": false, "description": "HTTP timeout for n8n requests." }
+      ],
+      "docs": "https://koupper.com/docs/providers/n8n"
+    },
+    {
+      "id": "notifications",
+      "serviceProvider": "NotificationsServiceProvider",
+      "description": "Operational notifications provider for console or webhook destinations.",
+      "bindings": [
+        {
+          "contract": "NotificationsProvider",
+          "implementations": [
+            { "class": "ConsoleNotificationsProvider" },
+            { "class": "WebhookNotificationsProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "NOTIFICATIONS_PROVIDER", "required": false, "description": "console (default), webhook, slack, discord, teams" },
+        { "name": "NOTIFICATIONS_WEBHOOK_URL", "required": false, "description": "Webhook URL for webhook-based notification providers." }
+      ],
+      "docs": "https://koupper.com/docs/providers/notifications"
+    },
+    {
+      "id": "observability",
+      "serviceProvider": "ObservabilityServiceProvider",
+      "description": "Metrics, events and traces sink provider with local JSONL backend.",
+      "bindings": [
+        {
+          "contract": "ObservabilityProvider",
+          "implementations": [
+            { "class": "LocalObservabilityProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "OBSERVABILITY_SINK_FILE", "required": false, "description": "JSONL output sink path for emitted telemetry." }
+      ],
+      "docs": "https://koupper.com/docs/providers/observability"
+    },
+    {
+      "id": "queue-ops",
+      "serviceProvider": "QueueOpsServiceProvider",
+      "description": "Queue operations provider with local pending/requeue/dead-letter management.",
+      "bindings": [
+        {
+          "contract": "QueueOpsProvider",
+          "implementations": [
+            { "class": "LocalQueueOpsProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "QUEUE_OPS_STORE_FILE", "required": false, "description": "JSON store path for local queue operations backend." }
+      ],
+      "docs": "https://koupper.com/docs/providers/queue-ops"
+    },
+    {
+      "id": "http",
+      "serviceProvider": "HttpServiceProvider",
+      "description": "HTTP invoker for outbound API requests.",
+      "bindings": [
+        {
+          "contract": "HtppClient",
+          "implementations": [
+            { "class": "HttpInvoker" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/http"
+    },
+    {
+      "id": "command-runner",
+      "serviceProvider": "CommandRunnerServiceProvider",
+      "description": "Generic command execution provider for shell and binary commands with timeout and dry-run support.",
+      "bindings": [
+        {
+          "contract": "CommandRunner",
+          "implementations": [
+            { "class": "DefaultCommandRunner" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "COMMAND_RUNNER_TIMEOUT_SECONDS", "required": false, "description": "Default timeout in seconds for command execution." },
+        { "name": "COMMAND_RUNNER_SHELL_WINDOWS", "required": false, "description": "Shell command used on Windows for shellCommand mode (default: pwsh)." },
+        { "name": "COMMAND_RUNNER_SHELL_UNIX", "required": false, "description": "Shell command used on Unix for shellCommand mode (default: bash)." }
+      ],
+      "docs": "https://koupper.com/docs/providers/command-runner"
+    },
+    {
+      "id": "iac",
+      "serviceProvider": "IaCServiceProvider",
+      "description": "Terraform-based IaC operations provider with approval guard for apply.",
+      "bindings": [
+        {
+          "contract": "IaCProvider",
+          "implementations": [
+            { "class": "TerraformIaCProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "TERRAFORM_COMMAND", "required": false, "description": "Terraform binary command." },
+        { "name": "TERRAFORM_TIMEOUT_SECONDS", "required": false, "description": "Terraform command timeout in seconds." }
+      ],
+      "docs": "https://koupper.com/docs/providers/iac"
+    },
+    {
+      "id": "process-supervisor",
+      "serviceProvider": "ProcessSupervisorServiceProvider",
+      "description": "Local long-running process supervisor for detached dev servers with persisted metadata and log access.",
+      "bindings": [
+        {
+          "contract": "ProcessSupervisor",
+          "implementations": [
+            { "class": "LocalProcessSupervisor" }
+          ]
+        },
+        {
+          "contract": "ProcessOrchestrator",
+          "implementations": [
+            { "class": "LocalProcessSupervisor" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "PROCESS_SUPERVISOR_STORE_PATH", "required": false, "description": "Path to process metadata store file (default: ~/.koupper/processes.json)." },
+        { "name": "PROCESS_SUPERVISOR_LOG_DIR", "required": false, "description": "Directory for process log files (default: ~/.koupper/process-logs)." },
+        { "name": "PROCESS_SUPERVISOR_SHELL_WINDOWS", "required": false, "description": "Shell binary for shellCommand mode on Windows (default: pwsh)." },
+        { "name": "PROCESS_SUPERVISOR_SHELL_UNIX", "required": false, "description": "Shell binary for shellCommand mode on Unix (default: bash)." }
+      ],
+      "docs": "https://koupper.com/docs/providers/process-supervisor"
+    },
+    {
+      "id": "job-ops",
+      "serviceProvider": "JobOpsServiceProvider",
+      "description": "Typed job orchestration operations for status/list/run/failed/retry without shelling to CLI.",
+      "bindings": [
+        {
+          "contract": "JobOps",
+          "implementations": [
+            { "class": "DefaultJobOps" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/job-ops"
+    },
+    {
+      "id": "local-e2e",
+      "serviceProvider": "LocalE2EServiceProvider",
+      "description": "Local E2E flow runner for process health, HTTP checks, jobs cycle, and persistence verification.",
+      "bindings": [
+        {
+          "contract": "LocalE2E",
+          "implementations": [
+            { "class": "DefaultLocalE2E" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/local-e2e"
+    },
+    {
+      "id": "files",
+      "serviceProvider": "FileServiceProvider",
+      "description": "File, text, JSON and YAML handlers.",
+      "bindings": [
+        {
+          "contract": "FileHandler",
+          "implementations": [
+            { "class": "FileHandlerImpl" }
+          ]
+        },
+        {
+          "contract": "TextFileHandler",
+          "implementations": [
+            { "class": "TextFileHandlerImpl" }
+          ]
+        },
+        {
+          "contract": "JSONFileHandler",
+          "implementations": [
+            { "class": "JSONFileHandlerImpl" }
+          ]
+        },
+        {
+          "contract": "YmlFileHandler",
+          "implementations": [
+            { "class": "YmlFileHandlerImpl" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/files"
+    },
+    {
+      "id": "jwt",
+      "serviceProvider": "JWTServiceProvider",
+      "description": "JWT signing and validation utilities.",
+      "bindings": [
+        {
+          "contract": "JWT",
+          "implementations": [
+            { "class": "JWTAgent" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "JWT_SECRET", "required": true, "description": "JWT shared secret key." }
+      ],
+      "docs": "https://koupper.com/docs/providers/jwt"
+    },
+    {
+      "id": "k8s",
+      "serviceProvider": "K8sServiceProvider",
+      "description": "Kubernetes operations provider over kubectl for apply/get/logs/rollout workflows.",
+      "bindings": [
+        {
+          "contract": "K8sProvider",
+          "implementations": [
+            { "class": "KubectlK8sProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "KUBECTL_COMMAND", "required": false, "description": "kubectl binary command." },
+        { "name": "KUBECTL_TIMEOUT_SECONDS", "required": false, "description": "Command timeout in seconds." }
+      ],
+      "docs": "https://koupper.com/docs/providers/k8s"
+    },
+    {
+      "id": "crypto",
+      "serviceProvider": "CryptoServiceProvider",
+      "description": "Symmetric encryption helpers.",
+      "bindings": [
+        {
+          "contract": "Crypt0",
+          "implementations": [
+            { "class": "AESGCM128" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "SHARED_SECRET", "required": true, "description": "Encryption shared secret." }
+      ],
+      "docs": "https://koupper.com/docs/providers/crypto"
+    },
+    {
+      "id": "aws-dynamo",
+      "serviceProvider": "AwsServiceProvider",
+      "description": "DynamoDB data access provider.",
+      "bindings": [
+        {
+          "contract": "DynamoClient",
+          "implementations": [
+            { "class": "DynamoClientImpl" }
+          ]
+        },
+        {
+          "contract": "DynamoLocalAdmin",
+          "implementations": [
+            { "class": "DynamoLocalAdminImpl" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "DYNAMO_REGION", "required": true, "description": "DynamoDB region." },
+        { "name": "DYNAMO_URL", "required": false, "description": "Local/custom endpoint URL." },
+        { "name": "AWS_ACCESS_KEY_ID", "required": false, "description": "AWS access key (optional for local)." },
+        { "name": "AWS_SECRET_ACCESS_KEY", "required": false, "description": "AWS secret key (optional for local)." },
+        { "name": "AWS_SESSION_TOKEN", "required": false, "description": "AWS session token." }
+      ],
+      "docs": "https://koupper.com/docs/providers/aws-dynamo"
+    },
+    {
+      "id": "aws-s3",
+      "serviceProvider": "AwsS3ServiceProvider",
+      "description": "S3 storage provider for uploads and presigned flows.",
+      "bindings": [
+        {
+          "contract": "S3Client",
+          "implementations": [
+            { "class": "S3ClientImpl" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "QUIZZTEA_S3_BUCKET", "required": true, "description": "S3 bucket name." },
+        { "name": "AWS_REGION", "required": true, "description": "AWS region for S3." },
+        { "name": "S3_URL", "required": false, "description": "Local/custom S3 endpoint URL." },
+        { "name": "AWS_ACCESS_KEY_ID", "required": false, "description": "AWS access key (optional for local)." },
+        { "name": "AWS_SECRET_ACCESS_KEY", "required": false, "description": "AWS secret key (optional for local)." },
+        { "name": "AWS_SESSION_TOKEN", "required": false, "description": "AWS session token." }
+      ],
+      "docs": "https://koupper.com/docs/providers/aws-s3"
+    },
+    {
+      "id": "aws-deploy",
+      "serviceProvider": "AwsDeployServiceProvider",
+      "description": "AWS deployment orchestration provider for Lambda, static site rollout, preflight checks and API smoke tests with retry/backoff and waiter support.",
+      "bindings": [
+        {
+          "contract": "AwsDeployProvider",
+          "implementations": [
+            { "class": "AwsCliDeployProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "AWS_COMMAND", "required": false, "description": "AWS CLI binary name/path (default: aws)." },
+        { "name": "AWS_REGION", "required": false, "description": "Default AWS region (default: us-east-1)." },
+        { "name": "AWS_DEPLOY_TIMEOUT_SECONDS", "required": false, "description": "Base timeout in seconds for AWS CLI deploy actions (default: 300)." },
+        { "name": "AWS_DEPLOY_RETRY_COUNT", "required": false, "description": "Retry count for transient AWS CLI failures (default: 2)." },
+        { "name": "AWS_DEPLOY_RETRY_BACKOFF_MS", "required": false, "description": "Base retry backoff in milliseconds for transient AWS CLI failures (default: 500)." },
+        { "name": "AWS_FRONTEND_BACKUP_MODE", "required": false, "description": "Frontend backup mode for static site deploys: full, incremental, or disabled (default: incremental)." },
+        { "name": "AWS_ACCESS_KEY_ID", "required": false, "description": "AWS access key for runtime AWS CLI authentication." },
+        { "name": "AWS_SECRET_ACCESS_KEY", "required": false, "description": "AWS secret key for runtime AWS CLI authentication." },
+        { "name": "AWS_SESSION_TOKEN", "required": false, "description": "AWS session token for temporary credentials." }
+      ],
+      "docs": "https://koupper.com/docs/providers/aws-deploy"
+    },
+    {
+      "id": "hashing",
+      "serviceProvider": "HasherServiceProvider",
+      "description": "Password hashing and verification utilities.",
+      "bindings": [
+        {
+          "contract": "Hasher",
+          "implementations": [
+            { "class": "PBKDF2Hasher" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/hashing"
+    },
+    {
+      "id": "terminal",
+      "serviceProvider": "TerminalRuntime",
+      "description": "Interactive terminal IO bridge for prompt/print during script execution.",
+      "bindings": [
+        {
+          "contract": "TerminalIO",
+          "implementations": [
+            { "class": "TerminalContext (runtime-backed)" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/terminal"
+    },
+    {
+      "id": "github",
+      "serviceProvider": "GitHubServiceProvider",
+      "description": "GitHub API operations for issues, pull requests, checks and workflows.",
+      "bindings": [
+        {
+          "contract": "GitHubClient",
+          "implementations": [
+            { "class": "GitHubClientImpl" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "GITHUB_TOKEN", "required": true, "description": "GitHub API token (PAT or app token)." },
+        { "name": "GITHUB_OWNER", "required": false, "description": "Default owner/org for operations." },
+        { "name": "GITHUB_REPO", "required": false, "description": "Default repository for operations." },
+        { "name": "GITHUB_API_URL", "required": false, "description": "GitHub API base URL override." },
+        { "name": "GITHUB_USER_AGENT", "required": false, "description": "Custom user agent header." },
+        { "name": "GITHUB_TIMEOUT_SECONDS", "required": false, "description": "HTTP timeout for GitHub requests." }
+      ],
+      "docs": "https://koupper.com/docs/providers/github"
+    },
+    {
+      "id": "git",
+      "serviceProvider": "GitServiceProvider",
+      "description": "Local Git repository automation provider with safe commit defaults.",
+      "bindings": [
+        {
+          "contract": "GitClient",
+          "implementations": [
+            { "class": "GitCliClient" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "GIT_COMMAND", "required": false, "description": "Git command binary (default: git)." },
+        { "name": "GIT_TIMEOUT_SECONDS", "required": false, "description": "Git command timeout in seconds." }
+      ],
+      "docs": "https://koupper.com/docs/providers/git"
+    },
+    {
+      "id": "ai",
+      "serviceProvider": "AIServiceProvider",
+      "description": "AI model integration provider (OpenAI by default).",
+      "bindings": [
+        {
+          "contract": "AI",
+          "implementations": [
+            { "class": "OpenAIClient", "tag": "openai" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "AI_PROVIDER", "required": false, "description": "AI provider selector (default: openai)." },
+        { "name": "OPENAI_API_KEY", "required": true, "description": "OpenAI API key." },
+        { "name": "OPENAI_API_URL", "required": false, "description": "OpenAI endpoint URL override." },
+        { "name": "OPENAI_CONTENT_TYPE", "required": false, "description": "OpenAI request content type." }
+      ],
+      "docs": "https://koupper.com/docs/providers/ai"
+    },
+    {
+      "id": "ai-llm-ops",
+      "serviceProvider": "AILlmOpsServiceProvider",
+      "description": "LLM operations provider with chat, structured output, embeddings, rerank and tool-call helpers.",
+      "bindings": [
+        {
+          "contract": "AILlmOpsProvider",
+          "implementations": [
+            { "class": "DefaultAILlmOpsProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "AI_LLM_OPS_MODE", "required": false, "description": "mock (default) or live" },
+        { "name": "AI_LLM_OPS_FALLBACK", "required": false, "description": "Comma-separated fallback model list." }
+      ],
+      "docs": "https://koupper.com/docs/providers/ai-llm-ops"
+    },
+    {
+      "id": "templates",
+      "serviceProvider": "TemplateServiceProvider",
+      "description": "Template rendering provider.",
+      "bindings": [
+        {
+          "contract": "TemplateProvider",
+          "implementations": [
+            { "class": "PebbleTemplateProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/templates"
+    },
+    {
+      "id": "vector-db",
+      "serviceProvider": "VectorDbServiceProvider",
+      "description": "Vector storage and similarity query provider with local in-memory backend.",
+      "bindings": [
+        {
+          "contract": "VectorDbProvider",
+          "implementations": [
+            { "class": "LocalVectorDbProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/vector-db"
+    },
+    {
+      "id": "rss",
+      "serviceProvider": "RSSServiceProvider",
+      "description": "RSS feed reader provider.",
+      "bindings": [
+        {
+          "contract": "RSSReader",
+          "implementations": [
+            { "class": "RSSReaderImpl" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/rss"
+    },
+    {
+      "id": "secrets",
+      "serviceProvider": "SecretsServiceProvider",
+      "description": "Secret retrieval provider with env and local JSON file backends.",
+      "bindings": [
+        {
+          "contract": "SecretsClient",
+          "implementations": [
+            { "class": "LocalSecretsClient" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "SECRETS_FILE", "required": false, "description": "JSON file path for persisted secrets." },
+        { "name": "SECRETS_ENV_PREFIX", "required": false, "description": "Environment variable prefix for secret lookup." },
+        { "name": "SECRETS_PERSIST_WRITES", "required": false, "description": "Persist put() writes to file (true/false)." },
+        { "name": "SECRETS_REQUIRE_FILE", "required": false, "description": "Fail when secrets file does not exist (true/false)." }
+      ],
+      "docs": "https://koupper.com/docs/providers/secrets"
+    },
+    {
+      "id": "runtime-router",
+      "serviceProvider": "RuntimeRouterServiceProvider",
+      "description": "Runtime HTTP endpoint provider for registering and serving script routes.",
+      "bindings": [
+        {
+          "contract": "RuntimeRouterProvider",
+          "implementations": [
+            { "class": "JdkRuntimeRouterProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/runtime-router"
+    },
+    {
+      "id": "ssh",
+      "serviceProvider": "SSHServiceProvider",
+      "description": "Remote SSH operations for command execution and file transfer workflows.",
+      "bindings": [
+        {
+          "contract": "SSHClient",
+          "implementations": [
+            { "class": "OpenSSHClient" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "SSH_HOST", "required": true, "description": "Remote SSH host name or IP." },
+        { "name": "SSH_USER", "required": true, "description": "Remote SSH username." },
+        { "name": "SSH_PORT", "required": false, "description": "Remote SSH port (default: 22)." },
+        { "name": "SSH_IDENTITY_FILE", "required": false, "description": "Private key path for SSH/SCP." },
+        { "name": "SSH_PASSWORD", "required": false, "description": "Password-based auth (use key-based auth when possible)." },
+        { "name": "SSH_STRICT_HOST_KEY_CHECKING", "required": false, "description": "Enable strict host key checking (true/false)." },
+        { "name": "SSH_CONNECT_TIMEOUT_SECONDS", "required": false, "description": "SSH connect timeout in seconds." },
+        { "name": "SSH_COMMAND_TIMEOUT_SECONDS", "required": false, "description": "SSH command/SCP timeout in seconds." }
+      ],
+      "docs": "https://koupper.com/docs/providers/ssh"
+    }
+  ]
+}

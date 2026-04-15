@@ -5,8 +5,11 @@ import com.koupper.cli.commands.*
 import com.koupper.cli.commands.AvailableCommands.HELP
 import com.koupper.cli.commands.AvailableCommands.MODULE
 import com.koupper.cli.commands.AvailableCommands.NEW
+import com.koupper.cli.commands.AvailableCommands.PROVIDER
+import com.koupper.cli.commands.AvailableCommands.RECONCILE
 import com.koupper.cli.commands.AvailableCommands.RUN
 import com.koupper.cli.commands.AvailableCommands.DEPLOY
+import com.koupper.cli.commands.AvailableCommands.INFRA
 import com.koupper.cli.commands.AvailableCommands.JOB
 import com.koupper.cli.commands.jobs.JobCommand
 import kotlinx.coroutines.delay
@@ -57,7 +60,10 @@ class CommandManager {
             RUN to RunCommand(),
             DEPLOY to DeployCommand(),
             MODULE to ModuleCommand(),
-            JOB to JobCommand()
+            JOB to JobCommand(),
+            PROVIDER to ProviderCommand(),
+            INFRA to InfraCommand(),
+            RECONCILE to ReconcileCommand()
         )
     }
 
@@ -131,7 +137,17 @@ fun main(args: Array<String>) {
             commandManager.process(input)
         }
 
-        println(response)
+        val addPromptSpacer = input.getOrNull(1) == RUN
+
+        print(response)
+        print(ANSIColors.ANSI_RESET)
+        if (!response.endsWith("\n")) {
+            println()
+        }
+
+        if (addPromptSpacer) {
+            println()
+        }
 
         System.out.flush()
         System.err.flush()

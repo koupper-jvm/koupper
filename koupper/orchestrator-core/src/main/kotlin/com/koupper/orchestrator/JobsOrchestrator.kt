@@ -4,15 +4,18 @@ import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.koupper.logging.GlobalLogger
+import com.koupper.logging.KLogger
 import com.koupper.orchestrator.JobRunner.runCompiled
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.orchestrator.config.JobConfiguration
 import com.koupper.shared.octopus.readTextOrNull
 import com.koupper.shared.octopus.sha256Of
 import com.koupper.shared.octopus.toCliArgs
+import com.koupper.shared.getProperty
 import redis.clients.jedis.Jedis
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
@@ -32,6 +35,32 @@ import kotlin.reflect.KProperty0
 private var enableDebugMode: Boolean = false
 
 fun enableDebugMode() { enableDebugMode = true }
+
+private fun readEnvOrGlobalFile(name: String): String? {
+    val fromEnv = System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
+    if (fromEnv != null) return fromEnv
+
+    val globalEnvFile = (System.getProperty("GLOBAL_ENV_FILE") ?: System.getenv("GLOBAL_ENV_FILE"))?.trim()
+    if (!globalEnvFile.isNullOrEmpty()) {
+        val fromGlobal = runCatching { File(globalEnvFile).getProperty(name) }.getOrNull()
+        if (!fromGlobal.isNullOrBlank() && fromGlobal != "undefined") return fromGlobal.trim()
+    }
+
+    return null
+}
+
+private fun resolvedAwsAccessKey(config: JobConfiguration): String? =
+    config.sqsAccessKey?.takeIf { it.isNotBlank() }
+        ?: readEnvOrGlobalFile("KQ_SQS_ACCESS_KEY")
+        ?: readEnvOrGlobalFile("AWS_ACCESS_KEY_ID")
+
+private fun resolvedAwsSecretKey(config: JobConfiguration): String? =
+    config.sqsSecretKey?.takeIf { it.isNotBlank() }
+        ?: readEnvOrGlobalFile("KQ_SQS_SECRET_KEY")
+        ?: readEnvOrGlobalFile("AWS_SECRET_ACCESS_KEY")
+
+private fun resolvedAwsSessionToken(): String? =
+    readEnvOrGlobalFile("AWS_SESSION_TOKEN")
 
 @JsonInclude(Include.NON_NULL)
 data class KouTask(
@@ -62,13 +91,20 @@ data class KouTask(
 )
 
 private fun sqsCredsProvider(config: JobConfiguration): AwsCredentialsProvider {
-    val ak =config.sqsAccessKey
-    val sk = config.sqsSecretKey
+    val ak = resolvedAwsAccessKey(config)
+    val sk = resolvedAwsSecretKey(config)
+    val st = resolvedAwsSessionToken()
 
     return if (!ak.isNullOrBlank() && !sk.isNullOrBlank()) {
-        StaticCredentialsProvider.create(
-            AwsBasicCredentials.create(ak, sk)
-        )
+        if (!st.isNullOrBlank()) {
+            StaticCredentialsProvider.create(
+                AwsSessionCredentials.create(ak, sk, st)
+            )
+        } else {
+            StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(ak, sk)
+            )
+        }
     } else {
         DefaultCredentialsProvider.create()
     }
@@ -193,17 +229,28 @@ object JobRunner {
             when (res) {
                 is JobResult.Ok -> {
                     val task = res.task
-
                     val taskContext = task.context?.takeIf { it.isNotBlank() } ?: context
-                    val scriptPath = resolveTaskScriptPath(task)
 
-                    if (scriptPath == null) {
-                        return@map JobResult.Error(
-                            "❌ Missing script metadata for job '${task.id}'. packageName/scriptPath is required."
-                        )
+                    val execResult = try {
+                        if (task.sourceType == "compiled") {
+                            println("[job-worker] branch=compiled job=${task.id} fn=${task.functionName}")
+                            runCompiled(taskContext, task)
+                        } else {
+                            println("[job-worker] branch=script job=${task.id}")
+                            val scriptPath = resolveTaskScriptPath(task) ?: run {
+                                res.releaseFn?.invoke()
+                                return@map JobResult.Error(
+                                    "❌ Missing script metadata for job '${task.id}'. packageName/scriptPath is required."
+                                )
+                            }
+                            runScriptContent(taskContext, scriptPath, task.params.toCliArgs())
+                        }
+                    } catch (e: Exception) {
+                        res.releaseFn?.invoke()
+                        return@map JobResult.Error("❌ Execution failed for job '${task.id}': ${e.message}", e)
                     }
 
-                    val result = runScriptContent(taskContext, scriptPath, task.params.toCliArgs())
+                    res.ackFn?.invoke()
                     JobInfo(
                         configId = res.configName,
                         id = res.task.id,
@@ -214,7 +261,7 @@ object JobRunner {
                         version = res.task.contextVersion,
                         origin = res.task.origin,
                         packg = res.task.packageName,
-                        resultOfExecution = result
+                        resultOfExecution = execResult
                     )
                 }
                 is JobResult.Error -> res
@@ -312,22 +359,51 @@ object JobRunner {
 
             val pkg = task.packageName?.trimEnd('.')
             val basePrefix = if (pkg.isNullOrBlank()) "" else "$pkg."
+
+            // Strip only the file extension (.class, .kt). Do NOT strip a trailing "Kt"
+            // here — it may be part of the real filename casing on disk.
             val fileBase = task.fileName
                 .removeSuffix(".class")
                 .removeSuffix(".kt")
-                .removeSuffix("Kt")
+
+            // Kotlin compiles "myFile.kt" to "myFileKt.class", preserving the exact case
+            // of the source filename. The SQS payload may carry a differently-cased
+            // fileName (e.g. PascalCase vs camelCase), so we try both variants before
+            // giving up.  Resolution order:
+            //   1. Exact fileBase + "Kt"   — fileBase already has correct leading case
+            //   2. lowercase-first + "Kt"  — payload has uppercase-first, file is lower
+            //   3. uppercase-first + "Kt"  — payload has lowercase-first, file is upper
+            //   4–6. Same trio without "Kt" — objects / @JvmName / explicit class names
+            // functionName is never used to derive the class name.
+            fun String.lcFirst() = replaceFirstChar { it.lowercase() }
+            fun String.ucFirst() = replaceFirstChar { it.uppercase() }
 
             val candidates = linkedSetOf(
                 "${basePrefix}${fileBase}Kt",
-                "${basePrefix}${fileBase}"
+                "${basePrefix}${fileBase.lcFirst()}Kt",
+                "${basePrefix}${fileBase.ucFirst()}Kt",
+                "${basePrefix}${fileBase}",
+                "${basePrefix}${fileBase.lcFirst()}",
+                "${basePrefix}${fileBase.ucFirst()}"
             )
-            if (task.fileName != fileBase) {
-                candidates += "${basePrefix}${task.fileName.removeSuffix(".class")}"
-            }
+
+            println("[compiled] class candidates: ${candidates.joinToString()}")
 
             val clazz = candidates.asSequence()
-                .mapNotNull { fqcn -> try { loader.loadClass(fqcn) } catch (_: ClassNotFoundException) { null } }
-                .firstOrNull() ?: error("No se encontró clase para ${task.functionName}. Probé: $candidates")
+                .mapNotNull { fqcn ->
+                    try {
+                        loader.loadClass(fqcn).also { println("[compiled] resolved class: $fqcn") }
+                    } catch (_: ClassNotFoundException) {
+                        null
+                    } catch (_: NoClassDefFoundError) {
+                        null
+                    } catch (_: LinkageError) {
+                        null
+                    }
+                }
+                .firstOrNull() ?: error(
+                    "No class found for job '${task.id}' fn='${task.functionName}'. Tried: $candidates"
+                )
 
             println("🧪 Campos disponibles en ${clazz.name}:")
             clazz.declaredFields.forEach { println(" - ${it.name}") }
@@ -413,7 +489,12 @@ object JobRunner {
 }
 
 sealed class JobResult {
-    data class Ok(val configName: String?, val task: KouTask) : JobResult()
+    data class Ok(
+        val configName: String?,
+        val task: KouTask,
+        val ackFn: (() -> Unit)? = null,
+        val releaseFn: (() -> Unit)? = null
+    ) : JobResult()
     data class Error(val message: String, val exception: Exception? = null) : JobResult()
 }
 
@@ -833,6 +914,11 @@ object SqsJobDriver : JobDriver {
         val region = Region.of(config.sqsRegion)
         val results = mutableListOf<JobResult>()
 
+        // The receive loop uses a short-lived client that is closed once all messages
+        // are collected.  Each ackFn opens its own ephemeral client for the deleteMessage
+        // call — this avoids the "Connection pool shut down" error that occurs when a
+        // lambda captures the shared client and tries to use it after the use{} block
+        // has already closed it.
         val sqsClient = SqsClient.builder()
             .region(region)
             .credentialsProvider(sqsCredsProvider(config))
@@ -860,14 +946,27 @@ object SqsJobDriver : JobDriver {
                 msgs.forEach { msg ->
                     try {
                         val task = JobSerializer.deserialize(msg.body())
-                        results.add(JobResult.Ok(config.id, task))
+                        val receiptHandle = msg.receiptHandle()
+                        val queueUrlCopy = queueUrl
 
-                        it.deleteMessage(
-                            DeleteMessageRequest.builder()
-                                .queueUrl(queueUrl)
-                                .receiptHandle(msg.receiptHandle())
+                        // Each ackFn creates its own client so it is not bound to the
+                        // lifecycle of the receive client above.
+                        val ackFn: () -> Unit = {
+                            SqsClient.builder()
+                                .region(region)
+                                .credentialsProvider(sqsCredsProvider(config))
                                 .build()
-                        )
+                                .use { ackClient ->
+                                    ackClient.deleteMessage(
+                                        DeleteMessageRequest.builder()
+                                            .queueUrl(queueUrlCopy)
+                                            .receiptHandle(receiptHandle)
+                                            .build()
+                                    )
+                                }
+                        }
+                        // releaseFn is a no-op: message becomes visible again after visibility timeout
+                        results.add(JobResult.Ok(config.id, task, ackFn = ackFn, releaseFn = {}))
                     } catch (e: Exception) {
                         results.add(JobResult.Error("❌ Failed SQS job: ${e.message}", e))
                     }
@@ -1061,6 +1160,7 @@ object JobReplayer {
         context: String,
         config: JobConfiguration,
         newParams: Map<String, Any?>,
+        logger: KLogger? = null,
         injector: (String) -> Any? = { null },
         symbol: Any? = null,
         onResult: (KouTask) -> Unit = {}
@@ -1072,7 +1172,9 @@ object JobReplayer {
             val driver = cfg.driver
             val d = JobDrivers.resolve(driver)
 
-            GlobalLogger.log.info {
+            val replayLogger = logger ?: GlobalLogger.log
+
+            replayLogger.info {
                 " 🔁 Replaying jobs using [$driver]"
             }
 
@@ -1090,13 +1192,13 @@ object JobReplayer {
 
                         val result = ScriptRunner.runScript(updated, symbol, injector)
 
-                        GlobalLogger.log.info { result.toString() }
+                        replayLogger.info { result.toString() }
 
                         onResult(updated)
                     }
 
                     is JobResult.Error -> {
-                        GlobalLogger.log.warn { res.message }
+                        replayLogger.warn { res.message }
                         res.exception?.printStackTrace()
                     }
                 }

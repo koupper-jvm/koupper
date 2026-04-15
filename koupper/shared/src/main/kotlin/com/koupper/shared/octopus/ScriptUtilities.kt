@@ -28,20 +28,25 @@ fun extractAllAnnotations(script: String): Map<String, Map<String, String>> {
     return annotations
 }
 
-fun extractExportedAnnotations(script: String): Pair<String, Map<String, Map<String, String>>>? {
+data class ExportedDeclaration(
+    val name: String,
+    val annotations: Map<String, Map<String, String>>
+)
+
+fun extractExportedDeclarations(script: String): List<ExportedDeclaration> {
     val declWithAnns = Regex(
         """(?s)((?:@\w+(?:\([^)]*\))?\s*)+)(?:public|private|protected|internal\s+)?(?:[A-Za-z0-9_\s]*)(val|fun)\s+(`[^`]+`|[A-Za-z_][A-Za-z0-9_]*)""",
         setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.MULTILINE)
     )
 
     val singleAnn = Regex("""@([\w.]+)\s*(?:\(([^)]*)\))?""")
-    val argRegex  = Regex("""(\w+)\s*=\s*("[^"]*"|'[^']*'|[^,\s)]+)""")
+    val argRegex = Regex("""(\w+)\s*=\s*("[^"]*"|'[^']*'|[^,\s)]+)""")
 
-    for (m in declWithAnns.findAll(script)) {
+    return declWithAnns.findAll(script).mapNotNull { m ->
         val annsBlock = m.groupValues[1]
         val foundAnns = singleAnn.findAll(annsBlock).toList()
         val hasExport = foundAnns.any { it.groupValues[1].endsWith("Export") }
-        if (!hasExport) continue
+        if (!hasExport) return@mapNotNull null
 
         val rawName = m.groupValues[3]
         val name = rawName.trim('`')
@@ -62,9 +67,14 @@ fun extractExportedAnnotations(script: String): Pair<String, Map<String, Map<Str
             annMap[simple] = args
         }
 
-        return name to annMap
-    }
-    return null
+        ExportedDeclaration(name = name, annotations = annMap)
+    }.toList()
+}
+
+fun extractExportedAnnotations(script: String): Pair<String, Map<String, Map<String, String>>>? {
+    val exports = extractExportedDeclarations(script)
+    val first = exports.firstOrNull() ?: return null
+    return first.name to first.annotations
 }
 
 fun extractExportFunctionName(scriptContent: String): String? {
@@ -191,6 +201,7 @@ fun resolveClassFromArgName(
         .substringBefore("<")
         .removeSuffix("?")
         .trim()
+    val simpleType = cleanType.substringAfterLast('.')
 
     val builtIns = mapOf(
         "String" to String::class.java,
@@ -224,23 +235,24 @@ fun resolveClassFromArgName(
         }
     }
 
-    // Buscar si está definido inline en el script
-    val isDefinedInline = signature.code.contains(Regex("""(class|data class|object)\s+$cleanType\b"""))
+    // Buscar si está definido inline en el script (soporta fqcn o simple name)
+    val isDefinedInline = signature.code.contains(Regex("""(class|data class|object)\s+$simpleType\b"""))
 
     if (isDefinedInline) {
         runCatching {
             return Class.forName(cleanType, true, classLoader)
         }
-        
+
         explicitClassName?.let { className ->
+            val host = className.substringBefore("$", className)
             runCatching {
-                return Class.forName("$className$$cleanType", true, classLoader)
+                return Class.forName("$host$$simpleType", true, classLoader)
             }
         }
-        
+
         // Algunos runtimes de scripting prefijan el nombre
         runCatching {
-            return Class.forName("Script\$$cleanType", true, classLoader)
+            return Class.forName("Script\$$simpleType", true, classLoader)
         }
     }
 

@@ -1,0 +1,39 @@
+name: PR Fast Checks
+
+on:
+  pull_request:
+    branches: [develop]
+
+concurrency:
+  group: pr-fast-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-checks-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure Gradle wrappers are executable
+        shell: bash
+        run: |
+          chmod +x ./koupper/gradlew ./koupper-cli/gradlew
+
+      - name: Build fast checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd koupper && ./gradlew :octopus:compileKotlin)
+          (cd koupper-cli && ./gradlew compileKotlin)

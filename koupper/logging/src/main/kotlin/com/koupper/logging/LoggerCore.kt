@@ -40,8 +40,24 @@ object LoggerContext {
 }
 
 class ScopedMDC(private val pairs: Map<String, String>) : AutoCloseable {
-    init { pairs.forEach { (k, v) -> LoggerContext.put(k, v) } }
-    override fun close() { pairs.keys.forEach(LoggerContext::remove) }
+    private val previousValues: Map<String, String?> = pairs.keys.associateWith { key ->
+        LoggerContext.getMDC()[key]
+    }
+
+    init {
+        pairs.forEach { (k, v) -> LoggerContext.put(k, v) }
+    }
+
+    override fun close() {
+        pairs.keys.forEach { key ->
+            val previous = previousValues[key]
+            if (previous == null) {
+                LoggerContext.remove(key)
+            } else {
+                LoggerContext.put(key, previous)
+            }
+        }
+    }
 }
 
 /* --------- Formateadores --------- */
@@ -271,8 +287,17 @@ data class LogSpec(
     val level: String = "INFO",
     val destination: String = "console",
     val mdc: Map<String, String> = emptyMap(),
-    val async: Boolean = true
+    val async: Boolean = true,
+    val stdoutLevel: String = "INFO",
+    val stderrLevel: String = "ERROR"
 )
+
+fun LogSpec.toStreamRoutingConfig(): StreamRoutingConfig {
+    return StreamRoutingConfig(
+        stdout = LogLevel.parse(stdoutLevel, LogLevel.INFO),
+        stderr = LogLevel.parse(stderrLevel, LogLevel.ERROR)
+    )
+}
 
 private fun configure(kLogger: KLogger, spec: LogSpec): () -> Unit {
     val prevLevel = kLogger.level

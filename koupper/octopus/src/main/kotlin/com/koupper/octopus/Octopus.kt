@@ -21,6 +21,7 @@ import com.koupper.providers.http.HtppClient
 import com.koupper.providers.io.TerminalContext
 import com.koupper.providers.io.TerminalIO
 import com.koupper.shared.monitoring.JsonlExecutionMonitor
+import com.koupper.shared.octopus.extractExportedDeclarations
 import com.koupper.shared.octopus.extractExportedAnnotations
 import com.koupper.shared.octopus.toCliArgs
 import kotlinx.coroutines.*
@@ -34,6 +35,7 @@ import java.net.URL
 import java.nio.file.Paths
 import java.security.MessageDigest
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -92,10 +94,16 @@ internal data class DaemonRequest(
 internal data class DaemonResponse(
     val type: String,
     val requestId: String? = null,
+    val level: String? = null,
     val message: String? = null,
     val result: String? = null,
     val error: String? = null
 )
+
+private enum class OutputStreamType {
+    STDOUT,
+    STDERR
+}
 
 private data class DaemonMetricsSnapshot(
     val uptimeMs: Long,
@@ -180,6 +188,37 @@ private object DaemonMetrics {
     )
 }
 
+private data class ActiveExecution(
+    val requestId: String,
+    val thread: Thread,
+    val scriptPath: String,
+    val startedAt: Long = System.currentTimeMillis()
+)
+
+private object ActiveExecutions {
+    private val executions = ConcurrentHashMap<String, ActiveExecution>()
+
+    fun register(requestId: String, scriptPath: String) {
+        executions[requestId] = ActiveExecution(
+            requestId = requestId,
+            thread = Thread.currentThread(),
+            scriptPath = scriptPath
+        )
+    }
+
+    fun unregister(requestId: String?) {
+        if (requestId.isNullOrBlank()) return
+        executions.remove(requestId)
+    }
+
+    fun cancel(requestId: String?): Boolean {
+        if (requestId.isNullOrBlank()) return false
+        val execution = executions[requestId] ?: return false
+        execution.thread.interrupt()
+        return true
+    }
+}
+
 private fun structuredEvent(event: String, fields: Map<String, Any?> = emptyMap()): String {
     val pairs = mutableListOf<String>()
     pairs += jsonField("event", event)
@@ -216,6 +255,7 @@ internal fun jsonField(name: String, value: String?): String {
 internal fun daemonResponseJson(
     type: String,
     requestId: String? = null,
+    level: String? = null,
     message: String? = null,
     result: String? = null,
     error: String? = null
@@ -223,10 +263,18 @@ internal fun daemonResponseJson(
     return "{" + listOf(
         jsonField("type", type),
         jsonField("requestId", requestId),
+        jsonField("level", level),
         jsonField("message", message),
         jsonField("result", result),
         jsonField("error", error)
     ).joinToString(",") + "}"
+}
+
+private fun loggerStreamLevels(annotations: Map<String, Map<String, Any?>>): StreamRoutingConfig {
+    val loggerAnnotation = annotations["Logger"].orEmpty()
+    val stdoutLevel = LogLevel.parse((loggerAnnotation["stdoutLevel"] as? String), LogLevel.INFO)
+    val stderrLevel = LogLevel.parse((loggerAnnotation["stderrLevel"] as? String), LogLevel.ERROR)
+    return StreamRoutingConfig(stdout = stdoutLevel, stderr = stderrLevel)
 }
 
 internal fun parseJsonCommand(input: String): DaemonRequest? {
@@ -354,6 +402,14 @@ internal fun parseIncomingCommand(command: String): IncomingCommand? {
                 params = req.params?.trim().takeUnless { it.isNullOrBlank() } ?: "EMPTY_PARAMS",
                 scriptContent = req.scriptContent,
                 contentSha256 = req.contentSha256?.trim()
+            )
+        }
+
+        if (type == "CANCEL") {
+            return IncomingCommand(
+                mode = ResponseMode.JSON,
+                requestId = req.requestId,
+                commandType = "CANCEL"
             )
         }
 
@@ -490,6 +546,13 @@ class Octopus(private var container: Container) : ScriptExecutor {
         callable: Callable?,
         result: (value: T) -> Unit,
     ) {
+        val exportedDeclarations = extractExportedDeclarations(sentence)
+        if (exportedDeclarations.size > 1) {
+            val names = exportedDeclarations.joinToString(", ") { it.name }
+            result(castTo<T>("Multiple @Export declarations found: $names. Use exactly one @Export entrypoint (recommended: setup)."))
+            return
+        }
+
         val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence)
             ?: run {
                 result(castTo<T>("No function annotated with @Export was found."))
@@ -513,14 +576,29 @@ class Octopus(private var container: Container) : ScriptExecutor {
             )
 
 
-            FunctionDispatcher.dispatch<T>(dispatcherInputParams) {
-                result(it)
+            val previousLevels = SessionStdoutBridge.currentStreamLevels()
+            SessionStdoutBridge.setStreamLevels(loggerStreamLevels(annotations))
+
+            try {
+                FunctionDispatcher.dispatch<T>(dispatcherInputParams) {
+                    result(it)
+                }
+            } finally {
+                SessionStdoutBridge.setStreamLevels(previousLevels)
             }
         } catch (e: Throwable) {
+            if (e is InterruptedException) {
+                result(castTo<T>("Script interrupted by cancellation request"))
+                return
+            }
             e.printStackTrace(System.out)
             var rootCause = e
             while (rootCause.cause != null) {
                 rootCause = rootCause.cause!!
+            }
+            if (rootCause is InterruptedException) {
+                result(castTo<T>("Script interrupted by cancellation request"))
+                return
             }
             rootCause.printStackTrace(System.out)
 
@@ -841,17 +919,34 @@ fun tokenize(input: String): List<String> {
 private class SessionOutput(private val writer: java.io.BufferedWriter) {
     private val lock = Any()
 
-    fun printLine(text: String, mode: ResponseMode = ResponseMode.LEGACY, requestId: String? = null) {
+    fun printLine(
+        text: String,
+        level: LogLevel = LogLevel.INFO,
+        mode: ResponseMode = ResponseMode.LEGACY,
+        requestId: String? = null
+    ) {
         synchronized(lock) {
             when (mode) {
                 ResponseMode.LEGACY -> {
-                    writer.write("PRINT::$text")
+                    val prefix = when {
+                        level.priority >= LogLevel.WARN.priority -> "PRINT_ERR::"
+                        level.priority <= LogLevel.DEBUG.priority -> "PRINT_DEBUG::"
+                        else -> "PRINT::"
+                    }
+                    writer.write("$prefix$text")
                     writer.newLine()
                     writer.flush()
                 }
 
                 ResponseMode.JSON -> {
-                    writer.write(daemonResponseJson(type = "print", requestId = requestId, message = text))
+                    writer.write(
+                        daemonResponseJson(
+                            type = "print",
+                            requestId = requestId,
+                            level = level.name,
+                            message = text
+                        )
+                    )
                     writer.newLine()
                     writer.flush()
                 }
@@ -902,20 +997,40 @@ private class SessionOutput(private val writer: java.io.BufferedWriter) {
 
 private object SessionStdoutBridge {
     private val installed = AtomicBoolean(false)
-    private val sessionOutput = InheritableThreadLocal<SessionOutput?>()
-    private val responseMode = InheritableThreadLocal<ResponseMode?>()
-    private val requestId = InheritableThreadLocal<String?>()
-    private val threadBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
+    private val sessionOutput = ThreadLocal<SessionOutput?>()
+    private val responseMode = ThreadLocal<ResponseMode?>()
+    private val requestId = ThreadLocal<String?>()
+    private val stdoutThreadBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
+    private val stderrThreadBuffer = ThreadLocal.withInitial { java.io.ByteArrayOutputStream() }
+    private val originalOut = System.out
+    private val originalErr = System.err
     private val fallback = PrintStream(object : OutputStream() {
         override fun write(b: Int) {}
     })
+    private val reentrantGuard = ThreadLocal.withInitial { false }
 
     fun installOnce() {
         if (!installed.compareAndSet(false, true)) return
 
-        val routingOut = PrintStream(RoutingOutputStream(), true, Charsets.UTF_8.name())
+        val routingOut = PrintStream(RoutingOutputStream(OutputStreamType.STDOUT), true, Charsets.UTF_8.name())
+        val routingErr = PrintStream(RoutingOutputStream(OutputStreamType.STDERR), true, Charsets.UTF_8.name())
         System.setOut(routingOut)
-        System.setErr(routingOut)
+        System.setErr(routingErr)
+    }
+
+    fun setStreamLevels(config: StreamRoutingConfig) {
+        StreamRoutingContext.set(config)
+    }
+
+    fun currentStreamLevels(): StreamRoutingConfig = StreamRoutingContext.get()
+
+    private fun currentLevel(streamType: OutputStreamType): LogLevel {
+        val config = StreamRoutingContext.get()
+        return if (streamType == OutputStreamType.STDERR) config.stderr else config.stdout
+    }
+
+    private fun bufferFor(streamType: OutputStreamType): java.io.ByteArrayOutputStream {
+        return if (streamType == OutputStreamType.STDERR) stderrThreadBuffer.get() else stdoutThreadBuffer.get()
     }
 
     fun bind(output: SessionOutput, mode: ResponseMode = ResponseMode.LEGACY, currentRequestId: String? = null) {
@@ -925,41 +1040,67 @@ private object SessionStdoutBridge {
     }
 
     fun clear() {
-        flushCurrentThreadBuffer()
+        flushCurrentThreadBuffer(OutputStreamType.STDOUT)
+        flushCurrentThreadBuffer(OutputStreamType.STDERR)
         sessionOutput.remove()
         responseMode.remove()
         requestId.remove()
-        threadBuffer.remove()
+        StreamRoutingContext.clear()
+        stdoutThreadBuffer.remove()
+        stderrThreadBuffer.remove()
     }
 
-    private fun flushCurrentThreadBuffer() {
-        val buffer = threadBuffer.get()
+    private fun flushCurrentThreadBuffer(streamType: OutputStreamType) {
+        val buffer = bufferFor(streamType)
         if (buffer.size() <= 0) return
         val text = buffer.toString(Charsets.UTF_8.name())
         buffer.reset()
-        emit(text)
+        emit(text, streamType)
     }
 
-    private fun emit(text: String) {
+    private fun emit(text: String, streamType: OutputStreamType) {
+        val level = currentLevel(streamType)
         val output = sessionOutput.get()
         if (output != null) {
-            output.printLine(text, responseMode.get() ?: ResponseMode.LEGACY, requestId.get())
+            output.printLine(text, level, responseMode.get() ?: ResponseMode.LEGACY, requestId.get())
         } else {
-            fallback.print(text)
+            if (reentrantGuard.get()) {
+                if (streamType == OutputStreamType.STDERR) {
+                    originalErr.print(text)
+                } else {
+                    originalOut.print(text)
+                }
+                return
+            }
+
+            reentrantGuard.set(true)
+            try {
+                when (level) {
+                    LogLevel.TRACE -> GlobalLogger.log.trace { text }
+                    LogLevel.DEBUG -> GlobalLogger.log.debug { text }
+                    LogLevel.INFO -> GlobalLogger.log.info { text }
+                    LogLevel.WARN -> GlobalLogger.log.warn { text }
+                    LogLevel.ERROR -> GlobalLogger.log.error { text }
+                }
+            } catch (_: Throwable) {
+                fallback.print(text)
+            } finally {
+                reentrantGuard.set(false)
+            }
         }
     }
 
-    private class RoutingOutputStream : OutputStream() {
+    private class RoutingOutputStream(private val streamType: OutputStreamType) : OutputStream() {
         override fun write(b: Int) {
             if (b == '\r'.code) return
 
-            val buffer = threadBuffer.get()
+            val buffer = bufferFor(streamType)
 
             if (b == '\n'.code) {
                 if (buffer.size() > 0) {
                     val text = buffer.toString(Charsets.UTF_8.name())
                     buffer.reset()
-                    emit(text)
+                    emit(text, streamType)
                 }
                 return
             }
@@ -968,7 +1109,7 @@ private object SessionStdoutBridge {
         }
 
         override fun flush() {
-            flushCurrentThreadBuffer()
+            flushCurrentThreadBuffer(streamType)
         }
     }
 }
@@ -1068,6 +1209,15 @@ fun listenForExternalCommands(
                     SessionStdoutBridge.bind(sessionOutput, parsedCommand.mode, parsedCommand.requestId)
 
                     when {
+                        parsedCommand.commandType == "CANCEL" -> {
+                            val cancelled = ActiveExecutions.cancel(parsedCommand.requestId)
+                            sessionOutput.result(
+                                "{\"ok\":${if (cancelled) "true" else "false"},\"requestId\":\"${parsedCommand.requestId ?: ""}\",\"cancelled\":${if (cancelled) "true" else "false"}}",
+                                parsedCommand.mode,
+                                parsedCommand.requestId
+                            )
+                        }
+
                         parsedCommand.commandType == "UPDATING_CHECK" -> {
                             checkForUpdates()
                         }
@@ -1232,6 +1382,10 @@ fun listenForExternalCommands(
                         parsedCommand.scriptPath.endsWith(".kts") || parsedCommand.scriptPath.endsWith(".kt") -> {
                             DaemonMetrics.onScriptStarted()
                             val startedAt = System.nanoTime()
+                            val requestId = parsedCommand.requestId
+                            if (!requestId.isNullOrBlank()) {
+                                ActiveExecutions.register(requestId, parsedCommand.scriptPath)
+                            }
 
                             try {
                                 sessionLogger.info {
@@ -1285,6 +1439,7 @@ fun listenForExternalCommands(
                                 }
                                 sessionOutput.error(e.message ?: "Script execution failed", parsedCommand.mode, parsedCommand.requestId)
                             } finally {
+                                ActiveExecutions.unregister(requestId)
                                 System.out.flush()
                                 it.shutdownOutput()
                             }
@@ -1399,7 +1554,16 @@ fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
 
     app.singleton(LoggerCore::class, { appLogger })
     app.bind(ScriptExecutor::class, { octopus })
-    app.bind(com.koupper.shared.monitoring.ExecutionMonitor::class, { com.koupper.octopus.monitoring.ResumenArchivosExecutionMonitor() })
+    app.bind(com.koupper.shared.monitoring.ExecutionMonitor::class, {
+        com.koupper.octopus.monitoring.CompositeExecutionMonitor(
+            delegates = listOf(
+                JsonlExecutionMonitor(File(logsDir, "octopus-executions.jsonl")),
+                com.koupper.octopus.monitoring.ResumenArchivosExecutionMonitor(),
+                com.koupper.octopus.monitoring.ObservabilityExecutionMonitor()
+            )
+        )
+    })
+    ScriptRunner.monitor = app.getInstance(com.koupper.shared.monitoring.ExecutionMonitor::class)
 
     return octopus
 }

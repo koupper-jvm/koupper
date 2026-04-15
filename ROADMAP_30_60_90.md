@@ -1,5 +1,7 @@
 # Koupper 30/60/90 Day Roadmap
 
+Enterprise execution add-on (kickoff 2026-03-30): see `ROADMAP_ENTERPRISE_2026_Q2.md`.
+
 ## Why this helps
 
 This roadmap turns your work into an execution plan that helps you:
@@ -14,6 +16,14 @@ In short: it helps convert a strong codebase into a product people can adopt and
 ## Goal
 
 Turn Koupper from a strong technical framework into a clearly positioned, adoptable product with repeatable growth signals (users, usage, and successful production stories).
+
+## ICP (v1)
+
+- Backend/platform JVM teams (3-15 engineers)
+- Script-heavy operations (workers, cron, deploy automations)
+- Need production reliability and observability without abandoning script velocity
+
+See operational detail in `docs/ICP_PRODUCTIZATION_V1.md`.
 
 ## Phase 1 (Days 1-30): Positioning + Adoption Foundation
 

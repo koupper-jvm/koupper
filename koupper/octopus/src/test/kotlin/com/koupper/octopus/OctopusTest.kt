@@ -18,6 +18,7 @@ import io.mockk.mockkClass
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertContains
 
 class OctopusTest : AnnotationSpec() {
     private lateinit var container: Container
@@ -141,6 +142,30 @@ class OctopusTest : AnnotationSpec() {
             ),
             r1.positionals
         )
+    }
+
+    @Test
+    fun `should fail when script has multiple export declarations`() {
+        val script = """
+            @Export
+            val setup: () -> String = { "one" }
+
+            @Export
+            val runner: () -> String = { "two" }
+        """.trimIndent()
+
+        var message = ""
+        this.octopus.run<String>(
+            context = ".",
+            sentence = script,
+            params = null
+        ) { result ->
+            message = result
+        }
+
+        assertContains(message, "Multiple @Export declarations found")
+        assertContains(message, "setup")
+        assertContains(message, "runner")
     }
 
     @Test

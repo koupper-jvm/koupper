@@ -1,0 +1,163 @@
+name: Full Smoke Suite
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  workflow_dispatch:
+  schedule:
+    - cron: '30 7 * * *'
+
+jobs:
+  install-uninstall-e2e-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Kotlin compiler
+        shell: pwsh
+        run: |
+          $version = "2.0.20"
+          $url = "https://github.com/JetBrains/kotlin/releases/download/v$version/kotlin-compiler-$version.zip"
+          $zip = Join-Path $env:RUNNER_TEMP "kotlin-compiler.zip"
+          $dest = Join-Path $env:RUNNER_TEMP "kotlin"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          "$dest\kotlinc\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install Koupper
+        shell: pwsh
+        run: |
+          kotlinc -script install.kts -- --force
+
+      - name: Add Koupper bin to PATH
+        shell: pwsh
+        run: |
+          "$env:USERPROFILE\.koupper\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Smoke CLI after install
+        shell: pwsh
+        run: |
+          koupper -v
+          koupper provider info command-runner
+
+      - name: Uninstall Koupper
+        shell: pwsh
+        run: |
+          kotlinc -script uninstall.kts -- --force --purge
+
+      - name: Assert uninstall cleanup
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:USERPROFILE\.koupper") {
+            throw "Expected ~/.koupper to be removed after uninstall"
+          }
+
+  smoke-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Kotlin compiler
+        shell: pwsh
+        run: |
+          $version = "2.0.20"
+          $url = "https://github.com/JetBrains/kotlin/releases/download/v$version/kotlin-compiler-$version.zip"
+          $zip = Join-Path $env:RUNNER_TEMP "kotlin-compiler.zip"
+          $dest = Join-Path $env:RUNNER_TEMP "kotlin"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          "$dest\kotlinc\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Verify toolchain
+        shell: pwsh
+        run: |
+          java -version
+          kotlinc -version
+
+      - name: Run full smoke suite
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\examples\full-smoke-suite.ps1 -KeepArtifacts
+
+      - name: Upload smoke artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts-windows
+          path: |
+            examples/.smoke-workspace/**
+            examples/smoke-standalone.kts
+          if-no-files-found: ignore
+
+  smoke-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Kotlin compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="2.0.20"
+          URL="https://github.com/JetBrains/kotlin/releases/download/v${VERSION}/kotlin-compiler-${VERSION}.zip"
+          ZIP_PATH="$RUNNER_TEMP/kotlin-compiler.zip"
+          DEST="$RUNNER_TEMP/kotlin"
+          curl -L "$URL" -o "$ZIP_PATH"
+          unzip -q "$ZIP_PATH" -d "$DEST"
+          echo "$DEST/kotlinc/bin" >> "$GITHUB_PATH"
+
+      - name: Verify toolchain
+        shell: bash
+        run: |
+          java -version
+          kotlinc -version
+
+      - name: Ensure Gradle wrappers are executable
+        shell: bash
+        run: |
+          chmod +x ./koupper/gradlew ./koupper-cli/gradlew
+
+      - name: Run full smoke suite
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File ./examples/full-smoke-suite.ps1 -KeepArtifacts
+
+      - name: Upload smoke artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts-linux
+          path: |
+            examples/.smoke-workspace/**
+            examples/smoke-standalone.kts
+          if-no-files-found: ignore

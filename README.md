@@ -1,188 +1,130 @@
-<div align="center">
-  <h1>🐙 Koupper Framework</h1>
-  <p><strong>The Ultimate Event-Driven Kotlin Scripting Ecosystem</strong></p>
-</div>
-
 <p align="center">
-  <img src="https://img.shields.io/badge/Language-Kotlin-7F52FF?style=for-the-badge&logo=kotlin" alt="Kotlin" />
-  <img src="https://img.shields.io/badge/Architecture-Event--Driven-FF5722?style=for-the-badge" alt="Event Driven" />
-  <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License MIT" />
+  <img alt="Koupper Octopus" src="koupper-avatar.svg" width="220">
 </p>
 
----
+# Koupper
 
-**Koupper** is an advanced, un-opinionated scripting infrastructure built natively on top of the Kotlin VM. Conceived to eliminate boilerplate and unify enterprise deployments, it provides an industrial-grade Dependency Injection engine, out-of-the-box Cron Daemons, and reactive message handlers out of pure `.kts` files.
+<p align="left">
+  <a href="https://github.com/koupper-jvm/koupper/blob/develop/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="https://github.com/koupper-jvm/koupper/commits/develop"><img alt="Last commit" src="https://img.shields.io/github/last-commit/koupper-jvm/koupper/develop"></a>
+  <img alt="Kotlin-first" src="https://img.shields.io/badge/language-Kotlin-7f52ff">
+  <img alt="Runtime" src="https://img.shields.io/badge/runtime-Octopus-0f172a">
+  <img alt="Architecture" src="https://img.shields.io/badge/architecture-provider--first-0284c7">
+  <a href="https://koupper.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-koupper.com-0ea5e9"></a>
+</p>
 
-Write your business logic in clean scripts, let our **Octopus Engine** handle the reflection and lifecycle, and scale your automations effortlessly.
+Koupper is a Kotlin scripting runtime + CLI for teams that want fast iteration and production-grade execution in the same model.
 
----
+Why it matters:
 
-## 🔥 Core Features
+- write small Kotlin scripts,
+- execute through a stable Octopus runtime contract,
+- scale capabilities through Service Providers,
+- move from local flows to production without rewriting your model.
 
-- **🚀 Zero-Boilerplate Daemons**: Use the `@Scheduled` annotation to spin up infinite background workers governed by CRON expressions.
-- **⚡ Reactive Queue Listeners**: Deploy active consumers monitoring your internal message bus automatically via `@JobsListener`.
-- **🚢 One-Click Remote Deploy**: Push `.kts` scripts from your local machine to any remote Octopus daemon via `koupper deploy`. Zero SSH/CI-CD required.
-- **💉 Native Dependency Injection**: Access internal singletons and providers (like `JSONFileHandler`, `Sender`, or `AI`) anywhere using the global `app.getInstance()` locator.
-- **🛡️ Strict JSON Deserialization**: Koupper's CLI layer maps raw, nested JSON arrays directly into your underlying Kotlin Data Classes. No manual parsing required.
-- **⚙️ Integrated Sandbox Execution**: Build entire integration tests parsing, asserting, and evaluating sibling scripts dynamically via `ScriptExecutor`.
+Tech tags:
 
-## 🏗️ Architecture
+`kotlin` `scripting` `automation` `octopus-runtime` `provider-first` `jobs` `deploy`
 
-What you are looking at is not a traditional "script runner"; it is a **Dynamic Execution Orchestrator**.
+## Start here
 
-Koupper operates as a seamless Monorepo split into two symbiotic layers:
+- Public docs site: https://koupper.com/docs
+- Getting started: https://koupper.com/docs/getting-started
+- Command reference: https://koupper.com/docs/commands/
+- Provider catalog: https://koupper.com/docs/providers/
 
-1. **The Server-CLI Decoupling (Octopus Engine)**: A long-living JVM daemon responsible for maintaining context, classpaths, handling Dependency Injection, and executing `.kts` scripts in isolated `ClassLoaders`. 
-2. **Koupper CLI**: The lightweight binary proxy that communicates interactively with the Octopus socket (`Port 9998`). The CLI acts merely as a pure transmitter, offloading all heavy JVM lifting to the persistent service.
+## Quick install
 
-### 🧠 Core Engineering Feats
-- **The Depth Tokenizer**: Achieving a CLI that understands `{...}` as a single argument without the OS Shell destroying the structure is handled by a custom manual state-parser engine. Elegant and extremely resilient.
-- **Dynamic Unmarshalling Injection**: Using Kotlin Reflection to dynamically map strictly-typed complex Data Classes (like `User`, `SalesReport`, etc.) directly from a raw shell text-string bypasses the `Shell -> JVM` barrier flawlessly without external boilerplate libraries.
-
----
-
-## ⚡ Setup & Installation
-
-Koupper boots itself using its own ecosystem. To install the CLI, Jars, and Daemon directly on your machine from the source code:
-
-```powershell
-# 1. Clone the Monorepo
-git clone https://github.com/koupper/koupper.git
+```bash
+git clone https://github.com/koupper-jvm/koupper.git
 cd koupper
-
-# 2. Run the self-bootstrapper (Compiles source and provisions ~/.koupper/bin)
-kotlinc -script install.kts
+./scripts/setup/install.sh
+koupper -v
 ```
 
-**After execution, just ensure `~/.koupper/bin` is in your system `PATH`.**
-
----
-
-## 🛠️ Usage & Examples
-
-Here are some of the patterns you can build in seconds. Check our `/examples` folder for the fully-commented source code!
-
-### 1. Synchronous Execution (`hello-world.kts`)
-Run immediate terminal outputs parsing positional parameters cleanly.
-```powershell
-koupper run examples/hello-world.kts "Developer"
-```
-
-### CLI Socket Overrides
-When Octopus is running on a non-default host/port (or token-protected), configure the CLI at runtime:
+Windows PowerShell:
 
 ```powershell
-# Host/port overrides
-$env:KOUPPER_OCTOPUS_HOST="127.0.0.1"
-$env:KOUPPER_OCTOPUS_PORT="9998"
-
-# Optional auth token
-$env:KOUPPER_OCTOPUS_TOKEN="your-token"
-
-koupper run examples/hello-world.kts
+git clone https://github.com/koupper-jvm/koupper.git
+cd koupper
+./scripts/setup/install.ps1
+koupper -v
 ```
 
-Equivalent JVM properties are also supported:
+The setup scripts validate prerequisites first (Java 17+, `kotlinc`, Git) and print exact download links when something is missing.
 
-```powershell
-$env:JAVA_TOOL_OPTIONS="-Dkoupper.octopus.host=127.0.0.1 -Dkoupper.octopus.port=9998 -Dkoupper.octopus.token=your-token"
-koupper run examples/hello-world.kts
+Optional automatic dependency mode:
+
+- macOS/Linux: `./scripts/setup/install.sh --auto-install-deps`
+- Windows: `./scripts/setup/install.ps1 -AutoInstallDeps`
+
+In auto mode, the installer validates current versions first and asks before updating incompatible prerequisites.
+
+## 60-second quick smoke
+
+```bash
+koupper help
+koupper run examples/hello-world.kts "Smoke"
+koupper provider list
 ```
 
-### 2. Deep JSON Data-Mapping (`cli-report-generator.kts`)
-Send heavily nested HTTP-like JSON objects right from Powershell. The engine will deserialize the payload, map it to a complex `SalesReportCommand` object, and execute the closure.
-```powershell
-koupper run examples/cli-report-generator.kts '{"reportName": "Q3", "region": "Global", "items": [{"name": "License", "value": 99.0}]}'
-```
+Expected result:
 
-### 3. Remote Deployment (`koupper deploy`)
-Push a local script to a remote production Octopus daemon. No SSH or manual file transfers needed.
-```powershell
-# Required for secure deploy auth
-$env:KOUPPER_OCTOPUS_TOKEN="your-remote-daemon-token"
+- CLI responds,
+- script execution works,
+- provider catalog is discoverable.
 
-# Deploy a worker script to a remote host
-koupper deploy examples/hello-world.kts "10.0.0.50"
+## Why Koupper vs typical scripting stacks
 
-# Custom port or user context
-koupper deploy examples/hello-world.kts "user@10.0.0.50:9999"
-```
+- **Single runtime contract**: local CLI, worker jobs, and deploy/runtime routes share the same execution rules.
+- **Provider-first architecture**: integrations are explicit contracts, not scattered SDK calls.
+- **Kotlin type safety**: better maintainability than ad-hoc shell scripts as automation grows.
+- **Production path built-in**: auth/checksum guardrails, hardening docs, and release automation scripts.
 
-Deploy hardening defaults:
-- deploy requires daemon token auth (`KOUPPER_OCTOPUS_TOKEN`)
-- payload integrity is validated with SHA-256 checksum
-- daemon enforces max deploy size (`KOUPPER_OCTOPUS_DEPLOY_MAX_BYTES`, default `262144`)
+## Why teams choose Koupper
 
-### 4. Background Cron Daemons (`disk-cleanup-daemon.kts`)
-Want to delete old logs at midnight? Just annotate your export and the Octopus Engine will schedule it natively in the background upon booting.
-```kotlin
-import com.koupper.octopus.annotations.Scheduled
-import com.koupper.octopus.annotations.Logger
+- Kotlin-first, type-safe scripts instead of ad-hoc shell glue.
+- Provider-first architecture for cloud, infra, and workflow capabilities.
+- Local-first developer workflow with production hardening paths.
+- Predictable runtime contract (`@Export` single entrypoint + pipeline orchestration).
 
-@Export
-@Logger(destination = "file:disk-maintenance-[yyy-MM-dd]")
-@Scheduled(debug = false, cron = "0 0 * * *")
-val nightlyLogCleanup: () -> Unit = {
-    // Business logic runs silently every midnight!
-}
-```
+## Typical use cases
 
-### 4. Background Workers (`ai-email-worker.kts`)
-Wake up instantly when a payload drops in the internal `jobs.json` queue. Features automated logging and error state rotation.
-```kotlin
-@Export
-@JobsListener(debug = true, configId = "customer-support")
-val processSupportTicket: (JobEvent, SupportTicket) -> Int = { event, ticket ->
-    val sender = app.getInstance(Sender::class)
-    sender.sendTo(ticket.userEmail).withContent("We received your ticket!").send()
-    200 // Returning 200 marks the job as SUCCESS.
-}
-```
+- script-driven backend workers and async jobs,
+- deployment orchestration and infra workflows,
+- runtime-exposed HTTP routes via providers,
+- operational automations (GitHub, Docker, SSH, notifications, queue ops),
+- AI/LLM pipelines with typed script inputs.
 
----
+## Documentation hierarchy
 
-## 🧪 Integration Testing natively
+- Public docs (users): `koupper-document/docs`
+- Internal docs (maintainers): `docs/`
+- Runnable references: `examples/`
 
-Koupper ships with its own Integration Testing suite capabilities. You can dynamically orchestrate and assert script evaluations directly natively:
-```powershell
-koupper run examples/integration-tests.kts
-```
+Recommended reading path:
 
----
+1. [Getting Started](https://koupper.com/docs/getting-started)
+2. [Why Koupper vs Alternatives](https://koupper.com/docs/why-koupper-vs-alternatives)
+3. [Ideal Customer Profile](https://koupper.com/docs/ideal-customer-profile)
+4. [Use Cases](https://koupper.com/docs/use-cases)
+5. [Golden Demo: Worker Flow](https://koupper.com/docs/examples/golden-demo-worker-flow)
+6. [Command Overview](https://koupper.com/docs/commands/)
+7. [Provider Catalog](https://koupper.com/docs/providers/)
+8. [Architecture](https://koupper.com/docs/architecture/)
+9. [Production](https://koupper.com/docs/production/hardening)
 
-## 🚢 Versioning & Release Workflow
+## Contributing
 
-Koupper uses Semantic Versioning with independent artifact tracks:
+- Core contribution flow and maintainer docs: `docs/MAINTAINER_GUIDE.md`
+- Documentation governance rules: `docs/DOCUMENTATION_STANDARD.md`
+- Public docs source: `koupper-document/docs`
 
-- `koupper` (Octopus runtime): `6.x.y`
-- `koupper-cli` (CLI binary): `4.x.y`
+## Maintainer docs in this repo
 
-Recommended production release workflow:
+- Maintainer index: `docs/MAINTAINER_GUIDE.md`
+- Documentation ownership standard: `docs/DOCUMENTATION_STANDARD.md`
 
-1. Merge release-ready PRs into `main`.
-2. Bump versions in:
-   - `koupper/build.gradle`
-   - `koupper-cli/build.gradle`
-3. Update changelogs:
-   - `CHANGELOG.md`
-   - `koupper/CHANGELOG.md`
-   - `koupper-cli/CHANGELOG.md`
-4. Create annotated git tags:
-   - `octopus-v<version>`
-   - `cli-v<version>`
-   - optional `koupper-v<version>` for a full monorepo snapshot
-5. Publish GitHub releases from those tags.
+## License
 
-Compatibility note: keep CLI and Octopus tags listed together in release notes for predictable upgrades.
-
-## 🔐 Production Hardening
-
-For production security defaults and deployment guardrails, see:
-
-- [Production Hardening Guide](docs/PRODUCTION_HARDENING.md)
-
----
-
-## 📜 License
-Built with 🩵 by Jacob Guzman Acosta / Igly technologies.
-Available under the MIT License.
+MIT

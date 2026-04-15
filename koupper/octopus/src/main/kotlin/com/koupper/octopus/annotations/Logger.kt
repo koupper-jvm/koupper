@@ -5,4 +5,6 @@ package com.koupper.octopus.annotations
 annotation class Logger(
     val level: String = "INFO",
     val destination: String = "console",
+    val stdoutLevel: String = "INFO",
+    val stderrLevel: String = "ERROR",
 )

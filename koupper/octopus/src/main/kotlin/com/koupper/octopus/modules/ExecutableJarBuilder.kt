@@ -4,9 +4,7 @@ import com.koupper.container.app
 import com.koupper.octopus.modifiers.GradleConfigurator
 import com.koupper.os.env
 import com.koupper.providers.files.FileHandler
-import com.koupper.providers.files.downloadFile
 import java.io.File
-import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -33,8 +31,10 @@ class ExecutableJarBuilder(
     }
 
     override fun build() {
-        // 1. Descargar y descomprimir el proyecto base
-        val projectRoot = this.fileHandler.unzipFile(env("MODEL_BACK_PROJECT_URL"), projectName)
+        val normalizedType = normalizeArtifactType(artifactType)
+
+        // 1. Resolver y preparar el proyecto base (local-first, remote fallback)
+        val projectRoot = prepareTemplateProject(context, projectName, this.fileHandler)
 
         // 2. Limpiar el zip temporal (best effort)
         try {
@@ -47,24 +47,22 @@ class ExecutableJarBuilder(
         GradleConfigurator.configure {
             this.rootProjectName = projectName
             this.version = moduleVersion
+            this.projectRootPath = projectRoot.absolutePath
         }
 
-        // 4. Descargar el process manager en libs/
+        // 4. Resolver process manager en libs/ (local-first, remote fallback)
         val libsDir = projectRoot.resolve("libs")
         libsDir.mkdirs()
-
-        downloadFile(
-            URL(env("OPTIMIZED_PROCESS_MANAGER_URL")),
-            libsDir.resolve("octopus-${env("OCTOPUS_VERSION")}.jar").toString()
-        )
+        val octopusVersion = env("OCTOPUS_VERSION", context, required = false, allowEmpty = true, default = "latest")
+        resolveAndCopyProcessManagerJar(context, libsDir, "octopus-$octopusVersion.jar")
 
         // 5. LIMPIAR el proyecto y crear scripts
-        cleanProjectAndCreateBootstrapping(projectRoot)
+        cleanProjectAndCreateBootstrapping(projectRoot, normalizedType)
 
         println("✅ Proyecto listo en: ${projectRoot.absolutePath}")
     }
 
-    private fun cleanProjectAndCreateBootstrapping(projectRoot: File) {
+    private fun cleanProjectAndCreateBootstrapping(projectRoot: File, normalizedType: String) {
         val kotlinRoot = Paths.get(projectRoot.toString(), "src", "main", "kotlin")
 
         if (!Files.exists(kotlinRoot)) {
@@ -82,9 +80,9 @@ class ExecutableJarBuilder(
 
         // 2. Leer y preparar el nuevo contenido
         val originalContent = originalBootstrapping.readText(Charsets.UTF_8)
-        val newBootstrappingContent = generateBootstrappingContent(originalContent, artifactType, packageName)
+        val newBootstrappingContent = generateBootstrappingContent(originalContent, normalizedType, packageName)
 
-        if (artifactType.lowercase() != "job") {
+        if (normalizedType != "job") {
 
             val fileToDelete = File(projectRoot, "jobs.json")
 
@@ -181,24 +179,22 @@ class ExecutableJarBuilder(
             "package $targetPackage\n\n$originalContent"
         }
 
-        // 2. Extraer los imports originales para mantenerlos
-        val importRegex = Regex("""^import .+$""", RegexOption.MULTILINE)
-        val originalImports = importRegex.findAll(originalContent).map { it.value }.toList()
-
-        // 3. Procesar según el artifactType
+        // 2. Procesar según el artifactType
         return when (artifactType.lowercase()) {
-            "script" -> processScriptExample(contentWithPackage, originalImports, targetPackage)
-            "job" -> processJobExample(contentWithPackage, originalImports, targetPackage)
-            "pipeline" -> processPipelineExample(contentWithPackage, originalImports, targetPackage)
+            "script" -> processScriptExample(contentWithPackage, targetPackage)
+            "job" -> processJobExample(contentWithPackage, targetPackage)
+            "pipeline" -> processPipelineExample(contentWithPackage, targetPackage)
             else -> contentWithPackage
         }
     }
 
-    private fun processScriptExample(content: String, originalImports: List<String>, targetPackage: String): String {
+    private fun processScriptExample(content: String, targetPackage: String): String {
         val scriptBlock = Regex("""/\*\s*#SCRIPT_EXAMPLE\s*(.*?)\s*\*/""", RegexOption.DOT_MATCHES_ALL)
 
         // Extraer el contenido del script
         val scriptContent = scriptBlock.find(content)?.groupValues?.get(1)?.trim() ?: ""
+        val normalizedScriptContent = scriptContent
+            .replace("processManager.call(myScript", "processManager.call(::myScript")
 
         // Imports específicos para script
         val scriptImports = listOf(
@@ -218,7 +214,7 @@ class ExecutableJarBuilder(
             appendLine("fun main() {")
             appendLine("    // Use the processManager to use a default configurations and execute the script files.")
             appendLine()
-            val lines = scriptContent.lines()
+            val lines = normalizedScriptContent.lines()
 
             lines.forEachIndexed { index, line ->
                 if (index == 0) {
@@ -231,7 +227,7 @@ class ExecutableJarBuilder(
         }.trim()
     }
 
-    private fun processJobExample(content: String, originalImports: List<String>, targetPackage: String): String {
+    private fun processJobExample(content: String, targetPackage: String): String {
         val jobBlock = Regex("""/\*\s*#JOB_EXAMPLE\s*(.*?)\s*\*/""", RegexOption.DOT_MATCHES_ALL)
 
         // Extraer el contenido del job
@@ -263,12 +259,11 @@ class ExecutableJarBuilder(
         }.trim()
     }
 
-    private fun processPipelineExample(content: String, originalImports: List<String>, targetPackage: String): String {
+    private fun processPipelineExample(content: String, targetPackage: String): String {
         val pipelineBlock = Regex("""/\*\s*#PIPELINE_EXAMPLE\s*(.*?)\s*\*/""", RegexOption.DOT_MATCHES_ALL)
 
         // Extraer el contenido del pipeline
         val pipelineContent = pipelineBlock.find(content)?.groupValues?.get(1) ?: ""
-        val normalized = pipelineContent.trimIndent().trim()
 
         // Imports específicos para pipeline
         val pipelineImports = listOf(
@@ -304,6 +299,15 @@ class ExecutableJarBuilder(
     private fun findFileByName(baseDir: File, fileName: String): File? {
         if (!baseDir.exists()) return null
         return baseDir.walkTopDown().firstOrNull { it.isFile && it.name == fileName }
+    }
+
+    private fun normalizeArtifactType(type: String): String {
+        return when (type.trim().lowercase()) {
+            "scripts" -> "script"
+            "jobs" -> "job"
+            "pipelines" -> "pipeline"
+            else -> type.trim().lowercase()
+        }
     }
 
     class Builder {
