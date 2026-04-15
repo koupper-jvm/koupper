@@ -10,7 +10,7 @@
   <img alt="Kotlin-first" src="https://img.shields.io/badge/language-Kotlin-7f52ff">
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-Octopus-0f172a">
   <img alt="Architecture" src="https://img.shields.io/badge/architecture-provider--first-0284c7">
-  <a href="https://koupper.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-koupper.com-0ea5e9"></a>
+  <a href="https://koupper.com/"><img alt="Docs" src="https://img.shields.io/badge/docs-koupper.com-0ea5e9"></a>
 </p>
 
 Koupper is a Kotlin scripting runtime + CLI for teams that want fast iteration and production-grade execution in the same model.
@@ -28,10 +28,10 @@ Tech tags:
 
 ## Start here
 
-- Public docs site: https://koupper.com/docs
-- Getting started: https://koupper.com/docs/getting-started
-- Command reference: https://koupper.com/docs/commands/
-- Provider catalog: https://koupper.com/docs/providers/
+- Public docs site: https://koupper.com/
+- Getting started: https://koupper.com/getting-started.html
+- Command reference: https://koupper.com/commands/
+- Provider catalog: https://koupper.com/providers/
 
 ## Quick install
 
@@ -104,15 +104,15 @@ Expected result:
 
 Recommended reading path:
 
-1. [Getting Started](https://koupper.com/docs/getting-started)
-2. [Why Koupper vs Alternatives](https://koupper.com/docs/why-koupper-vs-alternatives)
-3. [Ideal Customer Profile](https://koupper.com/docs/ideal-customer-profile)
-4. [Use Cases](https://koupper.com/docs/use-cases)
-5. [Golden Demo: Worker Flow](https://koupper.com/docs/examples/golden-demo-worker-flow)
-6. [Command Overview](https://koupper.com/docs/commands/)
-7. [Provider Catalog](https://koupper.com/docs/providers/)
-8. [Architecture](https://koupper.com/docs/architecture/)
-9. [Production](https://koupper.com/docs/production/hardening)
+1. [Getting Started](https://koupper.com/getting-started.html)
+2. [Why Koupper vs Alternatives](https://koupper.com/why-koupper-vs-alternatives.html)
+3. [Ideal Customer Profile](https://koupper.com/ideal-customer-profile.html)
+4. [Use Cases](https://koupper.com/use-cases.html)
+5. [Golden Demo: Worker Flow](https://koupper.com/examples/golden-demo-worker-flow.html)
+6. [Command Overview](https://koupper.com/commands/)
+7. [Provider Catalog](https://koupper.com/providers/)
+8. [Architecture](https://koupper.com/architecture/)
+9. [Production](https://koupper.com/production/hardening.html)
 
 ## Contributing
 
