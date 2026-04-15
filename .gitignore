@@ -1,0 +1,9 @@
+.env
+*.local.*
+CLAUDE.md
+AGENTS.md
+ROADMAP_30_60_90.md
+ROADMAP_ENTERPRISE_2026_Q2.md
+script-execution-checklist.local.txt
+koupper/.env
+koupper-cli/.env
