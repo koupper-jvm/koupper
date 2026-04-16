@@ -98,9 +98,11 @@ Expected result:
 
 ## Documentation hierarchy
 
-- Public docs (users): `koupper-document/docs`
-- Internal docs (maintainers): `docs/`
-- Runnable references: `examples/`
+- Public docs (users): [koupper.com](https://koupper.com/) and [koupper-docs repo](https://github.com/koupper-jvm/koupper-docs)
+- Internal docs (maintainers): [`docs/`](docs/)
+- Runnable references: [`examples/`](examples/)
+
+Internal docs are maintainer/operator playbooks; product-facing documentation lives in `koupper-docs`.
 
 Recommended reading path:
 
@@ -116,14 +118,14 @@ Recommended reading path:
 
 ## Contributing
 
-- Core contribution flow and maintainer docs: `docs/MAINTAINER_GUIDE.md`
-- Documentation governance rules: `docs/DOCUMENTATION_STANDARD.md`
-- Public docs source: `koupper-document/docs`
+- Core contribution flow and maintainer docs: [`docs/MAINTAINER_GUIDE.md`](docs/MAINTAINER_GUIDE.md)
+- Documentation governance rules: [`docs/DOCUMENTATION_STANDARD.md`](docs/DOCUMENTATION_STANDARD.md)
+- Public docs source: [koupper-jvm/koupper-docs](https://github.com/koupper-jvm/koupper-docs)
 
 ## Maintainer docs in this repo
 
-- Maintainer index: `docs/MAINTAINER_GUIDE.md`
-- Documentation ownership standard: `docs/DOCUMENTATION_STANDARD.md`
+- Maintainer index: [`docs/MAINTAINER_GUIDE.md`](docs/MAINTAINER_GUIDE.md)
+- Documentation ownership standard: [`docs/DOCUMENTATION_STANDARD.md`](docs/DOCUMENTATION_STANDARD.md)
 
 ## License
 
