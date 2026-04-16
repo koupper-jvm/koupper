@@ -41,7 +41,7 @@ Add an entry to `koupper/providers/src/main/resources/providers-catalog.json`:
   "env": [
     { "name": "ENV_VAR_NAME", "required": true, "description": "What this env var controls." }
   ],
-  "docs": "https://koupper.com/docs/providers/<short-id>"
+  "docs": "https://koupper.com/providers/<short-id>.html"
 }
 ```
 
@@ -55,7 +55,7 @@ Add an entry to `koupper/providers/src/main/resources/providers-catalog.json`:
 
 ## 6 — Write public docs
 
-- [ ] Create `koupper-document/docs/providers/<short-id>.md` with:
+- [ ] Create `koupper-docs/docs/providers/<short-id>.md` with:
   - Purpose and use cases
   - Environment variables table
   - Usage example in a `.kts` script
@@ -94,6 +94,6 @@ koupper/providers/src/main/kotlin/com/koupper/providers/<name>/
 koupper/providers/src/test/kotlin/com/koupper/providers/<name>/
 └── <Name>ProviderTest.kt      # unit tests
 
-koupper-document/docs/providers/
+koupper-docs/docs/providers/
 └── <short-id>.md              # public user docs
 ```

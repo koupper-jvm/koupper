@@ -35,7 +35,7 @@ Strategic reference for enterprise hardening: `docs/KOUPPER_FRAMEWORK_MATURITY_P
 
 5. **Docs deploy automation**
    - ~~Add deploy script for `koupper.com/docs`.~~ Done (6.4.0) — `scripts/deploy/deploy-docs.kts`.
-   - Next: wire docs deploy into CI on merge to `koupper-document` main (auto-deploy on push).
+   - Next: wire docs deploy into CI on merge to `koupper-docs` main (auto-deploy on push).
 
 ## Scope guardrails
 

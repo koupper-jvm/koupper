@@ -10,7 +10,7 @@ This repository uses two documentation surfaces with different responsibilities.
 
 ## 1) Public docs site (source of truth for users)
 
-Location: `koupper-document/docs`
+Location: `koupper-docs/docs`
 
 Use this for:
 
@@ -37,7 +37,7 @@ Structure:
 
 ## Rules for new documentation
 
-- User-facing content goes to `koupper-document/docs` first.
+- User-facing content goes to `koupper-docs/docs` first.
 - Internal process/maintenance content stays in this repository `docs/`.
 - Avoid duplicating full docs in both places; keep one canonical page and link to it.
 - When a command/provider behavior changes, update docs site pages in the same PR/branch.

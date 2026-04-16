@@ -1,8 +1,6 @@
-# Agent Bootstrap
+# Session Bootstrap
 
-This is the single reception file for every new agent session.
-
-If the user says "go to reception" or "read bootstrap", this is the file to read first.
+This is the default bootstrap file for maintainers and automated sessions in this repository.
 
 ## Session defaults
 
@@ -17,7 +15,7 @@ If the user says "go to reception" or "read bootstrap", this is the file to read
   - `docs/NEXT_FEATURES_NOTES.md`
   - `scripts/release/README.md`
 - If task touches docs/release policy, also read:
-  - `koupper-document/docs/production/release-workflow.md`
+  - `koupper-docs/docs/production/release-workflow.md`
 - If task touches maintainer governance/policy, also read:
   - `docs/MAINTAINER_GUIDE.md`
 - If task touches framework maturity/enterprise hardening, also read:
@@ -66,14 +64,14 @@ Linux/macOS:
 
 | If this changes... | Update this file | Why |
 | --- | --- | --- |
-| Branching/CI/release policy | `AGENTS.md` | Global agent rules must stay accurate |
-| Startup commands or default execution path | `docs/AGENT_BOOTSTRAP.md` | New agent sessions need correct boot instructions |
+| Branching/CI/release policy | `docs/MAINTAINER_GUIDE.md` | Maintainer-facing policy and references must stay accurate |
+| Startup commands or default execution path | `docs/AGENT_BOOTSTRAP.md` | New sessions need correct bootstrap instructions |
 | Upcoming priorities/roadmap | `docs/NEXT_FEATURES_NOTES.md` | Keeps next feature wave aligned |
 | Release script flags/behavior | `scripts/release/README.md` | Prevents wrong command usage |
-| Public release process docs | `koupper-document/docs/production/release-workflow.md` | Keeps docs synced with real process |
+| Public release process docs | `koupper-docs/docs/production/release-workflow.md` | Keeps docs synced with real process |
 
 ## Practical cadence
 
 - Update `docs/NEXT_FEATURES_NOTES.md` at the end of each feature wave.
 - Update release docs/scripts in the same PR when release behavior changes.
-- Keep `AGENTS.md` stable; only edit when policy truly changes.
+- Keep `docs/MAINTAINER_GUIDE.md` stable; only edit when policy truly changes.
