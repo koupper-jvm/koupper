@@ -17,33 +17,30 @@ class ControllersAnalyzer {
         val khandlerIndex = buildKHandlerIndex(moduleDir)
         val fileIndex = buildSimpleFileIndex(moduleDir)
 
-        val controllersDirs = srcRoot
+        val controllerFiles = srcRoot
             .walkTopDown()
-            .filter { it.isDirectory && it.name == "controllers" && it.parentFile?.name == "http" }
+            .filter { it.isFile && it.extension == "kt" }
+            .filter { isControllerFile(it.readText()) }
             .toList()
 
-        if (controllersDirs.isEmpty()) return
+        if (controllerFiles.isEmpty()) return
 
         val allControllersData = mutableListOf<Map<String, Any?>>()
 
-        for (controllersDir in controllersDirs) {
-            val controllersData = controllersDir
-                .walkTopDown()
-                .filter { it.isFile && it.extension == "kt" }
-                .map { controllerFile ->
-                    val controllerContent = controllerFile.readText()
-                    val endpoints = extractControllerInfo(controllerContent, khandlerIndex, fileIndex)
-                    mapOf(
-                        "port" to port,
-                        "controller" to controllerFile.nameWithoutExtension,
-                        "path" to (extractControllerBasePath(controllerContent) ?: "/"),
-                        "endpoints" to endpoints
-                    )
-                }
-                .toList()
+        val controllersData = controllerFiles
+            .map { controllerFile ->
+                val controllerContent = controllerFile.readText()
+                val endpoints = extractControllerInfo(controllerContent, khandlerIndex, fileIndex)
+                mapOf(
+                    "port" to port,
+                    "controller" to controllerFile.nameWithoutExtension,
+                    "path" to (extractControllerBasePath(controllerContent) ?: "/"),
+                    "endpoints" to endpoints
+                )
+            }
+            .toList()
 
-            allControllersData.addAll(controllersData)
-        }
+        allControllersData.addAll(controllersData)
 
         app.getInstance(com.koupper.shared.monitoring.ExecutionMonitor::class)
             .reportPayload(outputFileName.substringBeforeLast(".json"), allControllersData)
@@ -102,8 +99,9 @@ class ControllersAnalyzer {
                 .asReversed()
                 .joinToString("\n")
 
-            val httpMethod = Regex("""@(GET|POST|PUT|DELETE)""")
-                .find(annotationsBlock)?.groupValues?.get(1) ?: "Unknown"
+            val httpMethod = Regex("""@(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)""")
+                .find(annotationsBlock)?.groupValues?.get(1)
+                ?: continue
             val path = Regex("""@Path\("([^"]+)"\)""")
                 .find(annotationsBlock)?.groupValues?.get(1) ?: "Unknown"
             val consumes = Regex("""@Consumes\("([^"]+)"\)""")
@@ -271,7 +269,11 @@ class ControllersAnalyzer {
     }
 
     private fun extractControllerBasePath(content: String): String? {
-        val regex = Regex("""@Path\("([^"]+)"\)""")
+        val regex = Regex("""@Path\("([^"]+)"\)\s*(?:@[A-Za-z_][^\n]*\s*)*class\s+""")
         return regex.find(content)?.groups?.get(1)?.value
+    }
+
+    private fun isControllerFile(content: String): Boolean {
+        return Regex("""@Path\("[^"]+"\)\s*(?:@[A-Za-z_][^\n]*\s*)*class\s+""").containsMatchIn(content)
     }
 }
