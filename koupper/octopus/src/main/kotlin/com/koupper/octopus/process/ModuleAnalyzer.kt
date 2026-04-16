@@ -176,7 +176,10 @@ class ModuleAnalyzer(private val context: String) : Process {
 
         return src.walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
-            .filter { it.parentFile?.name == "handlers" }
+            .filter {
+                val relParent = it.parentFile.relativeTo(src).path.replace('\\', '/')
+                relParent.split('/').contains("handlers")
+            }
             .toList()
     }
 
@@ -301,6 +304,25 @@ class ModuleAnalyzer(private val context: String) : Process {
                         }
                     }
                 }
+        }
+
+        if (pkgs.isEmpty()) return null
+
+        val splitPkgs = pkgs.map { it.split('.') }
+        val minLen = splitPkgs.minOf { it.size }
+
+        val prefix = mutableListOf<String>()
+        for (i in 0 until minLen) {
+            val token = splitPkgs.first()[i]
+            if (splitPkgs.all { it[i] == token }) {
+                prefix += token
+            } else {
+                break
+            }
+        }
+
+        if (prefix.size >= 2) {
+            return prefix.joinToString(".")
         }
 
         return pkgs.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
