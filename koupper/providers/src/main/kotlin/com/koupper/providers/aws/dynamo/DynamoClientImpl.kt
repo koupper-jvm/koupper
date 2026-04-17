@@ -242,9 +242,9 @@ class DynamoClientImpl private constructor(
             attributeValue.s() != null -> attributeValue.s()
             attributeValue.n() != null -> attributeValue.n().toBigDecimal()
             attributeValue.bool() != null -> attributeValue.bool()
-            attributeValue.m() != null ->
+            attributeValue.hasM() ->
                 attributeValue.m().mapValues { convertAttributeValue(it.value) }
-            attributeValue.l() != null ->
+            attributeValue.hasL() ->
                 attributeValue.l().map { convertAttributeValue(it) }
             attributeValue.nul() == true -> ""
             else -> throw IllegalArgumentException("Unsupported AttributeValue: $attributeValue")
