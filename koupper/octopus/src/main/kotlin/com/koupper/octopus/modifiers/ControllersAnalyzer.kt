@@ -274,6 +274,8 @@ class ControllersAnalyzer {
     }
 
     private fun isControllerFile(content: String): Boolean {
-        return Regex("""@Path\("[^"]+"\)\s*(?:@[A-Za-z_][^\n]*\s*)*class\s+""").containsMatchIn(content)
+        val hasClassLevelPath = Regex("""@Path\("[^"]+"\)\s*(?:@[A-Za-z_][^\n]*\s*)*class\s+""").containsMatchIn(content)
+        val hasHttpMethodAnnotations = Regex("""@(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\b""").containsMatchIn(content)
+        return hasClassLevelPath || hasHttpMethodAnnotations
     }
 }
