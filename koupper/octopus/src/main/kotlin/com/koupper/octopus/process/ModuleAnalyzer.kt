@@ -36,9 +36,7 @@ class ModuleAnalyzer(private val context: String) : Process {
         val handlersStatus = if (handlers.khandlerNames.isNotEmpty() || handlers.awsRequestHandlerNames.isNotEmpty()) "✔️" else "❌"
 
         val port = runCatching { extractServerPort(baseDir)?.toInt() }.getOrNull()
-        if (port != null) {
-            ControllersAnalyzer().analyzeControllers(baseDir, port = port)
-        }
+        ControllersAnalyzer().analyzeControllers(baseDir, port = port ?: 0)
 
         val info = buildString {
             appendLine("${ANSI_CYAN}📦 Module Setup Info:${ANSI_RESET}")
