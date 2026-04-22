@@ -35,10 +35,16 @@ Tech tags:
 
 ## Quick install
 
+Prerequisites:
+
+- Java 17 on your `PATH`
+- Kotlin compiler (`kotlinc`) on your `PATH`
+
 ```bash
 git clone https://github.com/koupper-jvm/koupper.git
 cd koupper
 kotlinc -script install.kts -- --force
+kotlinc -script install.kts -- --doctor
 koupper -v
 ```
 
@@ -48,6 +54,7 @@ Windows PowerShell:
 git clone https://github.com/koupper-jvm/koupper.git
 cd koupper
 kotlinc -script install.kts -- --force
+kotlinc -script install.kts -- --doctor
 koupper -v
 ```
 
