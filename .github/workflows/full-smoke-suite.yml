@@ -118,7 +118,12 @@ jobs:
           koupper help
           koupper provider list
           $smokeScript = Join-Path $env:RUNNER_TEMP "smoke-standalone.kts"
-          "import com.koupper.octopus.annotations.Export`n@Export val hello: (String) -> String = { name -> \"hello $name\" }" | Set-Content -Path $smokeScript -Encoding ASCII
+          @'
+          import com.koupper.octopus.annotations.Export
+
+          @Export
+          val hello: (String) -> String = { name -> "hello $name" }
+          '@ | Set-Content -Path $smokeScript -Encoding ASCII
           koupper run $smokeScript "CI"
 
       - name: Upload smoke artifacts on failure
@@ -183,7 +188,12 @@ jobs:
           koupper help
           koupper provider list
           $smokeScript = Join-Path $env:RUNNER_TEMP "smoke-standalone.kts"
-          "import com.koupper.octopus.annotations.Export`n@Export val hello: (String) -> String = { name -> \"hello $name\" }" | Set-Content -Path $smokeScript -Encoding ASCII
+          @'
+          import com.koupper.octopus.annotations.Export
+
+          @Export
+          val hello: (String) -> String = { name -> "hello $name" }
+          '@ | Set-Content -Path $smokeScript -Encoding ASCII
           koupper run $smokeScript "CI"
 
       - name: Upload smoke artifacts on failure
