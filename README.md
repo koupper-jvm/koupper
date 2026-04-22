@@ -39,6 +39,7 @@ Prerequisites:
 
 - Java 17 on your `PATH`
 - Kotlin compiler (`kotlinc`) on your `PATH`
+- Git on your `PATH` (used if CLI cache must be fetched)
 
 ```bash
 git clone https://github.com/koupper-jvm/koupper.git
@@ -58,14 +59,14 @@ kotlinc -script install.kts -- --doctor
 koupper -v
 ```
 
-This source installer expects the standard Koupper workspace layout with sibling repositories (`koupper-cli` and `koupper-infrastructure`).
+The installer bootstraps CLI/runtime dependencies automatically. If `koupper-cli` source is not found locally, it is cloned into a local cache under `~/.koupper/cache/koupper-cli`.
 
 ## 60-second quick smoke
 
 ```bash
 koupper help
-koupper run ../examples/hello-world.kts "Smoke"
 koupper provider list
+koupper provider info command-runner
 ```
 
 Expected result:
