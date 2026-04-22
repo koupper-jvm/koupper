@@ -33,18 +33,78 @@ val cliArgs: Set<String> = runCatching { args.toSet() }.getOrDefault(emptySet())
 val forceReinstall = cliArgs.contains("--force")
 val doctorOnly = cliArgs.contains("--doctor") || cliArgs.contains("--verify")
 
+fun runExternalCommand(args: List<String>, cwd: File): Pair<Int, String> {
+    val process = ProcessBuilder(args)
+        .directory(cwd)
+        .redirectErrorStream(true)
+        .start()
+
+    val output = process.inputStream.bufferedReader().readText().trim()
+    val exit = process.waitFor()
+    return exit to output
+}
+
+fun ensureCliRepoInCache(): File {
+    val home = System.getProperty("user.home")
+    val cacheRoot = File(home, ".koupper${File.separator}cache")
+    val cliCacheDir = File(cacheRoot, "koupper-cli")
+
+    if (!cacheRoot.exists()) cacheRoot.mkdirs()
+
+    if (!cliCacheDir.exists()) {
+        println("${icon("📥", "[*] ")}koupper-cli not found locally. Cloning cached source...")
+        val (cloneExit, cloneOut) = runExternalCommand(
+            listOf(
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "--branch",
+                "develop",
+                "https://github.com/koupper-jvm/koupper-cli.git",
+                cliCacheDir.absolutePath
+            ),
+            File(".")
+        )
+        if (cloneExit != 0) {
+            failInstall(
+                "Could not clone koupper-cli automatically. Install git and internet access, or place koupper-cli as ./koupper-cli or ../koupper-cli. Details: $cloneOut"
+            )
+        }
+    } else {
+        println("${icon("🔄", "[*] ")}Updating cached koupper-cli source...")
+        val (pullExit, pullOut) = runExternalCommand(
+            listOf("git", "pull", "--ff-only", "origin", "develop"),
+            cliCacheDir
+        )
+        if (pullExit != 0) {
+            println("${icon("⚠️", "[!] ")}Could not update cached koupper-cli; using local cached copy. Details: $pullOut")
+        }
+    }
+
+    return cliCacheDir
+}
+
 fun resolveCliProjectDir(): File {
+    val isWindows = System.getProperty("os.name").toLowerCase(Locale.getDefault()).contains("win")
+    val wrapper = if (isWindows) "gradlew.bat" else "gradlew"
+
     val local = File("koupper-cli")
-    if (local.exists() && local.isDirectory && File(local, if (System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")) "gradlew.bat" else "gradlew").exists()) {
+    if (local.exists() && local.isDirectory && File(local, wrapper).exists()) {
         return local
     }
 
     val sibling = File("..${File.separator}koupper-cli")
-    if (sibling.exists() && sibling.isDirectory && File(sibling, if (System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")) "gradlew.bat" else "gradlew").exists()) {
+    if (sibling.exists() && sibling.isDirectory && File(sibling, wrapper).exists()) {
         return sibling
     }
 
-    failInstall("koupper-cli project not found. Expected ./koupper-cli or ../koupper-cli.")
+    val cached = ensureCliRepoInCache()
+    if (cached.exists() && cached.isDirectory && File(cached, wrapper).exists()) {
+        return cached
+    }
+
+    failInstall("koupper-cli project not found. Expected ./koupper-cli, ../koupper-cli, or cached clone at ~/.koupper/cache/koupper-cli.")
 }
 
 val cliProjectDir = resolveCliProjectDir()
@@ -133,14 +193,14 @@ println("${icon("🐙", "[K] ")}\u001B[38;5;141mBootstrapping Koupper Monorepo E
 println("${icon("🔨", "[*] ")}Compiling absolute latest sources via Gradle...")
 
 // 1. Compile the Monorepo sub-modules locally
-val isWindows = System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")
+val isWindows = System.getProperty("os.name").toLowerCase(Locale.getDefault()).contains("win")
 val gradleCmd = if (isWindows) "gradlew.bat" else "./gradlew"
 
 if (isWindows) {
     runCatching {
         ProcessBuilder("cmd", "/c", "chcp 65001 > nul")
-            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
+            .redirectError(ProcessBuilder.Redirect.INHERIT)
             .start()
             .waitFor()
     }
@@ -149,7 +209,11 @@ if (isWindows) {
 val cliCompilation = ProcessBuilder(
     if (isWindows) "cmd" else "bash",
     if (isWindows) "/c" else "-c",
-    "cd ${cliProjectDir.path} && $gradleCmd jar -x test"
+    if (isWindows) {
+        "cd /d \"${cliProjectDir.absolutePath}\" && $gradleCmd jar -x test"
+    } else {
+        "cd \"${cliProjectDir.absolutePath}\" && $gradleCmd jar -x test"
+    }
 )
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
