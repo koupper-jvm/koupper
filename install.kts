@@ -49,14 +49,14 @@ fun resolveCliProjectDir(): File {
 
 val cliProjectDir = resolveCliProjectDir()
 
-fun resolveTemplateSourceDir(): File {
+fun resolveTemplateSourceDir(): File? {
     val local = File("templates${File.separator}model-project")
     if (local.exists() && local.isDirectory) return local
 
     val sibling = File("..${File.separator}templates${File.separator}model-project")
     if (sibling.exists() && sibling.isDirectory) return sibling
 
-    failInstall("Template source not found. Expected ./templates/model-project or ../templates/model-project.")
+    return null
 }
 
 val templateSourceDir = resolveTemplateSourceDir()
@@ -218,14 +218,14 @@ println("${icon("🧩", "[*] ")}Provisioning local module template...")
 val templateSource = templateSourceDir
 val templateTarget = modelTemplateDirectory
 
-if (templateSource.exists() && templateSource.isDirectory) {
+if (templateSource != null && templateSource.exists() && templateSource.isDirectory) {
     if (templateTarget.exists()) {
         templateTarget.deleteRecursively()
     }
     templateSource.copyRecursively(templateTarget, overwrite = true)
     println("${icon("✅", "[OK] ")}Template installed at ${templateTarget.absolutePath}")
 } else {
-    println("${icon("⚠️", "[!] ")}Template source not found at ${templateSource.absolutePath}. Skipping local template provisioning.")
+    println("${icon("⚠️", "[!] ")}Template source not found. Skipping local template provisioning.")
 }
 
 // 3.2 Provision providers catalog for CLI discovery
