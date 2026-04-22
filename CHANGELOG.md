@@ -1,7 +1,7 @@
 # Koupper Changelog
 
 All notable changes to the Koupper monorepo are documented here.
-Versioning follows the Octopus engine version (`koupper/build.gradle`).
+Versioning follows the Octopus engine version (`build.gradle`).
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---

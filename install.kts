@@ -33,6 +33,34 @@ val cliArgs: Set<String> = runCatching { args.toSet() }.getOrDefault(emptySet())
 val forceReinstall = cliArgs.contains("--force")
 val doctorOnly = cliArgs.contains("--doctor") || cliArgs.contains("--verify")
 
+fun resolveCliProjectDir(): File {
+    val local = File("koupper-cli")
+    if (local.exists() && local.isDirectory && File(local, if (System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")) "gradlew.bat" else "gradlew").exists()) {
+        return local
+    }
+
+    val sibling = File("..${File.separator}koupper-cli")
+    if (sibling.exists() && sibling.isDirectory && File(sibling, if (System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")) "gradlew.bat" else "gradlew").exists()) {
+        return sibling
+    }
+
+    failInstall("koupper-cli project not found. Expected ./koupper-cli or ../koupper-cli.")
+}
+
+val cliProjectDir = resolveCliProjectDir()
+
+fun resolveTemplateSourceDir(): File? {
+    val local = File("templates${File.separator}model-project")
+    if (local.exists() && local.isDirectory) return local
+
+    val sibling = File("..${File.separator}templates${File.separator}model-project")
+    if (sibling.exists() && sibling.isDirectory) return sibling
+
+    return null
+}
+
+val templateSourceDir = resolveTemplateSourceDir()
+
 val userPath = System.getProperty("user.home")
 val koupperHome = File("$userPath${File.separator}.koupper")
 val binDirectory = File(koupperHome, "bin")
@@ -118,7 +146,11 @@ if (isWindows) {
     }
 }
 
-val cliCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "cd koupper-cli && $gradleCmd jar -x test")
+val cliCompilation = ProcessBuilder(
+    if (isWindows) "cmd" else "bash",
+    if (isWindows) "/c" else "-c",
+    "cd ${cliProjectDir.path} && $gradleCmd jar -x test"
+)
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
     .apply {
@@ -128,7 +160,7 @@ val cliCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWind
 
 cliCompilation.waitFor()
 
-val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "cd koupper && $gradleCmd :octopus:fatJar -x test")
+val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "$gradleCmd :octopus:fatJar -x test")
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
     .apply {
@@ -161,11 +193,11 @@ arrayOf(binDirectory, libsDirectory, logsDirectory, helpersDirectory, catalogDir
 // 3. Move freshly compiled JARS
 println("${icon("📦", "[*] ")}Deploying artifacts...")
 
-val cliJarSource = File("koupper-cli/build/libs").listFiles()
+val cliJarSource = File(cliProjectDir, "build/libs").listFiles()
     ?.filter { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
     ?.maxByOrNull { it.length() }
 
-val octopusJarSource = File("koupper/octopus/build/libs").listFiles()
+val octopusJarSource = File("octopus/build/libs").listFiles()
     ?.filter { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
     ?.maxByOrNull { it.length() }
 
@@ -183,23 +215,23 @@ safeCopy(octopusJarSource!!, octopusTarget, "Octopus jar")
 // 3.1 Provision local model template (local-first scaffolding)
 println("${icon("🧩", "[*] ")}Provisioning local module template...")
 
-val templateSource = File("templates${File.separator}model-project")
+val templateSource = templateSourceDir
 val templateTarget = modelTemplateDirectory
 
-if (templateSource.exists() && templateSource.isDirectory) {
+if (templateSource != null && templateSource.exists() && templateSource.isDirectory) {
     if (templateTarget.exists()) {
         templateTarget.deleteRecursively()
     }
     templateSource.copyRecursively(templateTarget, overwrite = true)
     println("${icon("✅", "[OK] ")}Template installed at ${templateTarget.absolutePath}")
 } else {
-    println("${icon("⚠️", "[!] ")}Template source not found at ${templateSource.absolutePath}. Skipping local template provisioning.")
+    println("${icon("⚠️", "[!] ")}Template source not found. Skipping local template provisioning.")
 }
 
 // 3.2 Provision providers catalog for CLI discovery
 println("${icon("📚", "[*] ")}Provisioning providers catalog...")
 
-val providerCatalogSource = File("koupper${File.separator}providers${File.separator}src${File.separator}main${File.separator}resources${File.separator}providers-catalog.json")
+val providerCatalogSource = File("providers${File.separator}src${File.separator}main${File.separator}resources${File.separator}providers-catalog.json")
 val providerCatalogTarget = File(catalogDirectory, "providers.json")
 
 if (providerCatalogSource.exists() && providerCatalogSource.isFile) {
