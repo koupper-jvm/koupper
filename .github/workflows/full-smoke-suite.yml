@@ -19,6 +19,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout koupper-cli
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-cli
+          ref: main
+          path: koupper-cli
+
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -72,6 +79,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout koupper-cli
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-cli
+          ref: main
+          path: koupper-cli
+
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -98,7 +112,19 @@ jobs:
       - name: Run full smoke suite
         shell: pwsh
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File .\examples\full-smoke-suite.ps1 -KeepArtifacts
+          kotlinc -script install.kts -- --force
+          "$env:USERPROFILE\.koupper\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$env:USERPROFILE\.koupper\bin;$env:PATH"
+          koupper help
+          koupper provider list
+          $smokeScript = Join-Path $env:RUNNER_TEMP "smoke-standalone.kts"
+          @'
+          import com.koupper.octopus.annotations.Export
+
+          @Export
+          val hello: (String) -> String = { name -> "hello $name" }
+          '@ | Set-Content -Path $smokeScript -Encoding ASCII
+          koupper run $smokeScript "CI"
 
       - name: Upload smoke artifacts on failure
         if: failure()
@@ -106,8 +132,7 @@ jobs:
         with:
           name: smoke-artifacts-windows
           path: |
-            examples/.smoke-workspace/**
-            examples/smoke-standalone.kts
+            ${{ env.USERPROFILE }}\.koupper\logs\**
           if-no-files-found: ignore
 
   smoke-linux:
@@ -117,6 +142,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout koupper-cli
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-cli
+          ref: main
+          path: koupper-cli
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -145,12 +177,24 @@ jobs:
       - name: Ensure Gradle wrappers are executable
         shell: bash
         run: |
-          chmod +x ./koupper/gradlew ./koupper-cli/gradlew
+          chmod +x ./gradlew ./koupper-cli/gradlew
 
       - name: Run full smoke suite
         shell: pwsh
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File ./examples/full-smoke-suite.ps1 -KeepArtifacts
+          kotlinc -script install.kts -- --force
+          "$env:HOME/.koupper/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$env:HOME/.koupper/bin:$env:PATH"
+          koupper help
+          koupper provider list
+          $smokeScript = Join-Path $env:RUNNER_TEMP "smoke-standalone.kts"
+          @'
+          import com.koupper.octopus.annotations.Export
+
+          @Export
+          val hello: (String) -> String = { name -> "hello $name" }
+          '@ | Set-Content -Path $smokeScript -Encoding ASCII
+          koupper run $smokeScript "CI"
 
       - name: Upload smoke artifacts on failure
         if: failure()
@@ -158,6 +202,5 @@ jobs:
         with:
           name: smoke-artifacts-linux
           path: |
-            examples/.smoke-workspace/**
-            examples/smoke-standalone.kts
+            ~/.koupper/logs/**
           if-no-files-found: ignore

@@ -1,9 +1,0 @@
-{
-  "mode": "sync-with-rollback",
-  "localDir": "./dist",
-  "remoteDir": "/var/www/my-app",
-  "verifyCommands": [
-    "test -f /var/www/my-app/index.html",
-    "ls -la /var/www/my-app"
-  ]
-}
