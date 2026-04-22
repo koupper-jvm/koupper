@@ -9,22 +9,27 @@ import javax.crypto.spec.SecretKeySpec
 
 class AESGCM128 : Crypt0, Setup() {
     private var secret: String = env("SHARED_SECRET")
-    var IV: ByteArray = byteArrayOf()
-    var authData: ByteArray = byteArrayOf()
+    lateinit var IV: ByteArray
+    lateinit var authData: ByteArray
+
+    private fun newIvBytes(): ByteArray {
+        val ivBytes = ByteArray(12)
+        SecureRandom().nextBytes(ivBytes)
+        return ivBytes
+    }
 
     override fun encrypt(rawText: ByteArray, authData: ByteArray): ByteArray {
-        val IV = ByteArray(16)
-
-        val secureRandom = SecureRandom()
-        secureRandom.nextBytes(IV)
+        val ivBytes = newIvBytes()
 
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
 
         cipher.init(
-            Cipher.ENCRYPT_MODE, SecretKeySpec(this.secret.toByteArray(), "AES"), GCMParameterSpec(128, IV)
+            Cipher.ENCRYPT_MODE,
+            SecretKeySpec(this.secret.toByteArray(), "AES"),
+            GCMParameterSpec(128, ivBytes)
         )
 
-        this.IV = IV
+        this.IV = ivBytes
         this.authData = authData
 
         return cipher.doFinal(rawText.plus(authData))
