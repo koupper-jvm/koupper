@@ -36,7 +36,9 @@ class ModuleAnalyzer(private val context: String) : Process {
         val handlersStatus = if (handlers.khandlerNames.isNotEmpty() || handlers.awsRequestHandlerNames.isNotEmpty()) "✔️" else "❌"
 
         val port = runCatching { extractServerPort(baseDir)?.toInt() }.getOrNull()
-        ControllersAnalyzer().analyzeControllers(baseDir, port = port ?: 0)
+        if (port != null) {
+            ControllersAnalyzer().analyzeControllers(baseDir, port = port)
+        }
 
         val info = buildString {
             appendLine("${ANSI_CYAN}📦 Module Setup Info:${ANSI_RESET}")
@@ -174,10 +176,7 @@ class ModuleAnalyzer(private val context: String) : Process {
 
         return src.walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
-            .filter {
-                val relParent = it.parentFile.relativeTo(src).path.replace('\\', '/')
-                relParent.split('/').contains("handlers")
-            }
+            .filter { it.parentFile?.name == "handlers" }
             .toList()
     }
 
@@ -302,25 +301,6 @@ class ModuleAnalyzer(private val context: String) : Process {
                         }
                     }
                 }
-        }
-
-        if (pkgs.isEmpty()) return null
-
-        val splitPkgs = pkgs.map { it.split('.') }
-        val minLen = splitPkgs.minOf { it.size }
-
-        val prefix = mutableListOf<String>()
-        for (i in 0 until minLen) {
-            val token = splitPkgs.first()[i]
-            if (splitPkgs.all { it[i] == token }) {
-                prefix += token
-            } else {
-                break
-            }
-        }
-
-        if (prefix.size >= 2) {
-            return prefix.joinToString(".")
         }
 
         return pkgs.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key

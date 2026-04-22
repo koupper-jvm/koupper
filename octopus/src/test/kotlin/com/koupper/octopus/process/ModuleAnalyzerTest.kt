@@ -109,65 +109,6 @@ class ModuleAnalyzerTest {
         }
     }
 
-    @Test
-    fun `discoverHandlers detects handlers nested under handlers subdirectories`() {
-        val moduleDir = Files.createTempDirectory("module-analyzer-test").toFile()
-        try {
-            writeKotlinFile(
-                moduleDir,
-                "src/main/kotlin/com/example/handlers/aws/SendEmailHandler.kt",
-                """
-                package com.example.handlers.aws
-
-                class SendEmailHandler : com.amazonaws.services.lambda.runtime.RequestHandler<Any, Any> {
-                    override fun handleRequest(input: Any, context: com.amazonaws.services.lambda.runtime.Context): Any = input
-                }
-                """.trimIndent()
-            )
-
-            val analyzer = ModuleAnalyzer(context = moduleDir.path)
-            val discovery = invokePrivate(analyzer, "discoverHandlers", moduleDir)
-
-            assertEquals(setOf("SendEmailHandler"), readSet(discovery, "awsRequestHandlerNames"))
-        } finally {
-            moduleDir.deleteRecursively()
-        }
-    }
-
-    @Test
-    fun `detectMostCommonSourcePackage infers root package prefix when group is absent`() {
-        val moduleDir = Files.createTempDirectory("module-analyzer-test").toFile()
-        try {
-            writeKotlinFile(
-                moduleDir,
-                "src/main/kotlin/com/quizztea/auth/http/controllers/QuizzesController.kt",
-                """
-                package com.quizztea.auth.http.controllers
-
-                class QuizzesController
-                """.trimIndent()
-            )
-            writeKotlinFile(
-                moduleDir,
-                "src/main/kotlin/com/quizztea/auth/extensions/scripts/tokenBased/TokenScript.kt",
-                """
-                package com.quizztea.auth.extensions.scripts.tokenBased
-
-                class TokenScript
-                """.trimIndent()
-            )
-
-            val analyzer = ModuleAnalyzer(context = moduleDir.path)
-            val method = analyzer.javaClass.getDeclaredMethod("detectMostCommonSourcePackage", File::class.java)
-            method.isAccessible = true
-            val detected = method.invoke(analyzer, moduleDir) as String?
-
-            assertEquals("com.quizztea.auth", detected)
-        } finally {
-            moduleDir.deleteRecursively()
-        }
-    }
-
     private fun writeKotlinFile(baseDir: File, relativePath: String, content: String) {
         val file = File(baseDir, relativePath)
         file.parentFile.mkdirs()

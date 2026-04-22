@@ -39,21 +39,7 @@ interface DynamoClient {
         indexName: String? = null,
         filterExpression: String? = null
     ): List<Map<String, Any>>
-    fun queryItemsPaginatedChunk(
-        tableName: String,
-        keyConditionExpression: String,
-        expressionAttributeValues: Map<String, Any>,
-        indexName: String? = null,
-        filterExpression: String? = null,
-        limit: Int = 20,
-        cursorToken: String? = null
-    ): Pair<List<Map<String, Any>>, String?>
     fun scanItems(tableName: String): List<Map<String, Any>> // Nuevo método para escaneo
-    fun scanItemsPaginatedChunk(
-        tableName: String,
-        limit: Int = 50,
-        cursorToken: String? = null
-    ): Pair<List<Map<String, Any>>, String?>
     fun getAllItemsPaginated(tableName: String): List<Map<String, Any>>
     fun getItemCount(
         tableName: String?,
