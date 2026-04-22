@@ -38,7 +38,7 @@ Tech tags:
 ```bash
 git clone https://github.com/koupper-jvm/koupper.git
 cd koupper
-./scripts/setup/install.sh
+kotlinc -script install.kts -- --force
 koupper -v
 ```
 
@@ -47,24 +47,17 @@ Windows PowerShell:
 ```powershell
 git clone https://github.com/koupper-jvm/koupper.git
 cd koupper
-./scripts/setup/install.ps1
+kotlinc -script install.kts -- --force
 koupper -v
 ```
 
-The setup scripts validate prerequisites first (Java 17+, `kotlinc`, Git) and print exact download links when something is missing.
-
-Optional automatic dependency mode:
-
-- macOS/Linux: `./scripts/setup/install.sh --auto-install-deps`
-- Windows: `./scripts/setup/install.ps1 -AutoInstallDeps`
-
-In auto mode, the installer validates current versions first and asks before updating incompatible prerequisites.
+This source installer expects the standard Koupper workspace layout with sibling repositories (`koupper-cli` and `koupper-infrastructure`).
 
 ## 60-second quick smoke
 
 ```bash
 koupper help
-koupper run examples/hello-world.kts "Smoke"
+koupper run ../examples/hello-world.kts "Smoke"
 koupper provider list
 ```
 
@@ -99,8 +92,8 @@ Expected result:
 ## Documentation hierarchy
 
 - Public docs (users): [koupper.com](https://koupper.com/) and [koupper-docs repo](https://github.com/koupper-jvm/koupper-docs)
-- Internal docs (maintainers): [`docs/`](docs/)
-- Runnable references: [`examples/`](examples/)
+- Internal docs (maintainers): [koupper-infrastructure/docs](https://github.com/koupper-jvm/koupper-infrastructure/tree/develop/docs)
+- Runnable references: [koupper-infrastructure/examples](https://github.com/koupper-jvm/koupper-infrastructure/tree/develop/examples)
 
 Internal docs are maintainer/operator playbooks; product-facing documentation lives in `koupper-docs`.
 
@@ -118,14 +111,14 @@ Recommended reading path:
 
 ## Contributing
 
-- Core contribution flow and maintainer docs: [`docs/MAINTAINER_GUIDE.md`](docs/MAINTAINER_GUIDE.md)
-- Documentation governance rules: [`docs/DOCUMENTATION_STANDARD.md`](docs/DOCUMENTATION_STANDARD.md)
+- Core contribution flow and maintainer docs: [koupper-infrastructure/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/MAINTAINER_GUIDE.md)
+- Documentation governance rules: [koupper-infrastructure/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/DOCUMENTATION_STANDARD.md)
 - Public docs source: [koupper-jvm/koupper-docs](https://github.com/koupper-jvm/koupper-docs)
 
 ## Maintainer docs in this repo
 
-- Maintainer index: [`docs/MAINTAINER_GUIDE.md`](docs/MAINTAINER_GUIDE.md)
-- Documentation ownership standard: [`docs/DOCUMENTATION_STANDARD.md`](docs/DOCUMENTATION_STANDARD.md)
+- Maintainer index: [koupper-infrastructure/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/MAINTAINER_GUIDE.md)
+- Documentation ownership standard: [koupper-infrastructure/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/DOCUMENTATION_STANDARD.md)
 
 ## License
 
