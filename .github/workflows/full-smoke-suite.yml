@@ -19,6 +19,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout koupper-infrastructure
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-infrastructure
+          ref: develop
+          path: infra
+
+      - name: Checkout koupper-cli
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-cli
+          ref: main
+          path: koupper-cli
+
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -72,6 +86,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout koupper-infrastructure
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-infrastructure
+          ref: develop
+          path: infra
+
+      - name: Checkout koupper-cli
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-cli
+          ref: main
+          path: koupper-cli
+
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -98,7 +126,7 @@ jobs:
       - name: Run full smoke suite
         shell: pwsh
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File .\examples\full-smoke-suite.ps1 -KeepArtifacts
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\infra\examples\full-smoke-suite.ps1 -KeepArtifacts
 
       - name: Upload smoke artifacts on failure
         if: failure()
@@ -108,6 +136,8 @@ jobs:
           path: |
             examples/.smoke-workspace/**
             examples/smoke-standalone.kts
+            infra/examples/.smoke-workspace/**
+            infra/examples/smoke-standalone.kts
           if-no-files-found: ignore
 
   smoke-linux:
@@ -117,6 +147,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout koupper-infrastructure
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-infrastructure
+          ref: develop
+          path: infra
+
+      - name: Checkout koupper-cli
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-cli
+          ref: main
+          path: koupper-cli
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -145,12 +189,12 @@ jobs:
       - name: Ensure Gradle wrappers are executable
         shell: bash
         run: |
-          chmod +x ./koupper/gradlew ./koupper-cli/gradlew
+          chmod +x ./gradlew ./koupper-cli/gradlew
 
       - name: Run full smoke suite
         shell: pwsh
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File ./examples/full-smoke-suite.ps1 -KeepArtifacts
+          pwsh -NoProfile -ExecutionPolicy Bypass -File ./infra/examples/full-smoke-suite.ps1 -KeepArtifacts
 
       - name: Upload smoke artifacts on failure
         if: failure()
@@ -160,4 +204,6 @@ jobs:
           path: |
             examples/.smoke-workspace/**
             examples/smoke-standalone.kts
+            infra/examples/.smoke-workspace/**
+            infra/examples/smoke-standalone.kts
           if-no-files-found: ignore
