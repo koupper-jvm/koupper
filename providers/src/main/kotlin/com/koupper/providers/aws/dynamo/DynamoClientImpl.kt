@@ -8,7 +8,6 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.*
 import java.net.URI
-import java.util.Base64
 
 class DynamoClientImpl private constructor(
     private val explicitCredsProvider: AwsCredentialsProvider?
@@ -243,11 +242,11 @@ class DynamoClientImpl private constructor(
             attributeValue.s() != null -> attributeValue.s()
             attributeValue.n() != null -> attributeValue.n().toBigDecimal()
             attributeValue.bool() != null -> attributeValue.bool()
-            attributeValue.hasM() ->
+            attributeValue.m() != null && attributeValue.m().isNotEmpty() ->
                 attributeValue.m().mapValues { convertAttributeValue(it.value) }
-            attributeValue.hasL() ->
+            attributeValue.l() != null && attributeValue.l().isNotEmpty() ->
                 attributeValue.l().map { convertAttributeValue(it) }
-            attributeValue.nul() == true -> ""
+            attributeValue.nul() -> ""
             else -> throw IllegalArgumentException("Unsupported AttributeValue: $attributeValue")
         }
 
@@ -339,36 +338,6 @@ class DynamoClientImpl private constructor(
         }
     }
 
-    override fun queryItemsPaginatedChunk(
-        tableName: String,
-        keyConditionExpression: String,
-        expressionAttributeValues: Map<String, Any>,
-        indexName: String?,
-        filterExpression: String?,
-        limit: Int,
-        cursorToken: String?
-    ): Pair<List<Map<String, Any>>, String?> {
-        val attrValues = expressionAttributeValues.mapValues { (_, v) -> processValue(v) }
-
-        val requestBuilder = QueryRequest.builder()
-            .tableName(tableName)
-            .keyConditionExpression(keyConditionExpression)
-            .expressionAttributeValues(attrValues)
-            .limit(limit)
-
-        if (!indexName.isNullOrBlank()) requestBuilder.indexName(indexName)
-        if (!filterExpression.isNullOrBlank()) requestBuilder.filterExpression(filterExpression)
-
-        decodeCursorFromBase64(cursorToken)?.let { requestBuilder.exclusiveStartKey(it) }
-
-        val result = dynamoDbClient.query(requestBuilder.build())
-        val parsedItems = result.items().map { item ->
-            item.mapValues { convertAttributeValue(it.value) }
-        }
-
-        return parsedItems to encodeCursorToBase64(result.lastEvaluatedKey())
-    }
-
     override fun scanItems(tableName: String): List<Map<String, Any>> {
         val items = mutableListOf<Map<String, Any>>()
         var lastEvaluatedKey: Map<String, AttributeValue>? = null
@@ -386,41 +355,6 @@ class DynamoClientImpl private constructor(
         } while (lastEvaluatedKey != null && lastEvaluatedKey.isNotEmpty())
 
         return items
-    }
-
-    override fun scanItemsPaginatedChunk(
-        tableName: String,
-        limit: Int,
-        cursorToken: String?
-    ): Pair<List<Map<String, Any>>, String?> {
-        val requestBuilder = ScanRequest.builder()
-            .tableName(tableName)
-            .limit(limit)
-
-        decodeCursorFromBase64(cursorToken)?.let { requestBuilder.exclusiveStartKey(it) }
-
-        val result = dynamoDbClient.scan(requestBuilder.build())
-        val parsedItems = result.items().map { item ->
-            item.mapValues { convertAttributeValue(it.value) }
-        }
-
-        return parsedItems to encodeCursorToBase64(result.lastEvaluatedKey())
-    }
-
-    fun encodeCursorToBase64(cursor: Map<String, AttributeValue>?): String? {
-        if (cursor.isNullOrEmpty()) return null
-
-        val payload = cursor.mapValues { convertAttributeValue(it.value) }
-        val json = JSONFileHandlerImpl<Map<String, Any?>>().toJsonString(payload)
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray(Charsets.UTF_8))
-    }
-
-    fun decodeCursorFromBase64(base64: String?): Map<String, AttributeValue>? {
-        if (base64.isNullOrBlank()) return null
-
-        val decoded = String(Base64.getUrlDecoder().decode(base64), Charsets.UTF_8)
-        val map = JSONFileHandlerImpl<Map<String, Any?>>().read(decoded).toType<Map<String, Any?>>()
-        return map.mapValues { (_, value) -> value?.let(::processValue) ?: AttributeValue.builder().nul(true).build() }
     }
 
     override fun getAllItemsPaginated(tableName: String): List<Map<String, Any>> {

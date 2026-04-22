@@ -1,68 +1,121 @@
-# Koupper Changelog
+# Changelog
+All notable changes to this project will be documented in this file.
 
-All notable changes to the Koupper monorepo are documented here.
-Versioning follows the Octopus engine version (`build.gradle`).
-Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
-
----
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),  
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
----
-
-## [6.4.0] - 2026-04-10
-
 ### Added
-- `koupper infra init|validate|plan|apply|drift|output` — Terraform-backed infrastructure lifecycle suite with retry/timeout/backoff controls and drift spec v1 evaluation.
-- `koupper reconcile run` — reconcile command with stage policies and stable JSON output contracts.
-- AWS deploy hardening: Lambda waiter support, timeout/retry/backoff per action, frontend backup modes (`full|incremental|disabled`), structured per-action result metadata, `preflight`, `smokeTestApis`, and `callerIdentity` operations.
-- `docs/CONTRACT_VERSIONING_POLICY.md` — governs additive/behavior/breaking change taxonomy, deprecation lifecycle, and migration note format.
-- `docs/PROVIDER_AUTHORING_CHECKLIST.md` — four-surface checklist (register + catalog + docs + tests) for every new service provider.
-- `docs/migrations/` — directory for per-change migration notes on behavior changes.
-- `docs/KOUPPER_FRAMEWORK_MATURITY_PLAYBOOK.md` — strategic enterprise hardening execution plan.
-- `SecretsClient.delete(key)` and `SecretsClient.list()` — completes the secrets contract.
-- `ObservabilityExecutionMonitor` — wires runtime script execution lifecycle (trace, metric, failure event) to `ObservabilityProvider` via the existing `CompositeExecutionMonitor` chain.
-- `CLAUDE.md` — Claude Code guidance file for AI-assisted development sessions.
+- Added framework-level IaC execution contract with stable stage output (`ok`, `stage`, `exitCode`, `durationMs`, `warnings`, `errors`, `artifacts`, `nextAction`).
+- Added Terraform lifecycle methods to IaC provider (`init`, `validate`, `plan`, `apply`, `drift`, `output`) with retries/timeouts.
+- Added drift-spec v1 evaluator with support for `required_only` and `exact_match` checks across Dynamo, API, Lambda, SQS, and workers.
+- Added AWS deploy action envelope metadata for stage-level outcomes (`ok`, `action`, `exitCode`, `durationMs`, `attempts`, `warnings`, `errors`, `nextAction`).
+
+### Changed
+- Module scaffolding bootstrapping now normalizes artifact type aliases (`scripts/jobs/pipelines`) before generating starter execution flow.
+- Local template source resolution now prioritizes versioned `templates/model-project` paths ahead of legacy `model-project` fallback paths.
+- Hardened `AwsCliDeployProvider` with configurable timeout/retry/backoff controls, Lambda update waiters, and static-site backup strategy modes (`full`, `incremental`, `disabled`).
 
 ### Fixed
-- `KubectlK8sProvider` timeout now returns `K8sResult(exitCode=124, timedOut=true)` instead of throwing `IllegalStateException`. Launch failures return `exitCode=127`. Migration note in `docs/migrations/`.
-- `MCPServerProvider` — replaced `com.sun.net.httpserver` (internal JDK API) with `ServerSocket` + `CachedThreadPool` using only `java.net` standard library.
-
-### Release alignment
-- `octopus 6.4.0` / `koupper-cli 4.7.1`
+- Local template extraction now normalizes single-root zip archives so scaffold files land at the expected module root.
+- Script module bootstrapping now uses property references (`::myScript`) in `processManager.call(...)` to match `ScriptExecutor` API expectations.
+- Script argument type resolution now infers script host class names when explicit metadata is missing, reducing runtime `argument type mismatch` for inline script models.
+- Script argument type resolution now handles fully-qualified inline model names by falling back to script-local nested class lookup.
+- Job/script argument binding now prefers parameter types extracted from source signatures when runtime metadata contains fully-qualified aliases.
 
 ---
 
 ## [6.3.1] - 2026-03-28
 
-### Added
-- `koupper run --serve` for long-running script sessions with attached CLI output and daemon-side cancellation via `Ctrl+C`.
-- `koupper provider list` and `koupper provider info <name>` — provider discoverability from installed catalog.
-- `process-supervisor` provider for detached local long-running process management with persisted metadata and per-process logs.
-- GitHub provider (`GitHubServiceProvider`) with `GitHubClient` operations: issues, pull requests, workflow dispatch/runs, and check-runs.
-- Terminal runtime demo and interactive prompt visibility fix for PowerShell.
-- Setup helpers (`scripts/setup/install.sh`, `scripts/setup/install.ps1`) with optional `--auto-install-deps` mode.
-- `--force` reinstall and `--doctor` verification mode in installer.
-- `--force` and `--purge` flags in uninstaller.
-- Installer provisions providers catalog at `~/.koupper/catalog/providers.json`.
-- `install-uninstall-e2e-windows` heavy CI gate added to `full-smoke-suite.yml`.
-- `PR Fast Checks` and `Provider Consistency` workflows for fast CI on `develop` PRs.
-- Remote deploy token authentication and payload checksum verification.
-- Deploy payload size limits with explicit rejection for oversized payloads.
+### Changed
+- Hardened DEPLOY execution by requiring daemon token-backed auth for remote deploy flows.
+- Added payload integrity validation using SHA-256 checksum correlation.
+- Added configurable max deploy payload guardrail (`KOUPPER_OCTOPUS_DEPLOY_MAX_BYTES`, default `262144`).
 
-### Release alignment
-- `octopus 6.3.1` / `koupper-cli 4.7.1`
+### Added
+- Extended socket integration coverage for DEPLOY auth, checksum mismatch, and payload size rejection scenarios.
+
+## [6.2.0] - 2026-03-28
+
+### Added
+- Socket observability and protocol coverage improvements for request/response handling and integration tests.
+- Safer parser and socket behavior validation to keep CLI/daemon communication stable under mixed payloads.
+
+### Changed
+- Octopus protocol parsing now relies on Jackson-based request decoding in key paths.
+- Runtime/daemon test suites were stabilized for environment-dependent scenarios.
+
+### Fixed
+- Stdout/session routing race conditions in Octopus socket execution flow.
+- Socket security defaults were hardened (loopback-first, tighter run-from-url handling).
+- Multiple unchecked-cast and parser edge-case regressions found during protocol hardening.
+
+## [6.0.0] - 2025-10-15
+
+### Added
+- **Java 17 support**: full compatibility with JDK 17 for all modules.
+- **Windows batch utilities**: added `koupper.bat` and `start-octopus.bat` for easier CLI execution on Windows environments.
+- **New service providers**:
+  - Added `AIProvider` to support requests to OpenAI and other AI APIs.
+  - Expanded provider layer for dynamic integrations.
+- **JobListener support**: a JobEvent script can now be used as a callback when a job runs.
+- **jobsListenerResolvers** map introduced for handling JobListener scripts.
+- Added new properties to `KouTask`.
+- Added new environment (`env`) methods in the OS layer.
+- Added new utilities in `ScriptUtilities`.
+- Implemented logging with `@Logger` annotation.
+- Added a dedicated **logging module** to the Koupper Gradle configuration.
+- Implemented `LoggerHolder` to provide a shared `LOGGER` instance across modules.
+- Added default `LogSpec` configuration for Octopus.
+- Added JSON helper: `JSONFileHandler.toType()` in `JsonShortcuts.kt`.
+- Introduced `ScriptLogger` for scoped log execution in scripts.
+- Added support for passing parameters to scripts and executing inline script sentences.
+
+### Changed
+- **Core architecture upgrade for jobs**:
+  - Jobs configuration can now be defined per function or at the project level.
+  - `forEachPending` now returns a list of `JobResult` objects.
+  - `JobLister.list` now returns a list of `Any` objects.
+- **Scripting engine replaced**:
+  - Migrated from the previous `Jsr223ScriptingHost` to **`BasicJvmScriptingHost`** for better performance and native Kotlin handling.
+- Updated validation logic in `ModuleAnalyzer` to better identify HTTP configuration files.
+- Renamed `EXTENSIONS_FOLDER_NAME` property used for locating scripts.
+- `Octopus.run(...)` now receives the script path as a parameter.
+- Relocated `LoggerCore` into a dedicated logging module.
+- Updated the default destination for the annotation resolver to `console`.
+- `ListenersRegistry`: worker threads now inherit the parent `Thread.contextClassLoader` (prevents losing classpath/loggers on replay).
+- `JobRunner.runCompiled` now returns the function **result** and uses `trySetAccessible()` when needed.
+- `FileJobDriver` now logs via `LoggerHolder.LOGGER` instead of `println`.
+- Set `file` as default work driver for JobListener setup.
+- SQS configuration now falls back to IAM credentials if environment variables are not set.
+
+### Fixed
+- Script logs during replay now respect the destination configured by `@Logger` (no longer dumped into `Octopus.Dispatcher`).
+- Fixed `ClassCastException` caused by `StringBuilder` return in `JobsListenerSetup.run` (now returns `String`).
+- Fixed `NullPointerException`/`ClassCastException` when reading `@JobsListener(debug = ...)` and `time`: added coercion for `Boolean`/`String`/`Number`.
+
+### Improved
+- General cleanup of unused or redundant code across modules.
+- Implemented resolvers to handle scripts via annotation.
+- Changed `run` method to use `SignatureDispatcher` instead of `annotationResolvers`.
+- Returned response from executed scripts now validates `Unit` as a type instead of an object.
+- Improved `Logger` annotation handling: destination now supports string patterns for file names.
+- Changed annotation processing flow: validation is now handled independently per annotation.
+- Improved internal `run` method implementation for Octopus.
+- Enhanced logging system based on configured properties or annotations.
+
+### Notes
+- When parsing annotation text, compiler defaults don’t apply automatically; safe coercion was added for `debug` and `time`.
+- If your `captureLogs` returns `(logs, result)`, adjust destructuring accordingly.
 
 ---
 
-## [6.0.0] - 2026-03-26
-
+## [5.3.1] - 2025-08-28
 ### Added
-- Monorepo migration: consolidated `koupper`, `koupper-cli`, and `.koupper` template into a single repository for version parity.
-- Advanced JSON mapping for CLI socket dispatcher — raw JSON string injection with deep PowerShell quote cleanup and permissive Jackson deserialization into nested Kotlin POJOs.
-- Event-driven background worker logging — deprecated untraceable `println` usage across async tasks; injected `GlobalLogger` lifecycle tracking with rolling log files.
-- Socket exception bubbling — fatal Jackson/mapper errors now flush upstream via `<ERROR::>` marker instead of failing silently.
-- UTF-8 byte preservation across TCP socket streams — emoji and multi-byte characters survive the CLI rendering pipeline cross-OS.
-- Release governance: semver policy, stable tagging convention (`octopus-v*`, `cli-v*`), and independent artifact versioning.
+- Support for jobs within Koupper.
+- Validation schemas.
+- Common rules for modules.
 
----
+### Improved
+- Overall code quality and structure.
