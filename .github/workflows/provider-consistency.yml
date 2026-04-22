@@ -18,6 +18,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout koupper-cli
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-cli
+          ref: develop
+          path: koupper-cli
+
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -29,13 +36,13 @@ jobs:
 
       - name: Ensure Gradle wrapper is executable
         shell: bash
-        run: chmod +x ./koupper/gradlew
+        run: chmod +x ./gradlew
 
       - name: Run provider consistency tests
         shell: bash
         run: |
           set -euo pipefail
-          (cd koupper && ./gradlew :providers:test --tests "com.koupper.providers.ProviderCatalogConsistencyTest" --tests "com.koupper.providers.command.CommandRunnerServiceProviderTest")
+          ./gradlew :providers:test --tests "com.koupper.providers.ProviderCatalogConsistencyTest" --tests "com.koupper.providers.command.CommandRunnerServiceProviderTest"
 
   providers-cli:
     name: Providers CLI consistency
@@ -45,6 +52,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout koupper-cli
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-cli
+          ref: develop
+          path: koupper-cli
 
       - name: Setup Java 17
         uses: actions/setup-java@v4

@@ -17,6 +17,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout koupper-cli
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-cli
+          ref: develop
+          path: koupper-cli
+
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -29,11 +36,11 @@ jobs:
       - name: Ensure Gradle wrappers are executable
         shell: bash
         run: |
-          chmod +x ./koupper/gradlew ./koupper-cli/gradlew
+          chmod +x ./gradlew ./koupper-cli/gradlew
 
       - name: Build fast checks
         shell: bash
         run: |
           set -euo pipefail
-          (cd koupper && ./gradlew :octopus:compileKotlin)
+          ./gradlew :octopus:compileKotlin
           (cd koupper-cli && ./gradlew compileKotlin)
