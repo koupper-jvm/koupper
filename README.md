@@ -33,33 +33,39 @@ Tech tags:
 - Command reference: https://koupper.com/commands/
 - Provider catalog: https://koupper.com/providers/
 
-## Quick install
+## Quick install (standalone, no repo clone)
 
 Prerequisites:
 
 - Java 17 on your `PATH`
 - Kotlin compiler (`kotlinc`) on your `PATH`
-- Git on your `PATH` (used if CLI cache must be fetched)
 
 ```bash
-git clone https://github.com/koupper-jvm/koupper.git
-cd koupper
-kotlinc -script install.kts -- --force
-kotlinc -script install.kts -- --doctor
+curl -L -o install-standalone.kts https://github.com/koupper-jvm/koupper/releases/latest/download/install-standalone.kts
+kotlinc -script install-standalone.kts -- --force
+kotlinc -script install-standalone.kts -- --doctor
 koupper -v
 ```
 
 Windows PowerShell:
 
 ```powershell
+Invoke-WebRequest -Uri "https://github.com/koupper-jvm/koupper/releases/latest/download/install-standalone.kts" -OutFile "install-standalone.kts"
+kotlinc -script .\install-standalone.kts -- --force
+kotlinc -script .\install-standalone.kts -- --doctor
+koupper -v
+```
+
+The standalone installer downloads signed release assets (`koupper-cli.jar`, `octopus.jar`, `model-project.zip`, `providers.json`) and verifies them with `SHA256SUMS`.
+
+## Source install (contributors)
+
+```bash
 git clone https://github.com/koupper-jvm/koupper.git
 cd koupper
 kotlinc -script install.kts -- --force
 kotlinc -script install.kts -- --doctor
-koupper -v
 ```
-
-The installer bootstraps CLI/runtime dependencies automatically. If `koupper-cli` source is not found locally, it is cloned into a local cache under `~/.koupper/cache/koupper-cli`.
 
 ## 60-second quick smoke
 
