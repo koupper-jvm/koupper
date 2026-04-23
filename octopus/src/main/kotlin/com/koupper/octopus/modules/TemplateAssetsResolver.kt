@@ -32,8 +32,14 @@ fun prepareTemplateProject(context: String, projectName: String, fileHandler: Fi
         }
 
         is TemplateProjectSource.ZipArchive -> {
-            val extracted = fileHandler.unzipFile(source.pathOrUrl, projectName)
-            normalizeExtractedProjectRoot(extracted)
+            val extracted = fileHandler.unzipFile(source.pathOrUrl, "${projectName}__template_source")
+            val normalized = normalizeExtractedProjectRoot(extracted)
+            val templateDir = resolveModelTemplateDirectory(normalized)
+                ?: throw IllegalStateException("Could not locate templates/model-project in downloaded source.")
+
+            copyTemplateDirectory(templateDir, targetDir)
+            extracted.deleteRecursively()
+            targetDir
         }
     }
 }
@@ -61,10 +67,14 @@ private fun resolveTemplateProjectSource(context: String): TemplateProjectSource
         return explicitPath.asTemplateSourceOrThrow("MODEL_BACK_PROJECT_PATH")
     }
 
+    val home = System.getProperty("user.home")
+    val cachedInfraTemplate = File(home, ".koupper/cache/koupper-infrastructure/templates/model-project")
+
     val localCandidates = listOf(
         File(context, "templates/model-project"),
         File(System.getProperty("user.dir"), "templates/model-project"),
         File(System.getProperty("user.home"), ".koupper/templates/model-project"),
+        cachedInfraTemplate,
         File(context, "templates/model-project.zip"),
         File(System.getProperty("user.dir"), "templates/model-project.zip"),
         File(System.getProperty("user.home"), ".koupper/templates/model-project.zip")
@@ -78,14 +88,23 @@ private fun resolveTemplateProjectSource(context: String): TemplateProjectSource
         }
     }
 
+    tryResolveTemplateFromInfraCache(context)?.let { return TemplateProjectSource.LocalDirectory(it) }
+
     val modelUrl = env("MODEL_BACK_PROJECT_URL", context, required = false, allowEmpty = true, default = "").trim()
     if (modelUrl.isNotBlank()) {
         return modelUrl.asTemplateSourceOrThrow("MODEL_BACK_PROJECT_URL")
     }
 
-    throw IllegalStateException(
-        "Could not resolve model project source. Set MODEL_BACK_PROJECT_PATH, provide templates/model-project locally, or configure MODEL_BACK_PROJECT_URL."
+    return TemplateProjectSource.ZipArchive(
+        "https://codeload.github.com/koupper-jvm/koupper-infrastructure/zip/refs/heads/develop"
     )
+}
+
+private fun tryResolveTemplateFromInfraCache(context: String): File? {
+    val home = System.getProperty("user.home")
+    val infraCacheDir = File(home, ".koupper/cache/koupper-infrastructure")
+    val templateDir = File(infraCacheDir, "templates/model-project")
+    return templateDir.takeIf { it.exists() && it.isDirectory }
 }
 
 private fun resolveProcessManagerSource(context: String): ProcessManagerSource {
@@ -209,4 +228,22 @@ private fun normalizeExtractedProjectRoot(targetDir: File): File {
 
     nestedRoot.deleteRecursively()
     return targetDir
+}
+
+private fun resolveModelTemplateDirectory(root: File): File? {
+    if (File(root, "settings.gradle").exists()) {
+        return root
+    }
+
+    val direct = File(root, "templates/model-project")
+    if (direct.exists() && direct.isDirectory && File(direct, "settings.gradle").exists()) {
+        return direct
+    }
+
+    return root.walkTopDown().firstOrNull { candidate ->
+        candidate.isDirectory &&
+            candidate.name == "model-project" &&
+            candidate.parentFile?.name == "templates" &&
+            File(candidate, "settings.gradle").exists()
+    }
 }

@@ -33,33 +33,65 @@ Tech tags:
 - Command reference: https://koupper.com/commands/
 - Provider catalog: https://koupper.com/providers/
 
-## Quick install
+## Quick install (standalone, no repo clone)
 
 Prerequisites:
 
 - Java 17 on your `PATH`
 - Kotlin compiler (`kotlinc`) on your `PATH`
-- Git on your `PATH` (used if CLI cache must be fetched)
 
 ```bash
-git clone https://github.com/koupper-jvm/koupper.git
-cd koupper
-kotlinc -script install.kts -- --force
-kotlinc -script install.kts -- --doctor
+curl -L -o install-standalone.kts https://github.com/koupper-jvm/koupper/releases/latest/download/install-standalone.kts
+kotlinc -script install-standalone.kts -- --force
+kotlinc -script install-standalone.kts -- --doctor
 koupper -v
 ```
 
 Windows PowerShell:
 
 ```powershell
-git clone https://github.com/koupper-jvm/koupper.git
-cd koupper
-kotlinc -script install.kts -- --force
-kotlinc -script install.kts -- --doctor
+Invoke-WebRequest -Uri "https://github.com/koupper-jvm/koupper/releases/latest/download/install-standalone.kts" -OutFile "install-standalone.kts"
+kotlinc -script .\install-standalone.kts -- --force
+kotlinc -script .\install-standalone.kts -- --doctor
 koupper -v
 ```
 
-The installer bootstraps CLI/runtime dependencies automatically. If `koupper-cli` source is not found locally, it is cloned into a local cache under `~/.koupper/cache/koupper-cli`.
+The standalone installer downloads signed release assets (`koupper-cli.jar`, `octopus.jar`, `model-project.zip`, `providers.json`) and verifies them with `SHA256SUMS`.
+
+If `koupper module <name>` fails with `.../.koupper/helpers/list.kts` on an older local install, create the missing runtime folders once and rerun:
+
+```bash
+mkdir -p "$HOME/.koupper/helpers" "$HOME/.koupper/logs"
+```
+
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.koupper\helpers" | Out-Null
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.koupper\logs" | Out-Null
+```
+
+## Installation modes
+
+- End user install (`install-standalone.kts`): no repository clone, installs from latest release assets into `~/.koupper`.
+- Developer install (`install.kts`): clone the repository and build/install from source in your local workspace.
+- Both modes install runtime files under `~/.koupper`; the difference is where binaries/templates come from (release assets vs local source build).
+
+## Developer/maintainer workspace install
+
+```bash
+git clone https://github.com/koupper-jvm/koupper-workspace.git "koupper workspace"
+cd "koupper workspace"
+bash ./scripts/setup/workspace-bootstrap.sh --workspace "$(pwd)" --pull
+```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/koupper-jvm/koupper-workspace.git "koupper workspace"
+cd "koupper workspace"
+./scripts/setup/workspace-bootstrap.ps1 -Workspace (Get-Location).Path -Pull
+```
 
 ## 60-second quick smoke
 
@@ -100,8 +132,8 @@ Expected result:
 ## Documentation hierarchy
 
 - Public docs (users): [koupper.com](https://koupper.com/) and [koupper-docs repo](https://github.com/koupper-jvm/koupper-docs)
-- Internal docs (maintainers): [koupper-infrastructure/docs](https://github.com/koupper-jvm/koupper-infrastructure/tree/develop/docs)
-- Runnable references: [koupper-infrastructure/examples](https://github.com/koupper-jvm/koupper-infrastructure/tree/develop/examples)
+- Internal docs (maintainers): [koupper-workspace/docs](https://github.com/koupper-jvm/koupper-workspace/tree/develop/docs)
+- Runnable references: [koupper-workspace/examples](https://github.com/koupper-jvm/koupper-workspace/tree/develop/examples)
 
 Internal docs are maintainer/operator playbooks; product-facing documentation lives in `koupper-docs`.
 
@@ -119,14 +151,14 @@ Recommended reading path:
 
 ## Contributing
 
-- Core contribution flow and maintainer docs: [koupper-infrastructure/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/MAINTAINER_GUIDE.md)
-- Documentation governance rules: [koupper-infrastructure/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/DOCUMENTATION_STANDARD.md)
+- Core contribution flow and maintainer docs: [koupper-workspace/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/MAINTAINER_GUIDE.md)
+- Documentation governance rules: [koupper-workspace/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/DOCUMENTATION_STANDARD.md)
 - Public docs source: [koupper-jvm/koupper-docs](https://github.com/koupper-jvm/koupper-docs)
 
 ## Maintainer docs in this repo
 
-- Maintainer index: [koupper-infrastructure/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/MAINTAINER_GUIDE.md)
-- Documentation ownership standard: [koupper-infrastructure/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/DOCUMENTATION_STANDARD.md)
+- Maintainer index: [koupper-workspace/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/MAINTAINER_GUIDE.md)
+- Documentation ownership standard: [koupper-workspace/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/DOCUMENTATION_STANDARD.md)
 
 ## License
 
