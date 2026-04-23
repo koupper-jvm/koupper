@@ -88,7 +88,10 @@ jobs:
           (cd templates && zip -rq "${DIST_DIR}/model-project.zip" model-project \
             -x "*/.gradle/*" "*/build/*" "*/out/*" "*/.kotlin/*")
 
-          sha256sum "${DIST_DIR}/koupper-cli.jar" "${DIST_DIR}/octopus.jar" "${DIST_DIR}/model-project.zip" "${DIST_DIR}/providers.json" > "${DIST_DIR}/SHA256SUMS"
+          (
+            cd "${DIST_DIR}"
+            sha256sum koupper-cli.jar octopus.jar model-project.zip providers.json > SHA256SUMS
+          )
 
           python - <<'PY'
           import hashlib
