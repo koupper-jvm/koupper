@@ -110,11 +110,55 @@ fun resolveCliProjectDir(): File {
 val cliProjectDir = resolveCliProjectDir()
 
 fun resolveTemplateSourceDir(): File? {
+    val fromEnv = System.getenv("MODEL_BACK_PROJECT_PATH")?.takeIf { it.isNotBlank() }?.let { File(it) }
+    if (fromEnv != null && fromEnv.exists() && fromEnv.isDirectory) return fromEnv
+
     val local = File("templates${File.separator}model-project")
     if (local.exists() && local.isDirectory) return local
 
     val sibling = File("..${File.separator}templates${File.separator}model-project")
     if (sibling.exists() && sibling.isDirectory) return sibling
+
+    val siblingInfra = File("..${File.separator}koupper-infrastructure${File.separator}templates${File.separator}model-project")
+    if (siblingInfra.exists() && siblingInfra.isDirectory) return siblingInfra
+
+    val home = System.getProperty("user.home")
+    val cacheRoot = File(home, ".koupper${File.separator}cache")
+    val infraCacheDir = File(cacheRoot, "koupper-infrastructure")
+    if (!cacheRoot.exists()) cacheRoot.mkdirs()
+
+    if (!infraCacheDir.exists()) {
+        println("${icon("📥", "[*] ")}koupper-infrastructure template source not found locally. Cloning cached source...")
+        val (cloneExit, cloneOut) = runExternalCommand(
+            listOf(
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "--branch",
+                "develop",
+                "https://github.com/koupper-jvm/koupper-infrastructure.git",
+                infraCacheDir.absolutePath
+            ),
+            File(".")
+        )
+        if (cloneExit != 0) {
+            failInstall(
+                "Could not clone koupper-infrastructure automatically. Install git and internet access, or set MODEL_BACK_PROJECT_PATH manually. Details: $cloneOut"
+            )
+        }
+    } else {
+        val (pullExit, pullOut) = runExternalCommand(
+            listOf("git", "pull", "--ff-only", "origin", "develop"),
+            infraCacheDir
+        )
+        if (pullExit != 0) {
+            println("${icon("⚠️", "[!] ")}Could not update cached koupper-infrastructure; using local cached copy. Details: $pullOut")
+        }
+    }
+
+    val cachedTemplate = File(infraCacheDir, "templates${File.separator}model-project")
+    if (cachedTemplate.exists() && cachedTemplate.isDirectory) return cachedTemplate
 
     return null
 }
@@ -289,7 +333,7 @@ if (templateSource != null && templateSource.exists() && templateSource.isDirect
     templateSource.copyRecursively(templateTarget, overwrite = true)
     println("${icon("✅", "[OK] ")}Template installed at ${templateTarget.absolutePath}")
 } else {
-    println("${icon("⚠️", "[!] ")}Template source not found. Skipping local template provisioning.")
+    failInstall("Template source not found. Set MODEL_BACK_PROJECT_PATH or ensure koupper-infrastructure templates are available.")
 }
 
 // 3.2 Provision providers catalog for CLI discovery
