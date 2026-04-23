@@ -6,7 +6,6 @@ import com.koupper.providers.files.downloadFile
 import java.io.File
 import java.net.URI
 import java.net.URL
-import java.util.concurrent.TimeUnit
 
 private sealed interface TemplateProjectSource {
     data class LocalDirectory(val dir: File) : TemplateProjectSource
@@ -103,63 +102,9 @@ private fun resolveTemplateProjectSource(context: String): TemplateProjectSource
 
 private fun tryResolveTemplateFromInfraCache(context: String): File? {
     val home = System.getProperty("user.home")
-    val cacheRoot = File(home, ".koupper/cache")
-    val infraCacheDir = File(cacheRoot, "koupper-infrastructure")
+    val infraCacheDir = File(home, ".koupper/cache/koupper-infrastructure")
     val templateDir = File(infraCacheDir, "templates/model-project")
-
-    if (!cacheRoot.exists()) {
-        cacheRoot.mkdirs()
-    }
-
-    if (templateDir.exists() && templateDir.isDirectory) {
-        val (pullExit, pullOut) = runExternalCommand(listOf("git", "pull", "--ff-only", "origin", "develop"), infraCacheDir)
-        if (pullExit != 0) {
-            println("[WARN] Could not update cached koupper-infrastructure templates; using local cached copy. Details: $pullOut")
-        }
-        return templateDir
-    }
-
-    val (gitExit, _) = runExternalCommand(listOf("git", "--version"), File(context))
-    if (gitExit != 0) {
-        return null
-    }
-
-    val (cloneExit, cloneOut) = runExternalCommand(
-        listOf(
-            "git",
-            "clone",
-            "--depth",
-            "1",
-            "--branch",
-            "develop",
-            "https://github.com/koupper-jvm/koupper-infrastructure.git",
-            infraCacheDir.absolutePath
-        ),
-        File(context)
-    )
-
-    if (cloneExit != 0) {
-        println("[WARN] Could not auto-fetch koupper-infrastructure template source. Details: $cloneOut")
-        return null
-    }
-
     return templateDir.takeIf { it.exists() && it.isDirectory }
-}
-
-private fun runExternalCommand(args: List<String>, cwd: File): Pair<Int, String> {
-    val process = ProcessBuilder(args)
-        .directory(cwd)
-        .redirectErrorStream(true)
-        .start()
-
-    val finished = process.waitFor(60, TimeUnit.SECONDS)
-    if (!finished) {
-        process.destroyForcibly()
-        return 124 to "Command timed out: ${args.joinToString(" ")}"
-    }
-
-    val output = process.inputStream.bufferedReader().readText().trim()
-    return process.exitValue() to output
 }
 
 private fun resolveProcessManagerSource(context: String): ProcessManagerSource {
