@@ -226,9 +226,19 @@ if (-not ${'$'}octopusRunning) {
     ps1File.writeText(ps1Shim)
 }
 
-fun runDoctor(koupperHome: File, libsDirectory: File, templatesDirectory: File, catalogDirectory: File, binDirectory: File): Boolean {
+fun runDoctor(
+    koupperHome: File,
+    libsDirectory: File,
+    templatesDirectory: File,
+    catalogDirectory: File,
+    binDirectory: File,
+    helpersDirectory: File,
+    logsDirectory: File
+): Boolean {
     val checks = listOf(
         "~/.koupper exists" to koupperHome.exists(),
+        "Helpers directory (~/.koupper/helpers)" to (helpersDirectory.exists() && helpersDirectory.isDirectory),
+        "Logs directory (~/.koupper/logs)" to (logsDirectory.exists() && logsDirectory.isDirectory),
         "CLI jar (~/.koupper/libs/koupper-cli.jar)" to File(libsDirectory, "koupper-cli.jar").exists(),
         "Octopus jar (~/.koupper/libs/octopus.jar)" to File(libsDirectory, "octopus.jar").exists(),
         "Template settings.gradle" to File(templatesDirectory, "model-project/settings.gradle").exists(),
@@ -250,10 +260,20 @@ val libsDirectory = File(koupperHome, "libs")
 val templatesDirectory = File(koupperHome, "templates")
 val catalogDirectory = File(koupperHome, "catalog")
 val binDirectory = File(koupperHome, "bin")
+val helpersDirectory = File(koupperHome, "helpers")
+val logsDirectory = File(koupperHome, "logs")
 val cacheDirectory = File(koupperHome, "cache/standalone-downloads")
 
 if (options.doctor) {
-    val ok = runDoctor(koupperHome, libsDirectory, templatesDirectory, catalogDirectory, binDirectory)
+    val ok = runDoctor(
+        koupperHome,
+        libsDirectory,
+        templatesDirectory,
+        catalogDirectory,
+        binDirectory,
+        helpersDirectory,
+        logsDirectory
+    )
     if (!ok) exitProcess(1)
     println("[OK] Standalone install looks healthy.")
     exitProcess(0)
@@ -307,7 +327,9 @@ if (options.force) {
     safeDeleteDirectory(binDirectory, "bin directory")
 }
 
-listOf(libsDirectory, templatesDirectory, catalogDirectory, binDirectory).forEach { if (!it.exists()) it.mkdirs() }
+listOf(libsDirectory, templatesDirectory, catalogDirectory, binDirectory, helpersDirectory, logsDirectory).forEach {
+    if (!it.exists()) it.mkdirs()
+}
 
 safeCopy(File(releaseCache, "koupper-cli.jar"), File(libsDirectory, "koupper-cli.jar"), "CLI jar")
 safeCopy(File(releaseCache, "octopus.jar"), File(libsDirectory, "octopus.jar"), "Octopus jar")

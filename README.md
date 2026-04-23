@@ -58,6 +58,19 @@ koupper -v
 
 The standalone installer downloads signed release assets (`koupper-cli.jar`, `octopus.jar`, `model-project.zip`, `providers.json`) and verifies them with `SHA256SUMS`.
 
+If `koupper module <name>` fails with `.../.koupper/helpers/list.kts` on an older local install, create the missing runtime folders once and rerun:
+
+```bash
+mkdir -p "$HOME/.koupper/helpers" "$HOME/.koupper/logs"
+```
+
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.koupper\helpers" | Out-Null
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.koupper\logs" | Out-Null
+```
+
 ## Installation modes
 
 - End user install (`install-standalone.kts`): no repository clone, installs from latest release assets into `~/.koupper`.
