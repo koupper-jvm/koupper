@@ -8,7 +8,7 @@ on:
     tags: ['v*']
   workflow_dispatch:
   schedule:
-    - cron: '30 7 * * *'
+    - cron: '30 14 * * *'
 
 jobs:
   install-uninstall-e2e-windows:
