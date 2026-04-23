@@ -149,15 +149,28 @@ fun resolveTemplateSourceDir(): File? {
     val sibling = File("..${File.separator}templates${File.separator}model-project")
     if (sibling.exists() && sibling.isDirectory) return sibling
 
-    val siblingInfra = File("..${File.separator}koupper-infrastructure${File.separator}templates${File.separator}model-project")
-    if (siblingInfra.exists() && siblingInfra.isDirectory) return siblingInfra
+    val siblingWorkspace = File("..${File.separator}koupper-workspace${File.separator}templates${File.separator}model-project")
+    if (siblingWorkspace.exists() && siblingWorkspace.isDirectory) return siblingWorkspace
+
+    val siblingInfraLegacy = File("..${File.separator}koupper-infrastructure${File.separator}templates${File.separator}model-project")
+    if (siblingInfraLegacy.exists() && siblingInfraLegacy.isDirectory) return siblingInfraLegacy
 
     val home = System.getProperty("user.home")
     val cacheRoot = File(home, ".koupper${File.separator}cache")
-    val infraCacheDir = ensureCachedRepo(cacheRoot, "koupper-infrastructure", "koupper-jvm/koupper-infrastructure", "develop")
+    val workspaceCacheDir = runCatching {
+        ensureCachedRepo(cacheRoot, "koupper-workspace", "koupper-jvm/koupper-workspace", "develop")
+    }.getOrNull()
 
-    val cachedTemplate = File(infraCacheDir, "templates${File.separator}model-project")
-    if (cachedTemplate.exists() && cachedTemplate.isDirectory) return cachedTemplate
+    if (workspaceCacheDir != null) {
+        val cachedTemplate = File(workspaceCacheDir, "templates${File.separator}model-project")
+        if (cachedTemplate.exists() && cachedTemplate.isDirectory) return cachedTemplate
+    }
+
+    val infraCacheDir = File(cacheRoot, "koupper-infrastructure")
+    if (infraCacheDir.exists() && infraCacheDir.isDirectory) {
+        val cachedTemplate = File(infraCacheDir, "templates${File.separator}model-project")
+        if (cachedTemplate.exists() && cachedTemplate.isDirectory) return cachedTemplate
+    }
 
     return null
 }
@@ -332,7 +345,7 @@ if (templateSource != null && templateSource.exists() && templateSource.isDirect
     templateSource.copyRecursively(templateTarget, overwrite = true)
     println("${icon("✅", "[OK] ")}Template installed at ${templateTarget.absolutePath}")
 } else {
-    failInstall("Template source not found. Set MODEL_BACK_PROJECT_PATH or ensure koupper-infrastructure templates are available.")
+    failInstall("Template source not found. Set MODEL_BACK_PROJECT_PATH or ensure koupper-workspace templates are available.")
 }
 
 // 3.2 Provision providers catalog for CLI discovery

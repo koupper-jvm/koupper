@@ -67,16 +67,16 @@ The standalone installer downloads signed release assets (`koupper-cli.jar`, `oc
 ## Developer/maintainer workspace install
 
 ```bash
-git clone https://github.com/koupper-jvm/koupper-infrastructure.git "koupper infrastructure"
-cd "koupper infrastructure"
+git clone https://github.com/koupper-jvm/koupper-workspace.git "koupper workspace"
+cd "koupper workspace"
 bash ./scripts/setup/workspace-bootstrap.sh --workspace "$(pwd)" --pull
 ```
 
 Windows PowerShell:
 
 ```powershell
-git clone https://github.com/koupper-jvm/koupper-infrastructure.git "koupper infrastructure"
-cd "koupper infrastructure"
+git clone https://github.com/koupper-jvm/koupper-workspace.git "koupper workspace"
+cd "koupper workspace"
 ./scripts/setup/workspace-bootstrap.ps1 -Workspace (Get-Location).Path -Pull
 ```
 
@@ -119,8 +119,8 @@ Expected result:
 ## Documentation hierarchy
 
 - Public docs (users): [koupper.com](https://koupper.com/) and [koupper-docs repo](https://github.com/koupper-jvm/koupper-docs)
-- Internal docs (maintainers): [koupper-infrastructure/docs](https://github.com/koupper-jvm/koupper-infrastructure/tree/develop/docs)
-- Runnable references: [koupper-infrastructure/examples](https://github.com/koupper-jvm/koupper-infrastructure/tree/develop/examples)
+- Internal docs (maintainers): [koupper-workspace/docs](https://github.com/koupper-jvm/koupper-workspace/tree/develop/docs)
+- Runnable references: [koupper-workspace/examples](https://github.com/koupper-jvm/koupper-workspace/tree/develop/examples)
 
 Internal docs are maintainer/operator playbooks; product-facing documentation lives in `koupper-docs`.
 
@@ -138,14 +138,14 @@ Recommended reading path:
 
 ## Contributing
 
-- Core contribution flow and maintainer docs: [koupper-infrastructure/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/MAINTAINER_GUIDE.md)
-- Documentation governance rules: [koupper-infrastructure/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/DOCUMENTATION_STANDARD.md)
+- Core contribution flow and maintainer docs: [koupper-workspace/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/MAINTAINER_GUIDE.md)
+- Documentation governance rules: [koupper-workspace/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/DOCUMENTATION_STANDARD.md)
 - Public docs source: [koupper-jvm/koupper-docs](https://github.com/koupper-jvm/koupper-docs)
 
 ## Maintainer docs in this repo
 
-- Maintainer index: [koupper-infrastructure/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/MAINTAINER_GUIDE.md)
-- Documentation ownership standard: [koupper-infrastructure/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-infrastructure/blob/develop/docs/DOCUMENTATION_STANDARD.md)
+- Maintainer index: [koupper-workspace/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/MAINTAINER_GUIDE.md)
+- Documentation ownership standard: [koupper-workspace/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/DOCUMENTATION_STANDARD.md)
 
 ## License
 
