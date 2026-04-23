@@ -1,0 +1,150 @@
+name: Publish Install Assets
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v6.5.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout koupper
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout koupper-cli
+        uses: actions/checkout@v4
+        with:
+          repository: koupper-jvm/koupper-cli
+          ref: develop
+          path: koupper-cli
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve release tag
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [[ -z "${TAG}" ]]; then
+            echo "Unable to resolve release tag" >&2
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build octopus runtime jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew :octopus:fatJar -x test
+
+      - name: Build standalone CLI jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./koupper-cli/gradlew
+          (cd koupper-cli && ./gradlew jar -x test)
+
+      - name: Package release assets
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIST_DIR="${RUNNER_TEMP}/koupper-dist"
+          mkdir -p "${DIST_DIR}"
+
+          OCTOPUS_JAR=$(ls octopus/build/libs/*.jar | grep -vE 'sources|javadoc' | head -n1)
+          CLI_JAR=$(ls koupper-cli/build/libs/*.jar | grep -vE 'sources|javadoc' | head -n1)
+
+          cp "${OCTOPUS_JAR}" "${DIST_DIR}/octopus.jar"
+          cp "${CLI_JAR}" "${DIST_DIR}/koupper-cli.jar"
+          cp "providers/src/main/resources/providers-catalog.json" "${DIST_DIR}/providers.json"
+
+          (cd templates && zip -rq "${DIST_DIR}/model-project.zip" model-project \
+            -x "*/.gradle/*" "*/build/*" "*/out/*" "*/.kotlin/*")
+
+          (
+            cd "${DIST_DIR}"
+            sha256sum koupper-cli.jar octopus.jar model-project.zip providers.json > SHA256SUMS
+          )
+
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          dist_dir = Path(os.environ["RUNNER_TEMP"]) / "koupper-dist"
+          tag = os.environ["RELEASE_TAG"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+
+          assets = ["koupper-cli.jar", "octopus.jar", "model-project.zip", "providers.json", "SHA256SUMS"]
+          payload = {
+              "schemaVersion": 1,
+              "channel": "stable",
+              "version": tag,
+              "release": {
+                  "repo": repo,
+                  "tag": tag,
+                  "baseUrl": f"https://github.com/{repo}/releases/download/{tag}"
+              },
+              "assets": []
+          }
+
+          for name in assets:
+              path = dist_dir / name
+              h = hashlib.sha256(path.read_bytes()).hexdigest()
+              payload["assets"].append({
+                  "name": name,
+                  "url": f"https://github.com/{repo}/releases/download/{tag}/{name}",
+                  "sha256": h,
+                  "size": path.stat().st_size,
+              })
+
+          (dist_dir / "manifest.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+          PY
+
+          cp install-standalone.kts "${DIST_DIR}/install-standalone.kts"
+
+          echo "dist_dir=${DIST_DIR}" >> "$GITHUB_OUTPUT"
+        env:
+          RELEASE_TAG: ${{ steps.vars.outputs.tag }}
+
+      - name: Publish GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.package.outputs.dist_dir }}/koupper-cli.jar
+            ${{ steps.package.outputs.dist_dir }}/octopus.jar
+            ${{ steps.package.outputs.dist_dir }}/model-project.zip
+            ${{ steps.package.outputs.dist_dir }}/providers.json
+            ${{ steps.package.outputs.dist_dir }}/SHA256SUMS
+            ${{ steps.package.outputs.dist_dir }}/manifest.json
+            ${{ steps.package.outputs.dist_dir }}/install-standalone.kts

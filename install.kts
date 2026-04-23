@@ -2,7 +2,9 @@ import java.io.File
 import java.io.FileDescriptor
 import java.io.FileOutputStream
 import java.io.PrintStream
+import java.net.URL
 import java.util.Locale
+import java.util.zip.ZipInputStream
 import kotlin.system.exitProcess
 
 fun shouldUseEmoji(): Boolean {
@@ -33,60 +35,88 @@ val cliArgs: Set<String> = runCatching { args.toSet() }.getOrDefault(emptySet())
 val forceReinstall = cliArgs.contains("--force")
 val doctorOnly = cliArgs.contains("--doctor") || cliArgs.contains("--verify")
 
-fun runExternalCommand(args: List<String>, cwd: File): Pair<Int, String> {
-    val process = ProcessBuilder(args)
-        .directory(cwd)
-        .redirectErrorStream(true)
-        .start()
+fun cleanDirectory(dir: File) {
+    if (dir.exists()) {
+        dir.deleteRecursively()
+    }
+    dir.mkdirs()
+}
 
-    val output = process.inputStream.bufferedReader().readText().trim()
-    val exit = process.waitFor()
-    return exit to output
+fun resolveRepoRootFromExtracted(targetDir: File): File {
+    val children = targetDir.listFiles()?.filter { it.isDirectory }.orEmpty()
+    return if (children.size == 1) children.first() else targetDir
+}
+
+fun downloadAndExtractRepoZip(repo: String, branch: String, targetDir: File): File {
+    val zipUrl = "https://codeload.github.com/$repo/zip/refs/heads/$branch"
+    cleanDirectory(targetDir)
+
+    URL(zipUrl).openStream().use { input ->
+        ZipInputStream(input.buffered()).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                val rawName = entry.name
+                val normalized = rawName.substringAfter('/', "")
+
+                if (normalized.isNotBlank()) {
+                    val outFile = File(targetDir, normalized)
+                    val canonicalTarget = outFile.canonicalFile
+                    val canonicalBase = targetDir.canonicalFile
+                    if (!canonicalTarget.path.startsWith(canonicalBase.path)) {
+                        throw IllegalStateException("Blocked suspicious zip entry: $rawName")
+                    }
+
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else {
+                        outFile.parentFile?.mkdirs()
+                        outFile.outputStream().use { output -> zip.copyTo(output) }
+                    }
+                }
+
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+    }
+
+    return resolveRepoRootFromExtracted(targetDir)
+}
+
+fun ensureCachedRepo(cacheRoot: File, cacheName: String, repo: String, branch: String): File {
+    val cacheDir = File(cacheRoot, cacheName)
+    val marker = File(cacheDir, ".source")
+
+    if (!cacheRoot.exists()) cacheRoot.mkdirs()
+
+    val shouldRefresh = !cacheDir.exists() || !File(cacheDir, "gradlew").exists() || !marker.exists()
+    if (shouldRefresh) {
+        println("${icon("📥", "[*] ")}Fetching $repo ($branch) from public codeload archive...")
+        val extracted = downloadAndExtractRepoZip(repo, branch, cacheDir)
+
+        if (extracted.canonicalPath != cacheDir.canonicalPath) {
+            val tmp = File(cacheRoot, "${cacheName}__tmp_move")
+            cleanDirectory(tmp)
+            extracted.copyRecursively(tmp, overwrite = true)
+            cleanDirectory(cacheDir)
+            tmp.copyRecursively(cacheDir, overwrite = true)
+            tmp.deleteRecursively()
+        }
+
+        marker.writeText("$repo@$branch")
+    }
+
+    return cacheDir
 }
 
 fun ensureCliRepoInCache(): File {
     val home = System.getProperty("user.home")
     val cacheRoot = File(home, ".koupper${File.separator}cache")
-    val cliCacheDir = File(cacheRoot, "koupper-cli")
-
-    if (!cacheRoot.exists()) cacheRoot.mkdirs()
-
-    if (!cliCacheDir.exists()) {
-        println("${icon("📥", "[*] ")}koupper-cli not found locally. Cloning cached source...")
-        val (cloneExit, cloneOut) = runExternalCommand(
-            listOf(
-                "git",
-                "clone",
-                "--depth",
-                "1",
-                "--branch",
-                "develop",
-                "https://github.com/koupper-jvm/koupper-cli.git",
-                cliCacheDir.absolutePath
-            ),
-            File(".")
-        )
-        if (cloneExit != 0) {
-            failInstall(
-                "Could not clone koupper-cli automatically. Install git and internet access, or place koupper-cli as ./koupper-cli or ../koupper-cli. Details: $cloneOut"
-            )
-        }
-    } else {
-        println("${icon("🔄", "[*] ")}Updating cached koupper-cli source...")
-        val (pullExit, pullOut) = runExternalCommand(
-            listOf("git", "pull", "--ff-only", "origin", "develop"),
-            cliCacheDir
-        )
-        if (pullExit != 0) {
-            println("${icon("⚠️", "[!] ")}Could not update cached koupper-cli; using local cached copy. Details: $pullOut")
-        }
-    }
-
-    return cliCacheDir
+    return ensureCachedRepo(cacheRoot, "koupper-cli", "koupper-jvm/koupper-cli", "develop")
 }
 
 fun resolveCliProjectDir(): File {
-    val isWindows = System.getProperty("os.name").toLowerCase(Locale.getDefault()).contains("win")
+    val isWindows = System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")
     val wrapper = if (isWindows) "gradlew.bat" else "gradlew"
 
     val local = File("koupper-cli")
@@ -110,11 +140,37 @@ fun resolveCliProjectDir(): File {
 val cliProjectDir = resolveCliProjectDir()
 
 fun resolveTemplateSourceDir(): File? {
+    val fromEnv = System.getenv("MODEL_BACK_PROJECT_PATH")?.takeIf { it.isNotBlank() }?.let { File(it) }
+    if (fromEnv != null && fromEnv.exists() && fromEnv.isDirectory) return fromEnv
+
     val local = File("templates${File.separator}model-project")
     if (local.exists() && local.isDirectory) return local
 
     val sibling = File("..${File.separator}templates${File.separator}model-project")
     if (sibling.exists() && sibling.isDirectory) return sibling
+
+    val siblingWorkspace = File("..${File.separator}koupper-workspace${File.separator}templates${File.separator}model-project")
+    if (siblingWorkspace.exists() && siblingWorkspace.isDirectory) return siblingWorkspace
+
+    val siblingInfraLegacy = File("..${File.separator}koupper-infrastructure${File.separator}templates${File.separator}model-project")
+    if (siblingInfraLegacy.exists() && siblingInfraLegacy.isDirectory) return siblingInfraLegacy
+
+    val home = System.getProperty("user.home")
+    val cacheRoot = File(home, ".koupper${File.separator}cache")
+    val workspaceCacheDir = runCatching {
+        ensureCachedRepo(cacheRoot, "koupper-workspace", "koupper-jvm/koupper-workspace", "develop")
+    }.getOrNull()
+
+    if (workspaceCacheDir != null) {
+        val cachedTemplate = File(workspaceCacheDir, "templates${File.separator}model-project")
+        if (cachedTemplate.exists() && cachedTemplate.isDirectory) return cachedTemplate
+    }
+
+    val infraCacheDir = File(cacheRoot, "koupper-infrastructure")
+    if (infraCacheDir.exists() && infraCacheDir.isDirectory) {
+        val cachedTemplate = File(infraCacheDir, "templates${File.separator}model-project")
+        if (cachedTemplate.exists() && cachedTemplate.isDirectory) return cachedTemplate
+    }
 
     return null
 }
@@ -193,7 +249,7 @@ println("${icon("🐙", "[K] ")}\u001B[38;5;141mBootstrapping Koupper Monorepo E
 println("${icon("🔨", "[*] ")}Compiling absolute latest sources via Gradle...")
 
 // 1. Compile the Monorepo sub-modules locally
-val isWindows = System.getProperty("os.name").toLowerCase(Locale.getDefault()).contains("win")
+val isWindows = System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")
 val gradleCmd = if (isWindows) "gradlew.bat" else "./gradlew"
 
 if (isWindows) {
@@ -289,7 +345,7 @@ if (templateSource != null && templateSource.exists() && templateSource.isDirect
     templateSource.copyRecursively(templateTarget, overwrite = true)
     println("${icon("✅", "[OK] ")}Template installed at ${templateTarget.absolutePath}")
 } else {
-    println("${icon("⚠️", "[!] ")}Template source not found. Skipping local template provisioning.")
+    failInstall("Template source not found. Set MODEL_BACK_PROJECT_PATH or ensure koupper-workspace templates are available.")
 }
 
 // 3.2 Provision providers catalog for CLI discovery
