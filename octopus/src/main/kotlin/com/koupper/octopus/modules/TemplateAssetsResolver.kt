@@ -6,6 +6,7 @@ import com.koupper.providers.files.downloadFile
 import java.io.File
 import java.net.URI
 import java.net.URL
+import java.util.concurrent.TimeUnit
 
 private sealed interface TemplateProjectSource {
     data class LocalDirectory(val dir: File) : TemplateProjectSource
@@ -61,10 +62,14 @@ private fun resolveTemplateProjectSource(context: String): TemplateProjectSource
         return explicitPath.asTemplateSourceOrThrow("MODEL_BACK_PROJECT_PATH")
     }
 
+    val home = System.getProperty("user.home")
+    val cachedInfraTemplate = File(home, ".koupper/cache/koupper-infrastructure/templates/model-project")
+
     val localCandidates = listOf(
         File(context, "templates/model-project"),
         File(System.getProperty("user.dir"), "templates/model-project"),
         File(System.getProperty("user.home"), ".koupper/templates/model-project"),
+        cachedInfraTemplate,
         File(context, "templates/model-project.zip"),
         File(System.getProperty("user.dir"), "templates/model-project.zip"),
         File(System.getProperty("user.home"), ".koupper/templates/model-project.zip")
@@ -78,6 +83,10 @@ private fun resolveTemplateProjectSource(context: String): TemplateProjectSource
         }
     }
 
+    tryResolveTemplateFromInfraCache(context)?.let {
+        return TemplateProjectSource.LocalDirectory(it)
+    }
+
     val modelUrl = env("MODEL_BACK_PROJECT_URL", context, required = false, allowEmpty = true, default = "").trim()
     if (modelUrl.isNotBlank()) {
         return modelUrl.asTemplateSourceOrThrow("MODEL_BACK_PROJECT_URL")
@@ -86,6 +95,67 @@ private fun resolveTemplateProjectSource(context: String): TemplateProjectSource
     throw IllegalStateException(
         "Could not resolve model project source. Set MODEL_BACK_PROJECT_PATH, provide templates/model-project locally, or configure MODEL_BACK_PROJECT_URL."
     )
+}
+
+private fun tryResolveTemplateFromInfraCache(context: String): File? {
+    val home = System.getProperty("user.home")
+    val cacheRoot = File(home, ".koupper/cache")
+    val infraCacheDir = File(cacheRoot, "koupper-infrastructure")
+    val templateDir = File(infraCacheDir, "templates/model-project")
+
+    if (!cacheRoot.exists()) {
+        cacheRoot.mkdirs()
+    }
+
+    if (templateDir.exists() && templateDir.isDirectory) {
+        val (pullExit, pullOut) = runExternalCommand(listOf("git", "pull", "--ff-only", "origin", "develop"), infraCacheDir)
+        if (pullExit != 0) {
+            println("[WARN] Could not update cached koupper-infrastructure templates; using local cached copy. Details: $pullOut")
+        }
+        return templateDir
+    }
+
+    val (gitExit, _) = runExternalCommand(listOf("git", "--version"), File(context))
+    if (gitExit != 0) {
+        return null
+    }
+
+    val (cloneExit, cloneOut) = runExternalCommand(
+        listOf(
+            "git",
+            "clone",
+            "--depth",
+            "1",
+            "--branch",
+            "develop",
+            "https://github.com/koupper-jvm/koupper-infrastructure.git",
+            infraCacheDir.absolutePath
+        ),
+        File(context)
+    )
+
+    if (cloneExit != 0) {
+        println("[WARN] Could not auto-fetch koupper-infrastructure template source. Details: $cloneOut")
+        return null
+    }
+
+    return templateDir.takeIf { it.exists() && it.isDirectory }
+}
+
+private fun runExternalCommand(args: List<String>, cwd: File): Pair<Int, String> {
+    val process = ProcessBuilder(args)
+        .directory(cwd)
+        .redirectErrorStream(true)
+        .start()
+
+    val finished = process.waitFor(60, TimeUnit.SECONDS)
+    if (!finished) {
+        process.destroyForcibly()
+        return 124 to "Command timed out: ${args.joinToString(" ")}"
+    }
+
+    val output = process.inputStream.bufferedReader().readText().trim()
+    return process.exitValue() to output
 }
 
 private fun resolveProcessManagerSource(context: String): ProcessManagerSource {
