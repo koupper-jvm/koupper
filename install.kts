@@ -86,7 +86,7 @@ fun ensureCliRepoInCache(): File {
 }
 
 fun resolveCliProjectDir(): File {
-    val isWindows = System.getProperty("os.name").toLowerCase(Locale.getDefault()).contains("win")
+    val isWindows = System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")
     val wrapper = if (isWindows) "gradlew.bat" else "gradlew"
 
     val local = File("koupper-cli")
@@ -193,7 +193,7 @@ println("${icon("🐙", "[K] ")}\u001B[38;5;141mBootstrapping Koupper Monorepo E
 println("${icon("🔨", "[*] ")}Compiling absolute latest sources via Gradle...")
 
 // 1. Compile the Monorepo sub-modules locally
-val isWindows = System.getProperty("os.name").toLowerCase(Locale.getDefault()).contains("win")
+val isWindows = System.getProperty("os.name").lowercase(Locale.getDefault()).contains("win")
 val gradleCmd = if (isWindows) "gradlew.bat" else "./gradlew"
 
 if (isWindows) {
