@@ -28,6 +28,8 @@ class OpenAIClient(
         val customHeaders = context["headers"] as? Map<String, String> ?: emptyMap()
         val contentType = context["contentType"] as? String ?: this.contentType
 
+        val systemPrompt = context["systemPrompt"] as? String ?: "You are Koupper's AI assistant."
+
         // Build the body payload
         val bodyMap = mapOf(
             "model" to when (model) {
@@ -36,7 +38,7 @@ class OpenAIClient(
                 else -> "gpt-4o"
             },
             "messages" to listOf(
-                mapOf("role" to "system", "content" to "You are Koupper's AI assistant."),
+                mapOf("role" to "system", "content" to systemPrompt),
                 mapOf("role" to "user", "content" to input)
             )
         )
