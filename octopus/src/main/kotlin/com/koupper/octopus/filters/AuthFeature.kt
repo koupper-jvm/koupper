@@ -1,7 +1,7 @@
 package com.koupper.octopus.filters
 
 import com.koupper.octopus.annotations.ApiKeyAuth
-import com.koupper.octopus.annotations.Auth
+import com.koupper.shared.annotations.Auth
 import jakarta.ws.rs.container.DynamicFeature
 import jakarta.ws.rs.container.ResourceInfo
 import jakarta.ws.rs.core.FeatureContext

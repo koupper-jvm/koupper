@@ -116,18 +116,20 @@ Expected result:
 
 ## Why teams choose Koupper
 
-- Kotlin-first, type-safe scripts instead of ad-hoc shell glue.
-- Provider-first architecture for cloud, infra, and workflow capabilities.
-- Local-first developer workflow with production hardening paths.
-- Predictable runtime contract (`@Export` single entrypoint + pipeline orchestration).
+- **Kotlin-first, type-safe scripts** instead of ad-hoc shell glue.
+- **Production-grade Web Engine**: Powered by Grizzly NIO for high-concurrency APIs.
+- **Provider-first architecture** for cloud, infra, and workflow capabilities.
+- **Declarative Security**: Use `@Auth` and `@Authorize` annotations that work across scripts and HTTP routes.
+- **Local-first developer workflow** with production hardening paths.
+- **Predictable runtime contract** (`@Export` single entrypoint + pipeline orchestration).
 
 ## Typical use cases
 
-- script-driven backend workers and async jobs,
-- deployment orchestration and infra workflows,
-- runtime-exposed HTTP routes via providers,
-- operational automations (GitHub, Docker, SSH, notifications, queue ops),
-- AI/LLM pipelines with typed script inputs.
+- **High-performance HTTP APIs**: Backed by Grizzly and Jersey filters.
+- **Script-driven backend workers** and async jobs.
+- **Deployment orchestration** and infra workflows.
+- **Operational automations** (GitHub, Docker, SSH, notifications, queue ops).
+- **AI/LLM pipelines** with typed script inputs.
 
 ## Documentation hierarchy
 
