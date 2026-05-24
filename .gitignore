@@ -11,3 +11,6 @@ script-execution-checklist.local.txt
 .idea/
 out/
 *.log
+
+bin/
+**/bin/
