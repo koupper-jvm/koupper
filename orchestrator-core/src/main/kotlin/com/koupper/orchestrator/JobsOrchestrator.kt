@@ -46,6 +46,10 @@ private fun readEnvOrGlobalFile(name: String): String? {
         if (!fromGlobal.isNullOrBlank() && fromGlobal != "undefined") return fromGlobal.trim()
     }
 
+    // Fallback to local .env file in the current directory (common in Lambda root /var/task)
+    val fromLocalEnv = runCatching { File(".env").getProperty(name) }.getOrNull()
+    if (!fromLocalEnv.isNullOrBlank() && fromLocalEnv != "undefined") return fromLocalEnv.trim()
+
     return null
 }
 
@@ -59,8 +63,10 @@ private fun resolvedAwsSecretKey(config: JobConfiguration): String? =
         ?: readEnvOrGlobalFile("KQ_SQS_SECRET_KEY")
         ?: readEnvOrGlobalFile("AWS_SECRET_ACCESS_KEY")
 
-private fun resolvedAwsSessionToken(): String? =
-    readEnvOrGlobalFile("AWS_SESSION_TOKEN")
+private fun resolvedAwsSessionToken(config: JobConfiguration): String? =
+         config.sqsSessionToken?.takeIf { it.isNotBlank() }
+         ?: readEnvOrGlobalFile("KQ_SQS_SESSION_TOKEN")
+         ?: readEnvOrGlobalFile("AWS_SESSION_TOKEN")
 
 @JsonInclude(Include.NON_NULL)
 data class KouTask(
@@ -93,7 +99,7 @@ data class KouTask(
 private fun sqsCredsProvider(config: JobConfiguration): AwsCredentialsProvider {
     val ak = resolvedAwsAccessKey(config)
     val sk = resolvedAwsSecretKey(config)
-    val st = resolvedAwsSessionToken()
+    val st = resolvedAwsSessionToken(config)
 
     return if (!ak.isNullOrBlank() && !sk.isNullOrBlank()) {
         if (!st.isNullOrBlank()) {
@@ -109,6 +115,16 @@ private fun sqsCredsProvider(config: JobConfiguration): AwsCredentialsProvider {
         DefaultCredentialsProvider.create()
     }
 }
+
+private fun resolvedAwsRegion(config: JobConfiguration): String? =
+    config.sqsRegion?.takeIf { it.isNotBlank() }
+        ?: readEnvOrGlobalFile("KQ_SQS_REGION")
+        ?: readEnvOrGlobalFile("AWS_REGION")
+        ?: readEnvOrGlobalFile("AWS_DEFAULT_REGION")
+
+private fun resolvedAwsQueueUrl(config: JobConfiguration): String? =
+    config.sqsQueueUrl?.takeIf { it.isNotBlank() }
+        ?: readEnvOrGlobalFile("KQ_SQS_QUEUE_URL")
 
 object JobSerializer {
     val mapper = jacksonObjectMapper()
@@ -147,12 +163,15 @@ object JobDispatcher {
                 // encolar en lista Redis con nombre `queue`
             }
             "sqs" -> {
-                val region   = Region.of(config.sqsRegion)
-                val queueUrl = config.sqsQueueUrl
+                val regionName = resolvedAwsRegion(config)
+                val region   = Region.of(regionName)
+                val queueUrl = resolvedAwsQueueUrl(config)
+
+                val test = sqsCredsProvider(config)
 
                 val sqsClient = SqsClient.builder()
                     .region(region)
-                    .credentialsProvider(sqsCredsProvider(config))
+                    .credentialsProvider(test)
                     .build()
 
                 try {
@@ -1234,7 +1253,8 @@ fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
     val codeSource = ref.javaClass.protectionDomain?.codeSource?.location?.toURI()
     val scriptPath = codeSource?.path?.let { path ->
         val buildIndex = path.indexOf("/build")
-        if (buildIndex != -1) path.substring(0, buildIndex) else path
+        val finalPath = if (buildIndex != -1) path.substring(0, buildIndex) else path
+        if (finalPath.endsWith(".jar")) File(finalPath).parent else finalPath
     }
     val file = codeSource?.let { File(it) }
 
@@ -1244,7 +1264,18 @@ fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
     val fileName = fullClassName.substringBefore("$$").substringAfterLast('.')
     val signature: Pair<List<String>, String> = extractSignature(this.returnType.toString())
 
-    val scriptName = fileName.lowercase().substring(0, fileName.indexOf("Kt")) + ".kt"
+    val ktIndex = fileName.indexOf("Kt")
+    val scriptName = if (ktIndex != -1) {
+        fileName.substring(0, ktIndex).let { name ->
+            // Try to find if the file exists with CamelCase first, if not, fallback to lowercase
+            val camelCaseName = "$name.kt"
+            val lowerCaseName = "${name.lowercase()}.kt"
+            val camelPath = "$scriptPath/src/main/kotlin/${packageName.replace(".", "/")}/$camelCaseName"
+            if (File(camelPath).exists()) camelCaseName else lowerCaseName
+        }
+    } else {
+        "$fileName.kt"
+    }
 
     val finalScriptPath = "$scriptPath/src/main/kotlin/${packageName.replace(".", "/")}/$scriptName"
 
@@ -1257,8 +1288,9 @@ fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
     val contextVersion = file?.lastModified()?.toString() ?: "unknown"
 
     val sourceSnapshot = readTextOrNull(finalScriptPathContent.path)
-    val artifactSha256 = sha256Of(finalScriptPathContent)
+    val artifactSha256 = if (finalScriptPathContent.exists() && finalScriptPathContent.isFile) sha256Of(finalScriptPathContent) else "unknown"
     val artifactUri: String? = null
+    val finalSourceType = if (finalScriptPathContent.exists()) "SCRIPT" else "COMPILED"
 
     return KouTask(
         id = UUID.randomUUID().toString(),
@@ -1269,7 +1301,7 @@ fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
         signature = signature,
         scriptPath = finalScriptPath,
         packageName = packageName,
-        sourceType = "SCRIPT",
+        sourceType = finalSourceType,
         contextVersion = contextVersion,
         sourceSnapshot = readTextOrNull(finalScriptPath),
         artifactUri = artifactUri,

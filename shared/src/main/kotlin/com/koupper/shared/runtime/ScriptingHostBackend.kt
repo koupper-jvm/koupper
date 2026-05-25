@@ -88,6 +88,14 @@ class ScriptingHostBackend(
         ScriptCompilationConfiguration {
             jvm {
                 dependenciesFromCurrentContext(wholeClasspath = true)
+                
+                // Si estamos en un FatJar, a veces dependenciesFromCurrentContext no es suficiente
+                // Intentamos encontrar el JAR actual y añadirlo explícitamente
+                val selfJar = this::class.java.protectionDomain.codeSource?.location?.toURI()?.let { File(it) }
+                if (selfJar != null && selfJar.exists() && selfJar.extension == "jar") {
+                    updateClasspath(listOf(selfJar))
+                }
+
                 if (extraClasspath.isNotEmpty()) {
                     updateClasspath(extraClasspath)
                 }
