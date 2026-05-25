@@ -11,7 +11,7 @@ fun shouldUseEmoji(): Boolean {
     val noEmoji = System.getenv("KOUPPER_NO_EMOJI")?.equals("true", ignoreCase = true) == true
     val asciiOnly = System.getenv("KOUPPER_ASCII")?.equals("true", ignoreCase = true) == true
     val dumbTerm = System.getenv("TERM")?.equals("dumb", ignoreCase = true) == true
-    val stdoutEncoding = System.getProperty("sun.stdout.encoding") ?: System.getProperty("file.encoding")
+    val stdoutEncoding = System.getProperty("sun.stdout.enque coding") ?: System.getProperty("file.encoding")
     val utf8 = stdoutEncoding?.contains("UTF-8", ignoreCase = true) == true
 
     return !noEmoji && !asciiOnly && !dumbTerm && utf8
