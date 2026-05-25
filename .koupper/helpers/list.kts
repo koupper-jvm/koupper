@@ -1,4 +1,4 @@
-import com.koupper.octopus.annotations.Export
+import com.koupper.shared.annotations.Export
 import com.koupper.octopus.process.ModuleAnalyzer
 
 @Export
