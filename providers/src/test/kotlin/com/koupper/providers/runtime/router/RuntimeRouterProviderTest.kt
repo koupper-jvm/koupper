@@ -30,7 +30,7 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
 
     @Test
     fun `registerRouter returns correct route list without starting server`() {
-        val provider = JdkRuntimeRouterProvider()
+        val provider = GrizzlyRuntimeRouterProvider()
         val info = provider.registerRouter {
             path { "/api" }
             get<String> {
@@ -44,7 +44,7 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
     @Test
     fun `GET route responds with 200 and handler output`() {
         val port = freePort()
-        val provider = JdkRuntimeRouterProvider()
+        val provider = GrizzlyRuntimeRouterProvider()
         provider.registerRouter {
             get<String> {
                 path { "/hello" }
@@ -64,7 +64,7 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
     @Test
     fun `unknown route returns 404`() {
         val port = freePort()
-        val provider = JdkRuntimeRouterProvider()
+        val provider = GrizzlyRuntimeRouterProvider()
         provider.start(port)
         try {
             val response = get("http://127.0.0.1:$port/not-found")
@@ -77,7 +77,7 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
     @Test
     fun `middleware blocks request and returns configured status code`() {
         val port = freePort()
-        val provider = JdkRuntimeRouterProvider()
+        val provider = GrizzlyRuntimeRouterProvider()
         provider.registerMiddleware("auth") { _ ->
             MiddlewareResult(allowed = false, statusCode = 401, message = "No token")
         }
@@ -100,7 +100,7 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
     @Test
     fun `middleware allows request when allowed is true`() {
         val port = freePort()
-        val provider = JdkRuntimeRouterProvider()
+        val provider = GrizzlyRuntimeRouterProvider()
         provider.registerMiddleware("permissive") { _ ->
             MiddlewareResult(allowed = true)
         }
@@ -123,12 +123,12 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
     @Test
     fun `POST route with String body receives and returns body`() {
         val port = freePort()
-        val provider = JdkRuntimeRouterProvider()
+        val provider = GrizzlyRuntimeRouterProvider()
         var received = ""
         provider.registerRouter {
-            post(String::class) {
+            post<String> {
                 path { "/echo" }
-                script { { body -> received = body; body } }
+                script { { body: String -> received = body; body } }
             }
         }
         provider.start(port)
@@ -142,7 +142,7 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
 
     @Test
     fun `stop can be called when server is not running`() {
-        val provider = JdkRuntimeRouterProvider()
+        val provider = GrizzlyRuntimeRouterProvider()
         provider.stop() // should not throw
     }
 }

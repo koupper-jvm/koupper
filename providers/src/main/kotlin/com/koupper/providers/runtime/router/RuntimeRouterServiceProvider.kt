@@ -6,7 +6,7 @@ import com.koupper.providers.ServiceProvider
 class RuntimeRouterServiceProvider : ServiceProvider() {
     override fun up() {
         app.bind(RuntimeRouterProvider::class, {
-            JdkRuntimeRouterProvider()
+            GrizzlyRuntimeRouterProvider()
         })
     }
 }

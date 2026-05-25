@@ -2,7 +2,7 @@ package com.koupper.octopus.filters
 
 import com.koupper.container.app
 import com.koupper.octopus.annotations.ApiKeyAuth
-import com.koupper.octopus.annotations.Auth
+import com.koupper.shared.annotations.Auth
 import com.koupper.os.env
 import com.koupper.providers.aws.dynamo.DynamoClient
 import com.koupper.providers.http.ApiKeySession
@@ -111,7 +111,8 @@ class AuthFilter : ContainerRequestFilter {
         }
 
         val tableName = env(
-            variableName = "KOUPPER_API_KEYS_TABLE",
+            variableName = "" +
+                    "",
             required = false,
             allowEmpty = true,
             default = ""

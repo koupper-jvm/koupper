@@ -30,6 +30,9 @@ data class JobConfiguration(
     @field:JsonProperty("sqs-secret-key")
     val sqsSecretKey: String? = null,
 
+    @field:JsonProperty("sqs-session-token")
+    val sqsSessionToken: String? = null,
+
     @field:JsonProperty("redis-host")
     val redisHost: String? = null,
 

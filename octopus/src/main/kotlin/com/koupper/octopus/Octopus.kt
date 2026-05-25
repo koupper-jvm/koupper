@@ -1567,3 +1567,28 @@ fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
 
     return octopus
 }
+
+fun createLambdaConfiguration(container: Container = app): ScriptExecutor {
+    val octopus = Octopus(container)
+    octopus.registerBuildInServicesProvidersInContainer()
+
+    val appLogger = LoggerFactory.get("Octopus.Main")
+    appLogger.clearAppenders(close = true)
+    appLogger.level = LogLevel.INFO
+
+    // En Lambda usamos el ConsoleAppender por defecto (System.out) para CloudWatch
+    app.singleton(LoggerCore::class, { appLogger })
+    app.bind(ScriptExecutor::class, { octopus })
+
+    // No usamos monitores de archivos en Lambda para evitar problemas de permisos
+    app.bind(com.koupper.shared.monitoring.ExecutionMonitor::class, {
+        com.koupper.octopus.monitoring.CompositeExecutionMonitor(
+            delegates = listOf(
+                com.koupper.octopus.monitoring.ObservabilityExecutionMonitor()
+            )
+        )
+    })
+    ScriptRunner.monitor = app.getInstance(com.koupper.shared.monitoring.ExecutionMonitor::class)
+
+    return octopus
+}
