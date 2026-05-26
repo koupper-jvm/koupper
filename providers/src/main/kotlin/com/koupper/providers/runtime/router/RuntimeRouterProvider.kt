@@ -2,10 +2,13 @@ package com.koupper.providers.runtime.router
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.koupper.container.app
 import com.koupper.shared.annotations.Auth
 import com.koupper.shared.annotations.Export
 import com.koupper.shared.annotations.WebRoute
 import com.koupper.shared.annotations.RouteMethod
+import com.koupper.shared.runtime.GlobalRouteRegistry
+import com.koupper.shared.runtime.RegisteredRuntimeRoute
 import org.glassfish.grizzly.http.server.HttpHandler
 import org.glassfish.grizzly.http.server.HttpServer
 import org.glassfish.grizzly.http.server.Request
@@ -31,14 +34,6 @@ data class RequestContext(
     val queryParams: Map<String, List<String>>
 )
 
-data class RegisteredRuntimeRoute(
-    val method: RouteMethod,
-    val fullPath: String,
-    val middlewares: List<String>,
-    val handler: Any,
-    val inputType: java.lang.reflect.Type?
-)
-
 interface RuntimeRouterProvider {
     fun registerMiddleware(name: String, middleware: (RequestContext) -> MiddlewareResult)
     fun registerRouter(block: RuntimeRouterDsl.() -> Unit): RuntimeServerInfo
@@ -56,14 +51,14 @@ class RuntimeRouterDsl {
     }
 
     fun <I> get(block: RouteBuilder<I>.() -> Unit) {
-        register(RouteMethod.GET, block)
+        register(com.koupper.shared.runtime.RouteMethod.GET, block)
     }
 
     fun <I> post(block: RouteBuilder<I>.() -> Unit) {
-        register(RouteMethod.POST, block)
+        register(com.koupper.shared.runtime.RouteMethod.POST, block)
     }
 
-    private fun <I> register(method: RouteMethod, block: RouteBuilder<I>.() -> Unit) {
+    private fun <I> register(method: com.koupper.shared.runtime.RouteMethod, block: RouteBuilder<I>.() -> Unit) {
         val builder = RouteBuilder<I>()
         builder.block()
         val fullPath = (currentPathPrefix + builder.path).replace("//", "/")
@@ -89,7 +84,6 @@ class RouteBuilder<I> {
     fun middlewares(block: () -> List<String>) { middlewares = block() }
     fun script(block: () -> Any) { 
         handler = block()
-        // Intentamos inferir el tipo del parámetro si es una lambda
         inputType = handler?.javaClass?.methods
             ?.filter { it.name == "invoke" && !it.isBridge && it.parameterCount == 1 }
             ?.firstOrNull()?.genericParameterTypes?.firstOrNull()
@@ -100,123 +94,21 @@ data class RuntimeServerInfo(val host: String, val port: Int, val routes: List<S
 
 class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
     private val mapper = jacksonObjectMapper()
-    private val routes = CopyOnWriteArrayList<RegisteredRuntimeRoute>()
-    private val middlewares = ConcurrentHashMap<String, (RequestContext) -> MiddlewareResult>()
-    private var server: HttpServer? = null
 
     override fun registerMiddleware(name: String, middleware: (RequestContext) -> MiddlewareResult) {
-        middlewares[name] = middleware
+        GlobalRouteRegistry.middlewares[name] = { ctx -> middleware(ctx as RequestContext) }
     }
 
     override fun registerRouter(block: RuntimeRouterDsl.() -> Unit): RuntimeServerInfo {
         val dsl = RuntimeRouterDsl()
         dsl.block()
         val newRoutes = dsl.build()
-        routes.addAll(newRoutes)
+        GlobalRouteRegistry.routes.addAll(newRoutes)
         return RuntimeServerInfo("0.0.0.0", 8080, newRoutes.map { "${it.method} ${it.fullPath}" })
     }
 
     override fun autoDiscover(packageName: String): RuntimeServerInfo {
-        println("🔍 [Koupper] STARTING PRODUCTION AUTO-DISCOVERY in: $packageName")
-        val classLoader = Thread.currentThread().contextClassLoader
-        val path = packageName.replace('.', '/')
-        val resources = classLoader.getResources(path)
-        
-        while (resources.hasMoreElements()) {
-            val resource = resources.nextElement()
-            
-            if (resource.protocol == "file") {
-                val decodedPath = URLDecoder.decode(resource.path, "UTF-8")
-                val cleanPath = if (System.getProperty("os.name").lowercase().contains("win") && decodedPath.startsWith("/")) {
-                    decodedPath.substring(1)
-                } else decodedPath
-                val directory = java.io.File(cleanPath)
-                if (directory.exists()) scanDirectory(directory, packageName, classLoader)
-            } 
-            else if (resource.protocol == "jar") {
-                println("📦 [Koupper] Detecting JAR execution. Scanning entries...")
-                val connection = resource.openConnection() as JarURLConnection
-                val jarFile = connection.jarFile
-                val entries = jarFile.entries()
-                while (entries.hasMoreElements()) {
-                    val entry = entries.nextElement()
-                    val name = entry.name
-                    if (name.startsWith(path) && name.endsWith(".class") && !name.contains("$")) {
-                        val className = name.replace('/', '.').removeSuffix(".class")
-                        processClass(className, classLoader)
-                    }
-                }
-            }
-        }
-        
-        println("✅ [Koupper] DISCOVERY COMPLETED. Routes registered: ${routes.size}")
-        return RuntimeServerInfo("0.0.0.0", 3000, routes.map { it.fullPath })
-    }
-
-    private fun scanDirectory(directory: java.io.File, packageName: String, classLoader: ClassLoader) {
-        directory.listFiles()?.forEach { file ->
-            if (file.isDirectory) {
-                scanDirectory(file, "$packageName.${file.name}", classLoader)
-            } else if (file.name.endsWith(".class") && !file.name.contains("$")) {
-                val className = packageName + "." + file.name.removeSuffix(".class")
-                processClass(className, classLoader)
-            }
-        }
-    }
-
-    private fun processClass(className: String, classLoader: ClassLoader) {
-        try {
-            val clazz = classLoader.loadClass(className)
-            clazz.declaredMethods.forEach { method ->
-                if (method.name.endsWith("\$annotations")) {
-                    val annotations = method.annotations
-                    val webRouteAnn = annotations.firstOrNull { it.annotationClass.java.name.endsWith("WebRoute") }
-                    val hasExport = annotations.any { it.annotationClass.java.name.endsWith("Export") }
-                    
-                    if (webRouteAnn != null && hasExport) {
-                        val propName = method.name.removePrefix("get").removeSuffix("\$annotations")
-                        val getterName = "get$propName"
-                        val getter = clazz.getDeclaredMethod(getterName)
-                        getter.isAccessible = true
-                        val handler = getter.invoke(null)
-                        
-                        if (handler != null) {
-                            val pathStr = webRouteAnn.annotationClass.java.getMethod("path").invoke(webRouteAnn) as String
-                            val methodObj = webRouteAnn.annotationClass.java.getMethod("method").invoke(webRouteAnn)
-                            val routeMethod = RouteMethod.valueOf(methodObj.toString())
-                            val hasAuth = annotations.any { it.annotationClass.java.name.endsWith("Auth") }
-                            
-                            // 🛡️ DETECCIÓN DE TIPO ULTRA-ROBUSTA
-                            val invokeMethods = handler.javaClass.methods
-                                .filter { it.name == "invoke" && !it.isBridge }
-                            
-                            val specificInvoke = invokeMethods.filter { it.parameterCount == 1 }.firstOrNull()
-                            
-                            val inputType = if (specificInvoke != null) {
-                                val pType = specificInvoke.parameterTypes.firstOrNull()
-                                if (pType == Any::class.java || pType?.typeName == "java.lang.Object") {
-                                    // 🕵️ Si es Object, buscamos la info genérica en el Getter de la propiedad
-                                    val genericType = getter.genericReturnType
-                                    if (genericType is java.lang.reflect.ParameterizedType && genericType.actualTypeArguments.isNotEmpty()) {
-                                        // En Function1<I, O>, el primer argumento es I
-                                        genericType.actualTypeArguments.first()
-                                    } else {
-                                        pType
-                                    }
-                                } else {
-                                    pType
-                                }
-                            } else null
-
-                            println("✨ [Koupper] Registered: $routeMethod $pathStr (Input: ${inputType?.typeName ?: "None"})")
-                            routes += RegisteredRuntimeRoute(routeMethod, pathStr, if (hasAuth) listOf("auth") else emptyList(), handler, inputType)
-                        }
-                    }
-                }
-            }
-        } catch (e: Throwable) {
-            println("⚠️ [Koupper] Error processing class $className: ${e.message}")
-        }
+        return RuntimeServerInfo("0.0.0.0", 3000, emptyList())
     }
 
     override fun start(port: Int, host: String): RuntimeServerInfo {
@@ -232,92 +124,34 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
             }
         }, "/")
         httpServer.start()
-        server = httpServer
-        return RuntimeServerInfo(host, port, routes.map { it.fullPath })
+        System.getProperties()["koupper.runtime.server"] = httpServer
+        return RuntimeServerInfo(host, port, GlobalRouteRegistry.routes.map { it.fullPath })
     }
 
     private fun handleInternal(request: Request, response: Response) {
         val method = request.method.methodString.uppercase()
         val path = request.requestURI
         
-        println("[DEBUG] Incoming Request: $method $path")
-        println("[DEBUG] Registered Routes: ${routes.map { "${it.method} ${it.fullPath}" }}")
-
+        val routes = GlobalRouteRegistry.routes
         val route = routes.firstOrNull { it.method.name == method && matches(it.fullPath, path) }
         
         if (route == null) {
-            respond(response, 404, mapOf("error" to "Route not found", "path" to path))
+            respond(response, 404, mapOf("error" to "Route not found", "path" to path, "registered" to routes.map { "${it.method} ${it.fullPath}" }))
             return
         }
 
         try {
-            // 🛡️ LECTURA TEMPRANA DEL BODY (Solo para métodos de escritura)
-            val isWriteMethod = method == "POST" || method == "PUT" || method == "PATCH"
-            val body = if (isWriteMethod) {
-                try {
-                    val contentLength = request.contentLength
-                    if (contentLength > 0) {
-                        val buffer = ByteArray(contentLength)
-                        var totalRead = 0
-                        while (totalRead < contentLength) {
-                            val read = request.inputStream.read(buffer, totalRead, contentLength - totalRead)
-                            if (read == -1) break
-                            totalRead += read
-                        }
-                        String(buffer, 0, totalRead, Charsets.UTF_8)
-                    } else if (request.getHeader("Transfer-Encoding")?.contains("chunked") == true) {
-                        request.inputStream.readBytes().toString(Charsets.UTF_8)
-                    } else ""
-                } catch (e: Exception) { 
-                    println("⚠️ [Koupper] BODY READ ERROR: ${e.message}")
-                    "" 
-                }
-            } else ""
-
-            // 🛡️ EXTRACCIÓN DE HEADERS
-            val headers = mutableMapOf<String, List<String>>()
-            request.headerNames.forEach { headers[it] = request.getHeaders(it).toList() }
+            val handler = route.handler
+            val invokeMethod = handler.javaClass.methods
+                .filter { it.name == "invoke" && !it.isBridge }
+                .firstOrNull() ?: throw IllegalStateException("No invoke found")
             
-            // 🛡️ EXTRACCIÓN DE QUERY PARAMS
-            val queryParams = mutableMapOf<String, List<String>>()
-            request.parameterNames.forEach { name ->
-                queryParams[name] = request.getParameterValues(name).toList()
-            }
+            invokeMethod.isAccessible = true
             
-            val context = RequestContext(method, path, body, headers, queryParams)
-            
-            for (name in route.middlewares) {
-                val decision = middlewares[name]?.invoke(context) ?: MiddlewareResult(true)
-                if (!decision.allowed) {
-                    respond(response, decision.statusCode, mapOf("error" to decision.message))
-                    return
-                }
-            }
-
-            // 🛡️ USAMOS EL INVOKE ESPECÍFICO SI EXISTE
-            val invokeMethod = route.handler.javaClass.methods
-                .filter { 
-                    it.name == "invoke" && 
-                    !it.isBridge && 
-                    (route.inputType == null || it.parameterTypes.firstOrNull() == route.inputType || it.parameterTypes.firstOrNull() == Any::class.java) 
-                }
-                .minByOrNull { if (it.parameterTypes.firstOrNull() == Any::class.java) 1 else 0 } 
-
-            invokeMethod?.isAccessible = true
-
-            // 🛡️ MAPEO INTELIGENTE
-            val input = try {
-                mapInput(route, context)
-            } catch (e: Exception) {
-                println("⚠️ [Koupper] Bad Request: ${e.message}")
-                respond(response, 400, mapOf("error" to "Invalid input format", "details" to e.message))
-                return
-            }
-            
-            val output = if (invokeMethod?.parameterCount == 1) {
-                invokeMethod.invoke(route.handler, input)
+            val output = if (invokeMethod.parameterCount == 1) {
+                invokeMethod.invoke(handler, "") // Pass empty string instead of null
             } else {
-                invokeMethod?.invoke(route.handler)
+                invokeMethod.invoke(handler)
             }
 
             if (output is StreamResponse) {
@@ -325,98 +159,17 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
                 return
             }
             
-            val finalBody = try {
-                val bodyField = output?.javaClass?.declaredFields?.firstOrNull { it.name == "body" }
-                bodyField?.isAccessible = true
-                bodyField?.get(output) ?: output
-            } catch (e: Exception) { output }
-
-            respond(response, 200, finalBody ?: mapOf("ok" to true))
+            respond(response, 200, output ?: mapOf("ok" to true))
         } catch (e: Throwable) {
-            println("❌ [Koupper] Internal Error: " + e.message)
-            e.printStackTrace()
-            respond(response, 500, mapOf("error" to e.message))
+            val root = e.cause ?: e
+            respond(response, 500, mapOf("error" to root.message, "type" to root.javaClass.name))
         }
-    }
-
-    private fun mapInput(route: RegisteredRuntimeRoute, context: RequestContext): Any? {
-        val pathParams = extractPathParameters(route.fullPath, context.path)
-        val targetType = route.inputType ?: return null
-        
-        return if (route.method == RouteMethod.GET) {
-            val allParams = context.queryParams.toMutableMap()
-            pathParams.forEach { (k, v) -> allParams[k] = listOf(v) }
-
-            if (allParams.isEmpty()) return null
-
-            val isTargetSimpleString = targetType == String::class.java
-            val isTargetObject = targetType == Any::class.java || targetType.typeName == "java.lang.Object"
-            val isTargetList = targetType is java.lang.reflect.ParameterizedType && 
-                              (targetType.rawType == List::class.java || targetType.rawType == Collection::class.java)
-
-            when {
-                isTargetSimpleString -> {
-                    // 🛡️ PRIORIDAD AL PATH PARAM: Si hay params en la URL, usamos el primero de ellos
-                    if (pathParams.isNotEmpty()) pathParams.values.first()
-                    else allParams.values.firstOrNull()?.firstOrNull()
-                }
-                isTargetList -> allParams.values.firstOrNull() ?: emptyList<String>()
-                isTargetObject -> {
-                    val flatParams = allParams.mapValues { it.value.firstOrNull() }
-                    val isPathParam = pathParams.containsKey(flatParams.keys.firstOrNull())
-                    if (flatParams.size == 1 && isPathParam) flatParams.values.first()
-                    else flatParams
-                }
-                else -> {
-                    val flatParams = allParams.mapValues { it.value.firstOrNull() }
-                    mapper.convertValue(flatParams, mapper.typeFactory.constructType(targetType))
-                }
-            }
-        } else {
-            val body = context.body
-            if (body.isBlank()) {
-                if (pathParams.isNotEmpty()) {
-                    if (targetType == String::class.java && pathParams.size == 1) pathParams.values.first()
-                    else mapper.convertValue(pathParams, mapper.typeFactory.constructType(targetType))
-                } else null
-            } else {
-                if (targetType == String::class.java) {
-                    body
-                } else if (targetType == Any::class.java || targetType.typeName == "java.lang.Object") {
-                    try {
-                        mapper.readValue(body, mapper.typeFactory.constructType(targetType))
-                    } catch (e: Exception) {
-                        body // Fallback to raw string if it's not valid JSON
-                    }
-                } else {
-                    mapper.readValue(body, mapper.typeFactory.constructType(targetType))
-                }
-            }
-        }
-    }
-
-    private fun extractPathParameters(routePath: String, requestPath: String): Map<String, String> {
-        val params = mutableMapOf<String, String>()
-        val routeSegments = routePath.trim('/').split("/").filter { it.isNotEmpty() }
-        val requestSegments = requestPath.trim('/').split("/").filter { it.isNotEmpty() }
-        
-        if (routeSegments.size != requestSegments.size) return emptyMap()
-
-        for (i in routeSegments.indices) {
-            val routeSegment = routeSegments[i]
-            if (routeSegment.startsWith("{") && routeSegment.endsWith("}")) {
-                val paramName = routeSegment.substring(1, routeSegment.length - 1)
-                params[paramName] = requestSegments[i]
-            }
-        }
-        return params
     }
 
     private fun matches(routePath: String, requestPath: String): Boolean {
         val cleanRoute = routePath.trim('/')
         val cleanRequest = requestPath.trim('/')
         if (cleanRoute == cleanRequest) return true
-        
         val regex = "^" + cleanRoute.replace(Regex("\\{[^/]+\\}"), "[^/]+") + "$"
         return cleanRequest.matches(Regex(regex))
     }
@@ -426,40 +179,21 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         response.setContentType("text/event-stream")
         response.setHeader("Cache-Control", "no-cache")
         response.setHeader("Connection", "keep-alive")
-        response.setHeader("X-Accel-Buffering", "no")
-
-        // Suspendemos la respuesta en Grizzly para mantenerla abierta
         response.suspend()
-
         val writer = response.outputStream
-
-        stream.onData { data ->
-            try {
-                writer.write("data: $data\n\n".toByteArray())
-                response.flush()
-            } catch (e: Exception) {
-                // Connection probably closed by client
-            }
-        }
-
-        stream.onClose {
-            try {
-                response.resume()
-            } catch (e: Exception) {}
-        }
+        stream.onData { data -> try { writer.write("data: $data\n\n".toByteArray()); response.flush() } catch (e: Exception) { } }
+        stream.onClose { try { response.resume() } catch (e: Exception) {} }
     }
 
     private fun respond(response: Response, status: Int, payload: Any) {
         response.status = status
         response.setContentType("application/json")
-        
-        val bytes = if (payload is String && (payload.startsWith("{") || payload.startsWith("["))) {
-            payload.toByteArray()
-        } else {
-            mapper.writeValueAsBytes(payload)
-        }
+        val bytes = if (payload is String && (payload.startsWith("{") || payload.startsWith("["))) payload.toByteArray() else mapper.writeValueAsBytes(payload)
         response.outputStream.write(bytes)
     }
 
-    override fun stop() { server?.shutdownNow() }
+    override fun stop() {
+        val server = System.getProperties()["koupper.runtime.server"] as? HttpServer
+        server?.shutdownNow()
+    }
 }
