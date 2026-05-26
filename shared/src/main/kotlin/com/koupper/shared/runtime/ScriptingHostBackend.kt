@@ -88,6 +88,7 @@ class ScriptingHostBackend(
         ScriptCompilationConfiguration {
             jvm {
                 dependenciesFromCurrentContext(wholeClasspath = true)
+                jvmTarget("17")
                 
                 // Si estamos en un FatJar, a veces dependenciesFromCurrentContext no es suficiente
                 // Intentamos encontrar el JAR actual y añadirlo explícitamente
@@ -100,8 +101,7 @@ class ScriptingHostBackend(
                     updateClasspath(extraClasspath)
                 }
             }
-            // Explicitly force K1 compiler for scripts to bypass K2 FIR Fat-Jar module accessibility bugs
-            compilerOptions("-language-version", "1.9")
+            compilerOptions("-jvm-target", "17")
         }
     }
 
@@ -134,6 +134,8 @@ class ScriptingHostBackend(
 
         val scriptSourceName = sourceName?.takeIf { it.isNotBlank() }
             ?: "KoupperScript_${java.util.UUID.randomUUID().toString().replace("-", "")}.kts"
+        
+        println("[DEBUG] Compiling $scriptSourceName with JVM target 17")
         val result = host.eval(code.toScriptSource(scriptSourceName), compilationConfig, evalConfig)
 
         // Reportar diagnósticos antes de lanzar
