@@ -5,6 +5,7 @@ import com.koupper.providers.ServiceProvider
 import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.process.ProcessSupervisor
 import com.koupper.providers.runtime.router.RuntimeRouterProvider
+import com.koupper.providers.mcp.MCPServerProvider
 import kotlinx.coroutines.runBlocking
 
 class AgentServiceProvider : ServiceProvider() {
@@ -39,7 +40,12 @@ class AgentServiceProvider : ServiceProvider() {
         
         app.bind(AgentBudget::class, { budget })
 
-        // 3. Register the Inference Engine
+        // 3. Register the Tool Executor (Using MCP)
+        app.bind(ToolExecutor::class, {
+            MCPToolExecutor(app.getInstance(MCPServerProvider::class))
+        })
+
+        // 4. Register the Inference Engine
         app.bind(InferenceEngine::class, {
             LlamaCppEngine(
                 processSupervisor = app.getInstance(ProcessSupervisor::class),
@@ -48,9 +54,11 @@ class AgentServiceProvider : ServiceProvider() {
             )
         })
 
-        // 4. Register the Orchestrator as a singleton instance
+        // 5. Register the Orchestrator as a singleton instance
         val orchestrator = DefaultAgentOrchestrator(
             engine = app.getInstance(InferenceEngine::class),
+            toolExecutor = app.getInstance(ToolExecutor::class),
+            mcpProvider = app.getInstance(MCPServerProvider::class),
             jsonHandler = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any>,
             budget = app.getInstance(AgentBudget::class)
         )
@@ -58,13 +66,5 @@ class AgentServiceProvider : ServiceProvider() {
         app.bind(AgentOrchestrator::class, {
             orchestrator
         })
-
-        // 5. Register the Control Plane API
-        val apiProvider = AgentApiProvider(
-            orchestrator = orchestrator,
-            budget = budget,
-            router = app.getInstance(RuntimeRouterProvider::class)
-        )
-        apiProvider.registerRoutes()
     }
 }

@@ -16,13 +16,21 @@ interface TokenListener {
     fun onToken(token: String, agentId: String)
 }
 
+/**
+ * Representa un mensaje en la conversación del agente.
+ */
+data class AgentMessage(
+    val role: String, // "system", "user", "assistant", "tool"
+    val content: String,
+    val toolCall: ToolCall? = null
+)
+
 interface InferenceEngine {
     /**
-     * Executes a local inference. 
-     * If [outputSchema] is provided, it attempts to parse the result into that DTO using Koupper's JSON handler.
+     * Executes a local inference with full conversation history. 
      */
     suspend fun <T : Any> predict(
-        prompt: String, 
+        history: List<AgentMessage>, 
         outputSchema: Class<T>? = null, 
         listener: TokenListener? = null
     ): T
@@ -35,40 +43,22 @@ class LlamaCppEngine(
 ) : InferenceEngine {
 
     override suspend fun <T : Any> predict(
-        prompt: String, 
+        history: List<AgentMessage>, 
         outputSchema: Class<T>?,
         listener: TokenListener?
     ): T = withContext(Dispatchers.IO) {
         
         val agentId = UUID.randomUUID().toString().substring(0, 8)
         
-        // 1. Prepare the command based on AgentBudget
-        val threads = budget.telemetry.physicalCores
-        val modelPath = System.getenv("KOUPPER_LLM_MODEL_PATH") ?: "models/qwen-3b.gguf"
+        // Simulación: Buscamos si el último mensaje pide una herramienta
+        val lastMessage = history.last().content.lowercase()
         
-        // 2. Logic to wrap the output into a structured format
-        val finalPrompt = if (outputSchema != null) {
-            "$prompt \n\nIMPORTANT: Respond ONLY with a valid JSON matching this structure: ${outputSchema.simpleName}"
-        } else {
-            prompt
-        }
-
-        // 3. Execution (Simulated for this phase)
-        val rawResponse = simulateInference(finalPrompt, agentId, listener)
-
-        // 4. Structured Boundary: Catching hallucinations via Koupper's JSON parser
-        if (outputSchema != null) {
-            try {
-                // Using Koupper's native JSON handler to force the DTO
-                val result = jsonHandler.read(rawResponse)
-                
-                // In a real scenario, we'd map 'result' to 'outputSchema'
-                // For now, we return a mock instance of the requested class if it exists in the container,
-                // or try to instantiate it.
-                return@withContext app.getInstance(outputSchema.kotlin) as T
-            } catch (e: Exception) {
-                throw IllegalStateException("LLM Hallucination detected: Output does not match ${outputSchema.name}")
+        val rawResponse = when {
+            // Mock: Si el prompt menciona 'hardware', el LLM emite una llamada a herramienta MCP
+            lastMessage.contains("hardware") && !lastMessage.contains("result:") -> {
+                """{"toolName": "hardware-checker", "action": "execute", "arguments": {}}"""
             }
+            else -> simulateInference(history.last().content, agentId, listener)
         }
 
         @Suppress("UNCHECKED_CAST")

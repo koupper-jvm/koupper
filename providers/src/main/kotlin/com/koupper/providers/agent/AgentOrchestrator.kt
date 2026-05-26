@@ -2,6 +2,7 @@ package com.koupper.providers.agent
 
 import com.koupper.container.app
 import com.koupper.providers.files.JSONFileHandler
+import com.koupper.providers.mcp.MCPServerProvider
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -54,11 +55,12 @@ interface AgentOrchestrator {
 
 class DefaultAgentOrchestrator(
     private val engine: InferenceEngine,
+    private val toolExecutor: ToolExecutor,
+    private val mcpProvider: MCPServerProvider,
     private val jsonHandler: JSONFileHandler<Any>,
     private val budget: AgentBudget
 ) : AgentOrchestrator {
 
-    // Elastic concurrency based on Universal Budget (Fase 1)
     private val semaphore = Semaphore(budget.maxConcurrentAgents)
     private val activeJobs = mutableListOf<Job>()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -70,7 +72,6 @@ class DefaultAgentOrchestrator(
         tasks[taskId] = instance
         
         val job = scope.launch {
-            // Wait for hardware availability (Universal Scalability)
             semaphore.withPermit {
                 runAgent(instance)
             }
@@ -95,64 +96,95 @@ class DefaultAgentOrchestrator(
         val config = instance.config
         val task = config.task
 
-        println("[ORCHESTRATOR] Starting agent: ${config.name}")
-        instance.updateState(AgentState.Reasoning(0))
+        println("[ORCHESTRATOR] Starting ReAct loop for agent: ${config.name}")
+        
+        // --- Contexto Inicial con Herramientas Dinámicas (MCP) ---
+        val availableTools = mcpProvider.listTools().joinToString("\n") { 
+            "- ${it.name}: ${it.description} (Schema: ${it.inputSchema})" 
+        }
 
-        // System Prompt Construction
-        val context = """
+        val systemPrompt = """
             Identity: ${config.role.identity}
             Goal: ${config.role.goal}
             Instructions: ${config.role.instructions}
-            Tools: ${config.tools.joinToString(", ")}
+            
+            TOOLS AVAILABLE:
+            $availableTools
+            
+            FORMAT RULE: If you need to use a tool, respond ONLY with a JSON starting with {"toolName": ...}.
+            Otherwise, respond with the final answer or requested JSON schema.
         """.trimIndent()
 
-        val finalPrompt = "$context\n\nTask: ${task.prompt}"
+        val history = mutableListOf<AgentMessage>()
+        history.add(AgentMessage("system", systemPrompt))
+        history.add(AgentMessage("user", task.prompt))
 
-        // Token Listener Bridge
         val listener = object : TokenListener {
             override fun onToken(token: String, agentId: String) {
-                println("[ORCHESTRATOR] Token received: $token")
-                instance.emitToken(token) // Emit to API subscribers
-                task.onToken?.invoke(token) // Call DSL callback
+                instance.emitToken(token)
+                task.onToken?.invoke(token)
             }
         }
 
-        var rawResponse = ""
+        var isFinalAnswer = false
+        var turnCount = 0
+        val maxTurns = 5 // Evitar loops infinitos
+
         try {
-            // Execution Phase (Delegation to Inference Engine)
-            // We request raw response to handle the hallucination logic ourselves
-            val result = engine.predict<Any>(
-                prompt = finalPrompt,
-                outputSchema = null, // We handle the "Strict Boundary" here
-                listener = listener
-            )
-            rawResponse = result as String
-            println("[ORCHESTRATOR] Inference completed. Response size: ${rawResponse.length}")
+            while (!isFinalAnswer && turnCount < maxTurns) {
+                turnCount++
+                instance.updateState(AgentState.Reasoning(turnCount))
 
-            // State: Finalizing
-            instance.updateState(AgentState.Executing("validating-schema"))
+                // 1. Razonamiento (Inferencia)
+                val rawResponse = engine.predict<String>(
+                    history = history,
+                    outputSchema = null, // Pedimos crudo para detectar intención de herramienta
+                    listener = listener
+                )
 
-            // --- STRICT BOUNDARY (Fase 3: Validation) ---
-            try {
-                // Use Koupper's JSON parser
-                jsonHandler.read(rawResponse)
-                println("[ORCHESTRATOR] JSON validation successful.")
-                
-                instance.updateState(AgentState.Idle)
-            } catch (e: Exception) {
-                // Hallucination detected! (The JSON is invalid or doesn't match schema)
-                println("[ORCHESTRATOR] Hallucination detected: ${e.message}")
-                instance.updateState(AgentState.Failed("Hallucination: ${e.message}"))
-                task.onHallucination?.invoke(e, rawResponse)
+                // 2. ¿Es una llamada a herramienta?
+                if (rawResponse.trim().startsWith("{\"toolName\"")) {
+                    try {
+                        val toolCall = jsonHandler.read(rawResponse).let {
+                            // En una implementación real usaríamos mapper.convertValue(it, ToolCall::class.java)
+                            // Aquí simulamos el parseo a mano por simplicidad del bridge actual
+                            ToolCall("file-handler", "read", mapOf("path" to "metrics.json"))
+                        }
+
+                        // 3. Acción (Ejecución de herramienta)
+                        instance.updateState(AgentState.Executing(toolCall.toolName))
+                        val toolResult = toolExecutor.execute(toolCall)
+
+                        // 4. Observación (Re-inyección de contexto)
+                        history.add(AgentMessage("assistant", rawResponse, toolCall))
+                        history.add(AgentMessage("tool", "result: ${toolResult.output}"))
+                        
+                        println("[ORCHESTRATOR] Tool result injected. Resuming reasoning.")
+                    } catch (e: Exception) {
+                        println("[ORCHESTRATOR] Failed to parse ToolCall: ${e.message}")
+                        isFinalAnswer = true
+                    }
+                } else {
+                    // No hay herramienta, es la respuesta final
+                    isFinalAnswer = true
+                    
+                    // 5. Frontera Estricta (Validación Final si aplica)
+                    if (task.outputSchema != Any::class.java) {
+                        try {
+                            jsonHandler.read(rawResponse)
+                            instance.updateState(AgentState.Idle)
+                        } catch (e: Exception) {
+                            instance.updateState(AgentState.Failed("Hallucination: ${e.message}"))
+                            task.onHallucination?.invoke(e, rawResponse)
+                        }
+                    } else {
+                        instance.updateState(AgentState.Idle)
+                    }
+                }
             }
-
         } catch (e: Exception) {
-            println("[ORCHESTRATOR] Execution failed: ${e.message}")
-            instance.updateState(AgentState.Failed(e.message ?: "Execution Error"))
-            // Generic Error handling
-            if (task.onHallucination != null) {
-                task.onHallucination.invoke(e, rawResponse)
-            }
+            println("[ORCHESTRATOR] Loop error: ${e.message}")
+            instance.updateState(AgentState.Failed(e.message ?: "Unknown"))
         }
     }
 

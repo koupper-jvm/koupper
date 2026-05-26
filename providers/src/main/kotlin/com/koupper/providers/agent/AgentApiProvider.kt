@@ -7,11 +7,10 @@ import kotlinx.coroutines.runBlocking
 
 class AgentApiProvider(
     private val orchestrator: AgentOrchestrator,
-    private val budget: AgentBudget,
-    private val router: RuntimeRouterProvider
+    private val budget: AgentBudget
 ) {
 
-    fun registerRoutes() {
+    fun registerIn(router: RuntimeRouterProvider) {
         router.registerRouter {
             path { "/api/v1" }
 
