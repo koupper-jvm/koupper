@@ -85,6 +85,20 @@ fun downloadAndExtractRepoZip(repo: String, branch: String, targetDir: File): Fi
 
 fun ensureCachedRepo(cacheRoot: File, cacheName: String, repo: String, branch: String): File {
     val cacheDir = File(cacheRoot, cacheName)
+    
+    // 🔥 NUCLEAR FORCE: Use CURRENT local directory for 'koupper' and 'koupper-cli'
+    val localKoupper = File("/home/tdn-dell/develop/koupper workspace/koupper")
+    val localCli = File("/home/tdn-dell/develop/koupper workspace/koupper-cli")
+
+    if (cacheName == "koupper" && localKoupper.exists()) {
+        println("🔥 [LOCAL_DEV] Using local Koupper sources from ${localKoupper.absolutePath}")
+        return localKoupper
+    }
+    if (cacheName == "koupper-cli" && localCli.exists()) {
+        println("🔥 [LOCAL_DEV] Using local Koupper-CLI sources from ${localCli.absolutePath}")
+        return localCli
+    }
+
     val marker = File(cacheDir, ".source")
 
     if (!cacheRoot.exists()) cacheRoot.mkdirs()
