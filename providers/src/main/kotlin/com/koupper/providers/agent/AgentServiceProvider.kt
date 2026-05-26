@@ -4,6 +4,7 @@ import com.koupper.container.app
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.process.ProcessSupervisor
+import com.koupper.providers.runtime.router.RuntimeRouterProvider
 import kotlinx.coroutines.runBlocking
 
 class AgentServiceProvider : ServiceProvider() {
@@ -57,5 +58,13 @@ class AgentServiceProvider : ServiceProvider() {
         app.bind(AgentOrchestrator::class, {
             orchestrator
         })
+
+        // 5. Register the Control Plane API
+        val apiProvider = AgentApiProvider(
+            orchestrator = orchestrator,
+            budget = budget,
+            router = app.getInstance(RuntimeRouterProvider::class)
+        )
+        apiProvider.registerRoutes()
     }
 }
