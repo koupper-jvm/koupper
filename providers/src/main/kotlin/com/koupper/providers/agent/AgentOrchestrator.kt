@@ -10,13 +10,23 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * The runtime instance of an Agent in the Orchestrator's scope.
  */
-class AgentInstance(val config: AgentConfig) {
+class AgentInstance(val config: AgentConfig, val taskId: String) {
     @Volatile
     var state: AgentState = AgentState.Idle
         private set
 
+    private val listeners = mutableListOf<(String) -> Unit>()
+
     internal fun updateState(newState: AgentState) {
         state = newState
+    }
+
+    fun onToken(callback: (String) -> Unit) {
+        listeners.add(callback)
+    }
+
+    internal fun emitToken(token: String) {
+        listeners.forEach { it(token) }
     }
 }
 
@@ -31,6 +41,11 @@ interface AgentOrchestrator {
      */
     suspend fun dispatchSync(config: AgentConfig): AgentInstance
     
+    /**
+     * Retrieves an active agent instance by its ID (task ID).
+     */
+    fun getTask(taskId: String): AgentInstance?
+
     /**
      * Waits for all dispatched agents to finish their tasks.
      */
@@ -47,9 +62,12 @@ class DefaultAgentOrchestrator(
     private val semaphore = Semaphore(budget.maxConcurrentAgents)
     private val activeJobs = mutableListOf<Job>()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val tasks = ConcurrentHashMap<String, AgentInstance>()
 
     override suspend fun dispatch(config: AgentConfig): AgentInstance {
-        val instance = AgentInstance(config)
+        val taskId = java.util.UUID.randomUUID().toString().substring(0, 8)
+        val instance = AgentInstance(config, taskId)
+        tasks[taskId] = instance
         
         val job = scope.launch {
             // Wait for hardware availability (Universal Scalability)
@@ -63,12 +81,15 @@ class DefaultAgentOrchestrator(
     }
 
     override suspend fun dispatchSync(config: AgentConfig): AgentInstance {
-        val instance = AgentInstance(config)
+        val taskId = "sync-${java.util.UUID.randomUUID().toString().substring(0, 4)}"
+        val instance = AgentInstance(config, taskId)
         semaphore.withPermit {
             runAgent(instance)
         }
         return instance
     }
+
+    override fun getTask(taskId: String): AgentInstance? = tasks[taskId]
 
     private suspend fun runAgent(instance: AgentInstance) {
         val config = instance.config
@@ -91,7 +112,8 @@ class DefaultAgentOrchestrator(
         val listener = object : TokenListener {
             override fun onToken(token: String, agentId: String) {
                 println("[ORCHESTRATOR] Token received: $token")
-                task.onToken?.invoke(token)
+                instance.emitToken(token) // Emit to API subscribers
+                task.onToken?.invoke(token) // Call DSL callback
             }
         }
 

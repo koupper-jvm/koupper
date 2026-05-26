@@ -1,5 +1,6 @@
 package com.koupper.providers
 
+import com.koupper.providers.agent.AgentServiceProvider
 import com.koupper.providers.ai.AIServiceProvider
 import com.koupper.providers.aillmops.AILlmOpsServiceProvider
 import com.koupper.providers.aws.dynamo.AwsServiceProvider
@@ -99,6 +100,7 @@ class ServiceProviderManager {
             RuntimeRouterServiceProvider::class,
             SecretsServiceProvider::class,
             SSHServiceProvider::class,
+            AgentServiceProvider::class,
         )
     }
 }

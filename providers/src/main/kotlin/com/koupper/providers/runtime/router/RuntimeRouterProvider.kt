@@ -17,7 +17,12 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 data class MiddlewareResult(val allowed: Boolean, val statusCode: Int = 401, val message: String = "Unauthorized")
 
-// DEFINICIÓN CORRECTA DE REQUEST CONTEXT
+// DEFINICIÓN DE STREAMING
+interface StreamResponse {
+    fun onData(callback: (String) -> Unit)
+    fun onClose(callback: () -> Unit)
+}
+
 data class RequestContext(
     val method: String, 
     val path: String, 
@@ -234,6 +239,10 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
     private fun handleInternal(request: Request, response: Response) {
         val method = request.method.methodString.uppercase()
         val path = request.requestURI
+        
+        println("[DEBUG] Incoming Request: $method $path")
+        println("[DEBUG] Registered Routes: ${routes.map { "${it.method} ${it.fullPath}" }}")
+
         val route = routes.firstOrNull { it.method.name == method && matches(it.fullPath, path) }
         
         if (route == null) {
@@ -309,6 +318,11 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
                 invokeMethod.invoke(route.handler, input)
             } else {
                 invokeMethod?.invoke(route.handler)
+            }
+
+            if (output is StreamResponse) {
+                handleStream(response, output)
+                return
             }
             
             val finalBody = try {
@@ -405,6 +419,34 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         
         val regex = "^" + cleanRoute.replace(Regex("\\{[^/]+\\}"), "[^/]+") + "$"
         return cleanRequest.matches(Regex(regex))
+    }
+
+    private fun handleStream(response: Response, stream: StreamResponse) {
+        response.status = 200
+        response.setContentType("text/event-stream")
+        response.setHeader("Cache-Control", "no-cache")
+        response.setHeader("Connection", "keep-alive")
+        response.setHeader("X-Accel-Buffering", "no")
+
+        // Suspendemos la respuesta en Grizzly para mantenerla abierta
+        response.suspend()
+
+        val writer = response.outputStream
+
+        stream.onData { data ->
+            try {
+                writer.write("data: $data\n\n".toByteArray())
+                response.flush()
+            } catch (e: Exception) {
+                // Connection probably closed by client
+            }
+        }
+
+        stream.onClose {
+            try {
+                response.resume()
+            } catch (e: Exception) {}
+        }
     }
 
     private fun respond(response: Response, status: Int, payload: Any) {
