@@ -38,7 +38,7 @@ interface InferenceEngine {
 
 class LlamaCppEngine(
     private val processSupervisor: ProcessSupervisor,
-    private val jsonHandler: JSONFileHandler<Any>,
+    private val jsonHandler: JSONFileHandler<*>,
     private val budget: AgentBudget
 ) : InferenceEngine {
 

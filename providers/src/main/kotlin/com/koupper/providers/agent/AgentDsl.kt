@@ -15,7 +15,9 @@ data class AgentConfig(
     val role: RoleConfig,
     val tools: List<String>,
     val task: TaskConfig<*>,
-    val contextFromPrevious: Any? = null
+    // String? instead of Any? — makes dispatchToQueue serialization deterministic.
+    // Jackson can't round-trip Any? without @JsonTypeInfo; callers always pass JSON strings.
+    val contextFromPrevious: String? = null
 )
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -39,7 +41,7 @@ class AgentBuilder {
     private var roleConfig: RoleConfig? = null
     private val toolsList = mutableListOf<String>()
     var taskConfig: TaskConfig<*>? = null
-    var contextFromPrevious: Any? = null
+    var contextFromPrevious: String? = null
 
     fun role(block: RoleBuilder.() -> Unit) {
         roleConfig = RoleBuilder().apply(block).build()

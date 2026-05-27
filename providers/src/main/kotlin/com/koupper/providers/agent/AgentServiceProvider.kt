@@ -50,7 +50,7 @@ class AgentServiceProvider : ServiceProvider() {
         app.bind(InferenceEngine::class, {
             LlamaCppEngine(
                 processSupervisor = app.getInstance(ProcessSupervisor::class),
-                jsonHandler = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any>,
+                jsonHandler = app.getInstance(JSONFileHandler::class),
                 budget = app.getInstance(AgentBudget::class)
             )
         })
@@ -60,7 +60,7 @@ class AgentServiceProvider : ServiceProvider() {
             engine = app.getInstance(InferenceEngine::class),
             toolExecutor = app.getInstance(ToolExecutor::class),
             mcpProvider = app.getInstance(MCPServerProvider::class),
-            jsonHandler = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any>,
+            jsonHandler = app.getInstance(JSONFileHandler::class),
             budget = app.getInstance(AgentBudget::class)
         )
 
