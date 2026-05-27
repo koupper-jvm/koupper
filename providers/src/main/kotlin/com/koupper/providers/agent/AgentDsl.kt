@@ -1,5 +1,7 @@
 package com.koupper.providers.agent
 
+import com.fasterxml.jackson.annotation.JsonInclude
+
 /**
  * Marks the Koupper Agent DSL.
  */
@@ -7,24 +9,26 @@ package com.koupper.providers.agent
 annotation class AgentDsl
 
 @AgentDsl
-class AgentConfig(
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class AgentConfig(
     val name: String,
     val role: RoleConfig,
     val tools: List<String>,
-    val task: TaskConfig<*>
+    val task: TaskConfig<*>,
+    val contextFromPrevious: Any? = null
 )
 
-class RoleConfig(
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class RoleConfig(
     val identity: String,
     val goal: String,
     val instructions: String
 )
 
-class TaskConfig<T : Any>(
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class TaskConfig<T : Any>(
     val outputSchema: Class<T>,
-    val prompt: String,
-    val onToken: ((String) -> Unit)?,
-    val onHallucination: ((Throwable, String) -> Unit)?
+    val prompt: String
 )
 
 // --- DSL Builders ---
@@ -35,6 +39,7 @@ class AgentBuilder {
     private var roleConfig: RoleConfig? = null
     private val toolsList = mutableListOf<String>()
     var taskConfig: TaskConfig<*>? = null
+    var contextFromPrevious: Any? = null
 
     fun role(block: RoleBuilder.() -> Unit) {
         roleConfig = RoleBuilder().apply(block).build()
@@ -51,7 +56,7 @@ class AgentBuilder {
     fun build(): AgentConfig {
         requireNotNull(roleConfig) { "Agent role must be defined via role { ... }" }
         requireNotNull(taskConfig) { "Agent task must be defined via task<T> { ... }" }
-        return AgentConfig(name, roleConfig!!, toolsList, taskConfig!!)
+        return AgentConfig(name, roleConfig!!, toolsList, taskConfig!!, contextFromPrevious)
     }
 }
 
@@ -74,13 +79,8 @@ class ToolsBuilder {
 @AgentDsl
 class TaskBuilder<T : Any>(private val schema: Class<T>) {
     var prompt: String = ""
-    private var tokenHandler: ((String) -> Unit)? = null
-    private var hallucinationHandler: ((Throwable, String) -> Unit)? = null
 
-    fun onToken(handler: (String) -> Unit) { tokenHandler = handler }
-    fun onHallucination(handler: (Throwable, String) -> Unit) { hallucinationHandler = handler }
-
-    fun build() = TaskConfig(schema, prompt, tokenHandler, hallucinationHandler)
+    fun build() = TaskConfig(schema, prompt)
 }
 
 /**
