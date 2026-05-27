@@ -16,6 +16,10 @@ class AgentInstance(val config: AgentConfig, val taskId: String) {
     var state: AgentState = AgentState.Idle
         private set
 
+    @Volatile
+    var result: Any? = null
+        internal set
+
     private val listeners = mutableListOf<(String) -> Unit>()
 
     internal fun updateState(newState: AgentState) {
@@ -172,12 +176,14 @@ class DefaultAgentOrchestrator(
                     if (task.outputSchema != Any::class.java) {
                         try {
                             jsonHandler.read(rawResponse)
+                            instance.result = app.getInstance(task.outputSchema.kotlin) // Mapeado simulado
                             instance.updateState(AgentState.Idle)
                         } catch (e: Exception) {
                             instance.updateState(AgentState.Failed("Hallucination: ${e.message}"))
                             task.onHallucination?.invoke(e, rawResponse)
                         }
                     } else {
+                        instance.result = rawResponse
                         instance.updateState(AgentState.Idle)
                     }
                 }

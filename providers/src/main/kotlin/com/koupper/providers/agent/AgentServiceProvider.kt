@@ -11,6 +11,7 @@ import kotlinx.coroutines.runBlocking
 class AgentServiceProvider : ServiceProvider() {
 
     override fun up() {
+        println("🐙 [AGENTIC_CORE] Booting AgentServiceProvider...")
         // 1. Register the profiler
         app.bind(EnvironmentProfiler::class, {
             LinuxEnvironmentProfiler()
@@ -65,6 +66,11 @@ class AgentServiceProvider : ServiceProvider() {
 
         app.bind(AgentOrchestrator::class, {
             orchestrator
+        })
+
+        // 6. Register the Swarm Coordinator
+        app.bind(SwarmCoordinator::class, {
+            DefaultSwarmCoordinator(app.getInstance(AgentOrchestrator::class))
         })
     }
 }
