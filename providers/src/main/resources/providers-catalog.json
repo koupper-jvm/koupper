@@ -651,6 +651,42 @@
         { "name": "SSH_COMMAND_TIMEOUT_SECONDS", "required": false, "description": "SSH command/SCP timeout in seconds." }
       ],
       "docs": "https://koupper.com/docs/providers/ssh"
+    },
+    {
+      "id": "agent",
+      "serviceProvider": "AgentServiceProvider",
+      "description": "Agentic core: local LLM inference, MCP tool execution, agent orchestration and swarm coordination.",
+      "bindings": [
+        {
+          "contract": "EnvironmentProfiler",
+          "implementations": [{ "class": "LinuxEnvironmentProfiler" }]
+        },
+        {
+          "contract": "AgentBudget",
+          "implementations": []
+        },
+        {
+          "contract": "ToolExecutor",
+          "implementations": [{ "class": "MCPToolExecutor" }]
+        },
+        {
+          "contract": "InferenceEngine",
+          "implementations": [{ "class": "LlamaCppEngine" }]
+        },
+        {
+          "contract": "AgentOrchestrator",
+          "implementations": [{ "class": "DefaultAgentOrchestrator" }]
+        },
+        {
+          "contract": "SwarmCoordinator",
+          "implementations": [{ "class": "DefaultSwarmCoordinator" }]
+        }
+      ],
+      "env": [
+        { "name": "KOUPPER_LLM_MODEL_PATH", "required": false, "description": "Path to GGUF model file for local LLM inference." },
+        { "name": "KOUPPER_LLM_EXECUTABLE", "required": false, "description": "Path to llama-server binary." }
+      ],
+      "docs": "https://koupper.com/docs/providers/agent"
     }
   ]
 }

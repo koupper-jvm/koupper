@@ -26,29 +26,15 @@ class DefaultSwarmCoordinator(
 
         for (config in agents) {
             println("[SWARM] Handoff -> Preparing agent: ${config.name}")
-            
-            // Inyectamos el contexto de los agentes anteriores si existe
-            val finalPrompt = if (sharedContext.isNotBlank()) {
-                "CONTEXT FROM PREVIOUS AGENTS:\n$sharedContext\n\nCURRENT TASK:\n${config.task.prompt}"
+
+            // Pass accumulated context through the dedicated handoff channel, not the task prompt.
+            val finalConfig = if (sharedContext.isNotBlank()) {
+                config.copy(contextFromPrevious = sharedContext)
             } else {
-                config.task.prompt
+                config
             }
 
-            // Creamos un nuevo config con el prompt actualizado (Handoff dinámico)
-            val swarmConfig = AgentConfig(
-                name = config.name,
-                role = config.role,
-                tools = config.tools,
-                task = TaskConfig(
-                    outputSchema = config.task.outputSchema,
-                    prompt = finalPrompt,
-                    onToken = config.task.onToken,
-                    onHallucination = config.task.onHallucination
-                )
-            )
-
-            // Ejecución
-            val instance = orchestrator.dispatchSync(swarmConfig)
+            val instance = orchestrator.dispatchSync(finalConfig)
             instances.add(instance)
 
             if (instance.state is AgentState.Failed) {

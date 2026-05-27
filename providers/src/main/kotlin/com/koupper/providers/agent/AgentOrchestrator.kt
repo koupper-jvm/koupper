@@ -1,5 +1,6 @@
 package com.koupper.providers.agent
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.koupper.container.app
 import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.mcp.MCPServerProvider
@@ -67,9 +68,11 @@ class DefaultAgentOrchestrator(
     private val engine: InferenceEngine,
     private val toolExecutor: ToolExecutor,
     private val mcpProvider: MCPServerProvider,
-    private val jsonHandler: JSONFileHandler<Any>,
+    private val jsonHandler: JSONFileHandler<*>,
     private val budget: AgentBudget
 ) : AgentOrchestrator {
+
+    private val mapper = jacksonObjectMapper()
 
     private val semaphore = Semaphore(budget.maxConcurrentAgents)
     private val activeJobs = mutableListOf<Job>()
@@ -184,12 +187,14 @@ class DefaultAgentOrchestrator(
                     // Final result storage
                     if (task.outputSchema != Any::class.java) {
                         try {
-                            jsonHandler.read(rawResponse)
-                            // En un worker real, devolveríamos un Map o DTO parseado
-                            instance.result = rawResponse 
+                            jsonHandler.read(rawResponse) // structural validation
+                            @Suppress("UNCHECKED_CAST")
+                            instance.result = mapper.readValue(rawResponse, task.outputSchema as Class<Any>)
                             instance.updateState(AgentState.Idle)
                         } catch (e: Exception) {
-                            instance.updateState(AgentState.Failed("Hallucination"))
+                            instance.updateState(AgentState.Failed(
+                                "Schema mismatch for ${task.outputSchema.simpleName}: ${e.message}"
+                            ))
                         }
                     } else {
                         instance.result = rawResponse
