@@ -32,6 +32,7 @@ Tech tags:
 - Getting started: https://koupper.com/getting-started.html
 - Command reference: https://koupper.com/commands/
 - Provider catalog: https://koupper.com/providers/
+- Agentic Core: https://koupper.com/agentic-core/
 
 ## Quick install (standalone, no repo clone)
 
@@ -129,7 +130,8 @@ Expected result:
 - **Script-driven backend workers** and async jobs.
 - **Deployment orchestration** and infra workflows.
 - **Operational automations** (GitHub, Docker, SSH, notifications, queue ops).
-- **AI/LLM pipelines** with typed script inputs.
+- **AI-Native Agents**: Build 100% local autonomous agents with the built-in **Agentic Core** and ReAct loop.
+- **LLM pipelines** with typed script inputs and structured output validation.
 
 ## Documentation hierarchy
 
