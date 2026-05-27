@@ -1,6 +1,7 @@
 package com.koupper.shared.runtime
 
 import java.io.File
+import java.lang.reflect.Proxy
 import java.net.URLClassLoader
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.script.experimental.api.*
@@ -169,18 +170,18 @@ class ScriptingHostBackend(
             ?: error("No script has been evaluated yet — call eval() first")
 
         val clazz = instance.javaClass
+        val key = clazz to symbol
 
-        val field = fieldCache.getOrPut(clazz to symbol) {
-            resolveField(clazz, symbol)
-                ?: error("Field '$symbol' not found in ${clazz.name} or any of its superclasses")
-        }
+        val field = fieldCache[key] ?: resolveField(clazz, symbol)?.also { fieldCache[key] = it }
+        if (field != null) return field.get(instance)
 
-        return field.get(instance)
+        // K2 compiles top-level @Export fun declarations as JVM methods, not fields
+        val method = resolveMethod(clazz, symbol)
+            ?: error("Symbol '$symbol' not found as field or method in ${clazz.name} or any of its superclasses")
+
+        return wrapMethodAsCallable(instance, method)
     }
 
-    /**
-     * Busca el campo también en superclases, por si el script hereda de una clase base.
-     */
     private fun resolveField(clazz: Class<*>, name: String): java.lang.reflect.Field? {
         var current: Class<*>? = clazz
         while (current != null && current != Any::class.java) {
@@ -192,6 +193,33 @@ class ScriptingHostBackend(
             current = current.superclass
         }
         return null
+    }
+
+    private fun resolveMethod(clazz: Class<*>, name: String): java.lang.reflect.Method? {
+        var current: Class<*>? = clazz
+        while (current != null && current != Any::class.java) {
+            val method = current.declaredMethods.firstOrNull { it.name == name && !it.isSynthetic }
+            if (method != null) {
+                method.isAccessible = true
+                return method
+            }
+            current = current.superclass
+        }
+        return null
+    }
+
+    private fun wrapMethodAsCallable(instance: Any, method: java.lang.reflect.Method): Any {
+        val arity = method.parameterCount
+        val functionInterface = Class.forName("kotlin.jvm.functions.Function$arity")
+        return Proxy.newProxyInstance(
+            instance.javaClass.classLoader,
+            arrayOf(functionInterface)
+        ) { _, proxyMethod, args ->
+            if (proxyMethod.name == "invoke") {
+                method.isAccessible = true
+                method.invoke(instance, *(args ?: emptyArray()))
+            } else null
+        }
     }
 
     // ──────────────────────────────────────────────
