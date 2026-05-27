@@ -42,10 +42,11 @@ class LlamaCppEngine(
     private val budget: AgentBudget
 ) : InferenceEngine {
 
-    private val modelPath = System.getenv("KOUPPER_LLM_MODEL_PATH") ?: "models/qwen-3b.gguf"
-    private val executablePath = System.getenv("KOUPPER_LLM_EXECUTABLE") ?: "llama-cli"
+    private val modelPath = System.getenv("KOUPPER_LLM_MODEL_PATH") ?: "/home/tdn-dell/develop/llama.cpp/modelo_prueba.gguf"
+    private val executablePath = System.getenv("KOUPPER_LLM_EXECUTABLE") ?: "/home/tdn-dell/develop/llama.cpp/build/bin/llama-server"
     
-    private val sidecar = LlamaCppSidecar(budget, modelPath, executablePath)
+    // Persistent Sidecar (llama-server)
+    private val sidecar = LlamaServerSidecar(budget, modelPath, executablePath)
 
     override suspend fun <T : Any> predict(
         history: List<AgentMessage>, 
@@ -54,26 +55,20 @@ class LlamaCppEngine(
     ): T = withContext(Dispatchers.IO) {
         
         val agentId = UUID.randomUUID().toString().substring(0, 8)
-        
-        // 1. ReAct Intent Detection (Check for ToolCall request)
-        val lastMessage = history.last().content.lowercase()
-        
-        // --- REAL INFERENCE VIA SIDECAR ---
-        val prompt = buildFinalPrompt(history, outputSchema)
-        
-        // Ejecución sincrónica para evitar deadlocks en el motor de scripts
-        val rawResponse = sidecar.inferSync(prompt)
-        
-        // Emitimos la respuesta al listener si existe
-        listener?.onToken(rawResponse, agentId)
+        val fullResponse = StringBuilder()
 
-        // 2. Structured Boundary: Catching hallucinations via Koupper's JSON parser
+        // --- REAL INFERENCE VIA PERSISTENT SIDECAR (SSE over HTTP) ---
+        sidecar.infer(history).collect { token ->
+            fullResponse.append(token)
+            listener?.onToken(token, agentId)
+        }
+
+        val rawResponse = fullResponse.toString()
+
+        // Structured Boundary: Catching hallucinations via Koupper's JSON parser
         if (outputSchema != null && outputSchema != String::class.java) {
             try {
                 jsonHandler.read(rawResponse)
-                
-                // Note: In a real scenario, we'd map the result to the DTO.
-                // staying consistent with our previous phases.
                 @Suppress("UNCHECKED_CAST")
                 return@withContext app.getInstance(outputSchema.kotlin) as T
             } catch (e: Exception) {
@@ -83,26 +78,5 @@ class LlamaCppEngine(
 
         @Suppress("UNCHECKED_CAST")
         return@withContext rawResponse as T
-    }
-
-    private fun buildFinalPrompt(history: List<AgentMessage>, outputSchema: Class<*>?): String {
-        val promptBuilder = StringBuilder()
-        history.forEach { msg ->
-            val prefix = when(msg.role) {
-                "system" -> "### System:\n"
-                "user" -> "### User:\n"
-                "assistant" -> "### Assistant:\n"
-                "tool" -> "### Observation:\n"
-                else -> ""
-            }
-            promptBuilder.append("$prefix${msg.content}\n\n")
-        }
-        
-        if (outputSchema != null) {
-            promptBuilder.append("Respond ONLY with a JSON matching this structure: ${outputSchema.simpleName}\n")
-        }
-        
-        promptBuilder.append("### Assistant:\n")
-        return promptBuilder.toString()
     }
 }
