@@ -4,6 +4,9 @@ import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.shared.annotations.WebRoute
 import com.koupper.shared.annotations.Export
 import com.koupper.shared.annotations.RouteMethod
+import com.koupper.shared.runtime.GlobalRouteRegistry
+import com.koupper.shared.runtime.RegisteredRuntimeRoute
+import com.koupper.shared.runtime.RouteMethod as RuntimeRouteMethod
 import java.net.ServerSocket
 import java.net.URI
 import java.net.http.HttpClient
@@ -19,6 +22,11 @@ class GrizzlyRuntimeRouterProviderTest : AnnotationSpec() {
         val client = HttpClient.newHttpClient()
         val request = HttpRequest.newBuilder(URI(url)).GET().build()
         return client.send(request, HttpResponse.BodyHandlers.ofString())
+    }
+
+    @Before
+    fun clearRegistry() {
+        GlobalRouteRegistry.routes.clear()
     }
 
     // Mock handlers
@@ -47,12 +55,8 @@ class GrizzlyRuntimeRouterProviderTest : AnnotationSpec() {
     @Test
     fun `should extract path parameters correctly`() {
         val provider = GrizzlyRuntimeRouterProvider()
-        val routesField = provider.javaClass.getDeclaredField("routes")
-        routesField.isAccessible = true
-        val routes = routesField.get(provider) as MutableList<RegisteredRuntimeRoute>
-        
-        routes.add(RegisteredRuntimeRoute(
-            method = RouteMethod.GET,
+        GlobalRouteRegistry.routes.add(RegisteredRuntimeRoute(
+            method = RuntimeRouteMethod.GET,
             fullPath = "/api/test/{id}",
             middlewares = emptyList(),
             handler = MockHandlers.getWithId,
@@ -73,12 +77,8 @@ class GrizzlyRuntimeRouterProviderTest : AnnotationSpec() {
     @Test
     fun `should map query parameters to data class`() {
         val provider = GrizzlyRuntimeRouterProvider()
-        val routesField = provider.javaClass.getDeclaredField("routes")
-        routesField.isAccessible = true
-        val routes = routesField.get(provider) as MutableList<RegisteredRuntimeRoute>
-        
-        routes.add(RegisteredRuntimeRoute(
-            method = RouteMethod.GET,
+        GlobalRouteRegistry.routes.add(RegisteredRuntimeRoute(
+            method = RuntimeRouteMethod.GET,
             fullPath = "/api/complex",
             middlewares = emptyList(),
             handler = MockHandlers.getComplex,
@@ -100,17 +100,12 @@ class GrizzlyRuntimeRouterProviderTest : AnnotationSpec() {
     @Test
     fun `should map multiple query parameters to a list`() {
         val provider = GrizzlyRuntimeRouterProvider()
-        val routesField = provider.javaClass.getDeclaredField("routes")
-        routesField.isAccessible = true
-        val routes = routesField.get(provider) as MutableList<RegisteredRuntimeRoute>
-        
-        // Usamos una forma más directa de obtener el tipo para el test
         val listType = object : Any() {
             fun getList(items: List<String>) {}
         }.javaClass.methods.first { it.name == "getList" }.genericParameterTypes[0]
 
-        routes.add(RegisteredRuntimeRoute(
-            method = RouteMethod.GET,
+        GlobalRouteRegistry.routes.add(RegisteredRuntimeRoute(
+            method = RuntimeRouteMethod.GET,
             fullPath = "/api/list",
             middlewares = emptyList(),
             handler = MockHandlers.getList,
@@ -131,12 +126,8 @@ class GrizzlyRuntimeRouterProviderTest : AnnotationSpec() {
     @Test
     fun `should return 400 when query parameter mapping fails`() {
         val provider = GrizzlyRuntimeRouterProvider()
-        val routesField = provider.javaClass.getDeclaredField("routes")
-        routesField.isAccessible = true
-        val routes = routesField.get(provider) as MutableList<RegisteredRuntimeRoute>
-        
-        routes.add(RegisteredRuntimeRoute(
-            method = RouteMethod.GET,
+        GlobalRouteRegistry.routes.add(RegisteredRuntimeRoute(
+            method = RuntimeRouteMethod.GET,
             fullPath = "/api/complex",
             middlewares = emptyList(),
             handler = MockHandlers.getComplex,

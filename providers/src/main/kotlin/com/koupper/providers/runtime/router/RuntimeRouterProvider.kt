@@ -50,15 +50,16 @@ class RuntimeRouterDsl {
         currentPathPrefix += prefix()
     }
 
-    fun <I> get(block: RouteBuilder<I>.() -> Unit) {
-        register(com.koupper.shared.runtime.RouteMethod.GET, block)
+    inline fun <reified I> get(noinline block: RouteBuilder<I>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.GET, I::class.java, block)
     }
 
-    fun <I> post(block: RouteBuilder<I>.() -> Unit) {
-        register(com.koupper.shared.runtime.RouteMethod.POST, block)
+    inline fun <reified I> post(noinline block: RouteBuilder<I>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.POST, I::class.java, block)
     }
 
-    private fun <I> register(method: com.koupper.shared.runtime.RouteMethod, block: RouteBuilder<I>.() -> Unit) {
+    @PublishedApi
+    internal fun <I> registerWithType(method: com.koupper.shared.runtime.RouteMethod, inputClass: Class<*>, block: RouteBuilder<I>.() -> Unit) {
         val builder = RouteBuilder<I>()
         builder.block()
         val fullPath = (currentPathPrefix + builder.path).replace("//", "/")
@@ -67,7 +68,7 @@ class RuntimeRouterDsl {
             fullPath = fullPath,
             middlewares = builder.middlewares,
             handler = builder.handler ?: throw IllegalStateException("Handler not defined for $fullPath"),
-            inputType = builder.inputType
+            inputType = if (inputClass != Any::class.java) inputClass else builder.inputType
         ))
     }
 
@@ -131,13 +132,30 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
     private fun handleInternal(request: Request, response: Response) {
         val method = request.method.methodString.uppercase()
         val path = request.requestURI
-        
+
         val routes = GlobalRouteRegistry.routes
         val route = routes.firstOrNull { it.method.name == method && matches(it.fullPath, path) }
-        
+
         if (route == null) {
             respond(response, 404, mapOf("error" to "Route not found", "path" to path, "registered" to routes.map { "${it.method} ${it.fullPath}" }))
             return
+        }
+
+        val queryParams = parseQueryString(request.queryString ?: "")
+        val reqCtx = RequestContext(
+            method = method,
+            path = path,
+            body = "",
+            headers = emptyMap(),
+            queryParams = queryParams
+        )
+        for (middlewareName in route.middlewares) {
+            val middleware = GlobalRouteRegistry.middlewares[middlewareName] ?: continue
+            val result = middleware(reqCtx) as? MiddlewareResult ?: continue
+            if (!result.allowed) {
+                respond(response, result.statusCode, mapOf("error" to result.message))
+                return
+            }
         }
 
         try {
@@ -145,11 +163,12 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
             val invokeMethod = handler.javaClass.methods
                 .filter { it.name == "invoke" && !it.isBridge }
                 .firstOrNull() ?: throw IllegalStateException("No invoke found")
-            
+
             invokeMethod.isAccessible = true
-            
+
             val output = if (invokeMethod.parameterCount == 1) {
-                invokeMethod.invoke(handler, "") // Pass empty string instead of null
+                val arg = buildArgument(request, route)
+                invokeMethod.invoke(handler, arg)
             } else {
                 invokeMethod.invoke(handler)
             }
@@ -158,12 +177,87 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
                 handleStream(response, output)
                 return
             }
-            
+
             respond(response, 200, output ?: mapOf("ok" to true))
+        } catch (e: IllegalArgumentException) {
+            respond(response, 400, mapOf("error" to "Invalid input format", "detail" to (e.message ?: "")))
         } catch (e: Throwable) {
             val root = e.cause ?: e
             respond(response, 500, mapOf("error" to root.message, "type" to root.javaClass.name))
         }
+    }
+
+    private fun buildArgument(request: Request, route: RegisteredRuntimeRoute): Any? {
+        val inputType = route.inputType ?: return null
+        val httpMethod = request.method.methodString.uppercase()
+
+        if (inputType == String::class.java) {
+            if (httpMethod == "POST" || httpMethod == "PUT" || httpMethod == "PATCH") {
+                return readRequestBody(request)
+            }
+            val pathParams = extractPathParams(route.fullPath, request.requestURI)
+            return pathParams.values.firstOrNull()
+                ?: URLDecoder.decode(request.requestURI.trim('/').split("/").lastOrNull() ?: "", "UTF-8")
+        }
+
+        if (inputType is java.lang.reflect.ParameterizedType) {
+            val rawType = inputType.rawType
+            if (rawType is Class<*> && Collection::class.java.isAssignableFrom(rawType)) {
+                val queryParams = parseQueryString(request.queryString ?: "")
+                return queryParams.values.flatten()
+            }
+        }
+
+        if (inputType is Class<*>) {
+            val queryParams = parseQueryString(request.queryString ?: "").mapValues { it.value.firstOrNull() ?: "" }
+            try {
+                return mapper.convertValue(queryParams, inputType)
+            } catch (e: Exception) {
+                throw IllegalArgumentException("Cannot map params to ${inputType.simpleName}: ${e.message}")
+            }
+        }
+
+        return null
+    }
+
+    private fun readRequestBody(request: Request): String {
+        val contentLength = request.contentLengthLong.toInt()
+        if (contentLength <= 0) return ""
+        val inputBuffer = request.inputBuffer
+        try {
+            inputBuffer.fillFully(contentLength)
+        } catch (e: Exception) {
+            return ""
+        }
+        val buf = ByteArray(contentLength)
+        val n = inputBuffer.read(buf, 0, contentLength)
+        return if (n > 0) String(buf, 0, n, Charsets.UTF_8) else ""
+    }
+
+    private fun extractPathParams(routePath: String, requestPath: String): Map<String, String> {
+        val routeParts = routePath.trim('/').split("/")
+        val requestParts = requestPath.trim('/').split("/")
+        val params = mutableMapOf<String, String>()
+        routeParts.forEachIndexed { i, part ->
+            if (part.startsWith("{") && part.endsWith("}") && i < requestParts.size) {
+                params[part.substring(1, part.length - 1)] = URLDecoder.decode(requestParts[i], "UTF-8")
+            }
+        }
+        return params
+    }
+
+    private fun parseQueryString(queryString: String): Map<String, List<String>> {
+        if (queryString.isBlank()) return emptyMap()
+        val result = mutableMapOf<String, MutableList<String>>()
+        queryString.split("&").forEach { pair ->
+            val idx = pair.indexOf('=')
+            if (idx > 0) {
+                val key = URLDecoder.decode(pair.substring(0, idx), "UTF-8")
+                val value = URLDecoder.decode(pair.substring(idx + 1), "UTF-8")
+                result.getOrPut(key) { mutableListOf() }.add(value)
+            }
+        }
+        return result
     }
 
     private fun matches(routePath: String, requestPath: String): Boolean {
