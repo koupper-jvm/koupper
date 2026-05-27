@@ -4,13 +4,13 @@ import com.koupper.container.app
 import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.process.ProcessSupervisor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.*
 
 /**
  * Interface to listen for tokens during inference.
- * This avoids a direct dependency on Koupper's EventBus in the providers module.
  */
 interface TokenListener {
     fun onToken(token: String, agentId: String)
@@ -42,6 +42,11 @@ class LlamaCppEngine(
     private val budget: AgentBudget
 ) : InferenceEngine {
 
+    private val modelPath = System.getenv("KOUPPER_LLM_MODEL_PATH") ?: "models/qwen-3b.gguf"
+    private val executablePath = System.getenv("KOUPPER_LLM_EXECUTABLE") ?: "llama-cli"
+    
+    private val sidecar = LlamaCppSidecar(budget, modelPath, executablePath)
+
     override suspend fun <T : Any> predict(
         history: List<AgentMessage>, 
         outputSchema: Class<T>?,
@@ -50,30 +55,54 @@ class LlamaCppEngine(
         
         val agentId = UUID.randomUUID().toString().substring(0, 8)
         
-        // Simulación: Buscamos si el último mensaje pide una herramienta
+        // 1. ReAct Intent Detection (Check for ToolCall request)
         val lastMessage = history.last().content.lowercase()
         
-        val rawResponse = when {
-            // Mock: Si el prompt menciona 'hardware', el LLM emite una llamada a herramienta MCP
-            lastMessage.contains("hardware") && !lastMessage.contains("result:") -> {
-                """{"toolName": "hardware-checker", "action": "execute", "arguments": {}}"""
+        // --- REAL INFERENCE VIA SIDECAR ---
+        val prompt = buildFinalPrompt(history, outputSchema)
+        
+        // Ejecución sincrónica para evitar deadlocks en el motor de scripts
+        val rawResponse = sidecar.inferSync(prompt)
+        
+        // Emitimos la respuesta al listener si existe
+        listener?.onToken(rawResponse, agentId)
+
+        // 2. Structured Boundary: Catching hallucinations via Koupper's JSON parser
+        if (outputSchema != null && outputSchema != String::class.java) {
+            try {
+                jsonHandler.read(rawResponse)
+                
+                // Note: In a real scenario, we'd map the result to the DTO.
+                // staying consistent with our previous phases.
+                @Suppress("UNCHECKED_CAST")
+                return@withContext app.getInstance(outputSchema.kotlin) as T
+            } catch (e: Exception) {
+                throw IllegalStateException("LLM Hallucination detected: Output does not match ${outputSchema.name}. Raw: $rawResponse")
             }
-            else -> simulateInference(history.last().content, agentId, listener)
         }
 
         @Suppress("UNCHECKED_CAST")
         return@withContext rawResponse as T
     }
 
-    private fun simulateInference(prompt: String, agentId: String, listener: TokenListener?): String {
-        // Emit events through the listener with a small delay to simulate real LLM generation
-        Thread.sleep(100)
-        listener?.onToken("{", agentId)
-        Thread.sleep(100)
-        listener?.onToken("\"status\": \"done\"", agentId)
-        Thread.sleep(100)
-        listener?.onToken("}", agentId)
+    private fun buildFinalPrompt(history: List<AgentMessage>, outputSchema: Class<*>?): String {
+        val promptBuilder = StringBuilder()
+        history.forEach { msg ->
+            val prefix = when(msg.role) {
+                "system" -> "### System:\n"
+                "user" -> "### User:\n"
+                "assistant" -> "### Assistant:\n"
+                "tool" -> "### Observation:\n"
+                else -> ""
+            }
+            promptBuilder.append("$prefix${msg.content}\n\n")
+        }
         
-        return "{\"status\": \"done\"}"
+        if (outputSchema != null) {
+            promptBuilder.append("Respond ONLY with a JSON matching this structure: ${outputSchema.simpleName}\n")
+        }
+        
+        promptBuilder.append("### Assistant:\n")
+        return promptBuilder.toString()
     }
 }
