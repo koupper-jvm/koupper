@@ -684,7 +684,8 @@ private object FileJobFS {
         failedDir(queue).listFiles { f -> f.isFile && f.extension.equals("json", true) }?.sortedBy { it.name } ?: emptyList()
 
     fun moveToFailed(queue: String, file: File) {
-        val target = File(failedDir(queue), file.name)
+        val targetName = file.name.removeSuffix(".processing")
+        val target = File(failedDir(queue), targetName)
         file.copyTo(target, overwrite = true)
         file.delete()
     }
@@ -782,16 +783,36 @@ object FileJobDriver : ContextualJobDriver {
             return results
         }
 
+        val failedDir = File(dir, ".failed").also { it.mkdirs() }
+
         files.forEach { file ->
+            val processingFile = File(file.parent, "${file.name}.processing")
+
+            // Atomic claim via POSIX rename(2). If this returns false, the source
+            // no longer exists — another worker already renamed it. Skip silently.
+            if (!file.renameTo(processingFile)) return@forEach
+
+            fun moveToFailed() {
+                val target = File(failedDir, file.name)
+                processingFile.copyTo(target, overwrite = true)
+                processingFile.delete()
+            }
+
             try {
-                val task = JobSerializer.deserialize(file.readText())
-                if (!file.delete()) {
-                    results.add(JobResult.Error("⚠️ Could not delete processed job file: ${file.name}"))
-                }
-                results.add(JobResult.Ok(config.id, task))
+                val task = JobSerializer.deserialize(processingFile.readText())
+                results.add(JobResult.Ok(
+                    configName = config.id,
+                    task = task,
+                    ackFn = {
+                        if (!processingFile.delete()) {
+                            println("⚠️ Could not delete processing file: ${processingFile.name}")
+                        }
+                    },
+                    releaseFn = ::moveToFailed
+                ))
             } catch (e: Exception) {
-                results.add(JobResult.Error("❌ Failed to execute job from file '${file.name}': ${e.message}", e))
-                FileJobFS.moveToFailed(config.queue!!, file)
+                results.add(JobResult.Error("❌ Failed to read job from file '${file.name}': ${e.message}", e))
+                moveToFailed()
             }
         }
 
