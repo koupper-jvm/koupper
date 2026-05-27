@@ -47,6 +47,12 @@ interface AgentOrchestrator {
     suspend fun dispatchSync(config: AgentConfig): AgentInstance
     
     /**
+     * Executes an agent task. Designed to be called from Koupper Workers.
+     * Returns the final result object.
+     */
+    suspend fun execute(config: AgentConfig): Any?
+
+    /**
      * Retrieves an active agent instance by its ID (task ID).
      */
     fun getTask(taskId: String): AgentInstance?
@@ -94,23 +100,36 @@ class DefaultAgentOrchestrator(
         return instance
     }
 
+    override suspend fun execute(config: AgentConfig): Any? {
+        val instance = AgentInstance(config, "worker-${java.util.UUID.randomUUID().toString().substring(0, 4)}")
+        semaphore.withPermit {
+            runAgent(instance)
+        }
+        return instance.result
+    }
+
     override fun getTask(taskId: String): AgentInstance? = tasks[taskId]
 
     private suspend fun runAgent(instance: AgentInstance) {
         val config = instance.config
         val task = config.task
 
-        println("[ORCHESTRATOR] Starting ReAct loop for agent: ${config.name}")
+        println("[ORCHESTRATOR] Running Agent: ${config.name}")
         
-        // --- Contexto Inicial con Herramientas Dinámicas (MCP) ---
         val availableTools = mcpProvider.listTools().joinToString("\n") { 
             "- ${it.name}: ${it.description} (Schema: ${it.inputSchema})" 
         }
+
+        // Inyectamos el contexto de handoffs anteriores si existe
+        val historyContext = if (config.contextFromPrevious != null) {
+            "\nCONTEXT FROM PREVIOUS AGENT:\n${config.contextFromPrevious}\n"
+        } else ""
 
         val systemPrompt = """
             Identity: ${config.role.identity}
             Goal: ${config.role.goal}
             Instructions: ${config.role.instructions}
+            $historyContext
             
             TOOLS AVAILABLE:
             $availableTools
@@ -125,62 +144,52 @@ class DefaultAgentOrchestrator(
 
         val listener = object : TokenListener {
             override fun onToken(token: String, agentId: String) {
+                println("TOKEN: $token")
                 instance.emitToken(token)
-                task.onToken?.invoke(token)
             }
         }
 
         var isFinalAnswer = false
         var turnCount = 0
-        val maxTurns = 5 // Evitar loops infinitos
+        val maxTurns = 5
 
         try {
             while (!isFinalAnswer && turnCount < maxTurns) {
                 turnCount++
                 instance.updateState(AgentState.Reasoning(turnCount))
 
-                // 1. Razonamiento (Inferencia)
                 val rawResponse = engine.predict<String>(
                     history = history,
-                    outputSchema = null, // Pedimos crudo para detectar intención de herramienta
+                    outputSchema = null,
                     listener = listener
                 )
 
-                // 2. ¿Es una llamada a herramienta?
                 if (rawResponse.trim().startsWith("{\"toolName\"")) {
                     try {
-                        val toolCall = jsonHandler.read(rawResponse).let {
-                            // En una implementación real usaríamos mapper.convertValue(it, ToolCall::class.java)
-                            // Aquí simulamos el parseo a mano por simplicidad del bridge actual
-                            ToolCall("file-handler", "read", mapOf("path" to "metrics.json"))
-                        }
+                        // Simulación de ToolCall via JSON
+                        val toolCall = ToolCall("hardware-checker", "execute") 
 
-                        // 3. Acción (Ejecución de herramienta)
                         instance.updateState(AgentState.Executing(toolCall.toolName))
                         val toolResult = toolExecutor.execute(toolCall)
 
-                        // 4. Observación (Re-inyección de contexto)
                         history.add(AgentMessage("assistant", rawResponse, toolCall))
                         history.add(AgentMessage("tool", "result: ${toolResult.output}"))
                         
-                        println("[ORCHESTRATOR] Tool result injected. Resuming reasoning.")
                     } catch (e: Exception) {
-                        println("[ORCHESTRATOR] Failed to parse ToolCall: ${e.message}")
                         isFinalAnswer = true
                     }
                 } else {
-                    // No hay herramienta, es la respuesta final
                     isFinalAnswer = true
                     
-                    // 5. Frontera Estricta (Validación Final si aplica)
+                    // Final result storage
                     if (task.outputSchema != Any::class.java) {
                         try {
                             jsonHandler.read(rawResponse)
-                            instance.result = app.getInstance(task.outputSchema.kotlin) // Mapeado simulado
+                            // En un worker real, devolveríamos un Map o DTO parseado
+                            instance.result = rawResponse 
                             instance.updateState(AgentState.Idle)
                         } catch (e: Exception) {
-                            instance.updateState(AgentState.Failed("Hallucination: ${e.message}"))
-                            task.onHallucination?.invoke(e, rawResponse)
+                            instance.updateState(AgentState.Failed("Hallucination"))
                         }
                     } else {
                         instance.result = rawResponse
@@ -189,7 +198,6 @@ class DefaultAgentOrchestrator(
                 }
             }
         } catch (e: Exception) {
-            println("[ORCHESTRATOR] Loop error: ${e.message}")
             instance.updateState(AgentState.Failed(e.message ?: "Unknown"))
         }
     }
