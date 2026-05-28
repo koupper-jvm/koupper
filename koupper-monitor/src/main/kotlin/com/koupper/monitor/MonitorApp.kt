@@ -504,8 +504,8 @@ class MonitorApp(private val jobsDir: File) {
             }
         }
 
-        // Auto-select wizard job when it appears and wizard is active
-        if (wizardActive && wizardSessionId != null && mode != Mode.LOG) {
+        // Auto-select wizard job only from WATCH — never override COMMAND mode
+        if (wizardActive && wizardSessionId != null && mode == Mode.WATCH) {
             val wi = snap.indexOfFirst { it.id == wizardSessionId }
             if (wi >= 0) { selectedIdx = wi; selectedJobId = wizardSessionId; mode = Mode.LOG }
         }
