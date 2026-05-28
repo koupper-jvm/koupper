@@ -6,6 +6,8 @@ import com.googlecode.lanterna.graphics.TextGraphics
 import com.googlecode.lanterna.input.KeyType
 import com.googlecode.lanterna.screen.TerminalScreen
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.File
 import java.net.URI
 import java.net.http.HttpClient
@@ -21,10 +23,11 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
-// ── CortexEngine: local LLM via llama-server, no external deps ────────────────
+// ── CortexEngine: local LLM via llama-server, MCP tool calling ───────────────
 private class CortexEngine(
     private val logFile: File,
     private val agentsDir: File,
+    private val mcpServer: CortexMcpServer? = null,
     private val modelPath: String  = System.getenv("KOUPPER_LLM_MODEL_PATH")
                                       ?: "/home/tdn-dell/develop/llama.cpp/modelo_prueba.gguf",
     private val serverBin: String  = System.getenv("KOUPPER_LLM_EXECUTABLE")
@@ -33,22 +36,31 @@ private class CortexEngine(
 ) {
     private val http      = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
     private val history   = mutableListOf<Map<String, String>>()
+    private val mapper    = jacksonObjectMapper()
     private var serverProc: Process? = null
 
-    private val SYSTEM = """
-You are CORTEX, the AI orchestrator of a Koupper automation swarm.
-You run entirely on a local LLM — no cloud, no remote APIs.
-When asked to create an agent, generate a complete Koupper .kts script wrapped in a kotlin code block:
-```kotlin
-// Agent: Name
-// Role: what it does
-import java.io.File
-val home = System.getProperty("user.home")
-// implementation
-```
-After generating code, confirm the file was saved.
-Be concise — this is a terminal. Keep replies under 8 lines unless generating code.
-    """.trimIndent()
+    private companion object { const val MAX_TOOL_ITERS = 5 }
+
+    private fun buildSystem(): String {
+        val toolLines = mcpServer?.toolDefinitions()?.joinToString("\n") { t ->
+            "  • ${t["name"]}: ${t["description"]}"
+        } ?: "  (no tools available)"
+        return buildString {
+            appendLine("You are CORTEX, the AI orchestrator of a Koupper automation swarm.")
+            appendLine("You run entirely on a local LLM — no cloud, no remote APIs.")
+            appendLine()
+            appendLine("AVAILABLE TOOLS:")
+            appendLine(toolLines)
+            appendLine()
+            appendLine("TOOL CALLING: When you need to use a tool, output EXACTLY this on its own line:")
+            appendLine("""  CORTEX_TOOL: {"tool":"<name>","args":{<arguments>}}""")
+            appendLine("You will then receive: TOOL_RESULT: <json>. Continue your response after the result.")
+            appendLine("Only use CORTEX_TOOL when you need to take action or get information.")
+            appendLine()
+            appendLine("For agent code, wrap in a kotlin code block with '// Agent: Name' as first comment.")
+            append("Be concise — terminal UI. Under 8 lines unless generating code.")
+        }
+    }
 
     private fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
 
@@ -91,7 +103,7 @@ Be concise — this is a terminal. Keep replies under 8 lines unless generating 
 
     fun greet(swarmContext: String) {
         history.clear()
-        history.add(mapOf("role" to "system", "content" to SYSTEM))
+        history.add(mapOf("role" to "system", "content" to buildSystem()))
         history.add(mapOf("role" to "user",   "content" to "Context: $swarmContext\nGreet the user (2 lines max) and ask what they need built today."))
         val reply = infer()
         history.add(mapOf("role" to "assistant", "content" to reply))
@@ -104,7 +116,39 @@ Be concise — this is a terminal. Keep replies under 8 lines unless generating 
         log("▶ $userMsg")
         log("")
         history.add(mapOf("role" to "user", "content" to userMsg))
-        val reply = infer()
+
+        var reply = infer()
+        var iters = 0
+
+        // Agentic tool-calling loop: keep going as long as CORTEX_TOOL lines appear
+        val mcp = mcpServer  // local val so the compiler can smart-cast inside lambdas
+        while (iters < MAX_TOOL_ITERS) {
+            val toolLine = reply.lines().firstOrNull { it.trimStart().startsWith("CORTEX_TOOL:") }
+                ?: break
+            if (mcp == null) break
+
+            val jsonStr = toolLine.trimStart().removePrefix("CORTEX_TOOL:").trim()
+            log("  ↳ $jsonStr")
+
+            val result = runCatching {
+                val payload  = mapper.readValue<Map<String, Any?>>(jsonStr)
+                val toolName = payload["tool"]?.toString()
+                    ?: return@runCatching mapOf("error" to "missing 'tool' field in CORTEX_TOOL")
+                @Suppress("UNCHECKED_CAST")
+                val toolArgs = payload["args"] as? Map<String, Any?> ?: emptyMap()
+                mcp.callTool(toolName, toolArgs)
+            }.getOrElse { e -> mapOf("error" to "parse error: ${e.message?.take(80)}") }
+
+            val resultJson = mapper.writeValueAsString(result)
+            log("  ↳ ${resultJson.take(150)}")
+            log("")
+
+            history.add(mapOf("role" to "assistant", "content" to reply))
+            history.add(mapOf("role" to "user",      "content" to "TOOL_RESULT: $resultJson"))
+            reply = infer()
+            iters++
+        }
+
         history.add(mapOf("role" to "assistant", "content" to reply))
 
         val scriptMatch = Regex("```kotlin(.*?)```", RegexOption.DOT_MATCHES_ALL).find(reply)
@@ -114,7 +158,7 @@ Be concise — this is a terminal. Keep replies under 8 lines unless generating 
                 ?.groupValues?.get(1)?.trim()?.replace(" ", "") ?: "Agent${System.currentTimeMillis() % 1000}"
             File(agentsDir, "$agentName.kts").writeText(script)
             val out = reply.replace(scriptMatch.value,
-                "\n[✓ Saved → ~/.koupper/agents/$agentName.kts]\n[  Run: koupper run ~/.koupper/agents/$agentName.kts]")
+                "\n[✓ Saved → ~/.koupper/agents/$agentName.kts]\n[  Use run_agent to execute it]")
             out.lines().forEach { log(it) }
         } else {
             reply.lines().forEach { log(it) }
@@ -215,7 +259,8 @@ class MonitorApp(private val jobsDir: File) {
     // Wizard / CORTEX state
     @Volatile private var wizardActive    = false
     private var wizardSessionId: String?  = null
-    private var cortexEngine: CortexEngine? = null
+    private var cortexEngine: CortexEngine?  = null
+    private var mcpServer: CortexMcpServer?  = null
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -227,6 +272,7 @@ class MonitorApp(private val jobsDir: File) {
 
         Runtime.getRuntime().addShutdownHook(thread(start = false, isDaemon = true) {
             runCatching { screen.stopScreen() }
+            mcpServer?.stopHttp()
         })
 
         // No splash animation — go straight to dashboard
@@ -317,13 +363,20 @@ class MonitorApp(private val jobsDir: File) {
         wizardSessionId = "cortex-session"
         dirty = true
 
-        val engine = CortexEngine(logFile, agentsDir)
+        // Start MCP server (port 18082) before creating CortexEngine
+        val mcp = CortexMcpServer(jobsDir, agentsDir)
+        mcp.startHttp()
+        mcpServer = mcp
+
+        val engine = CortexEngine(logFile, agentsDir, mcpServer = mcp)
         cortexEngine = engine
 
         fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
 
         log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         log("  CORTEX ONLINE — Local inference")
+        log("  MCP tools : ${mcp.toolDefinitions().size} registered")
+        log("  MCP port  : 18082")
         log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         dirty = true
 
