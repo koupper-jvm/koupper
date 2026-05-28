@@ -15,6 +15,13 @@ import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+data class InferenceConfig(
+    val maxTokens: Int    = 512,
+    val temperature: Double = 0.7,
+    val topP: Double      = 0.95,
+    val stream: Boolean   = true
+)
+
 /**
  * LlamaServerSidecar manages the lifecycle of a background 'llama-server' process.
  * It ensures the model is resident in RAM for fast multi-turn inference.
@@ -23,7 +30,8 @@ class LlamaServerSidecar(
     private val budget: AgentBudget,
     private val modelPath: String,
     private val executablePath: String = "llama-server",
-    private val port: Int = 8081
+    private val port: Int = 8081,
+    private val config: InferenceConfig = InferenceConfig()
 ) {
     private var process: Process? = null
     private val isStarted = AtomicBoolean(false)
@@ -125,10 +133,11 @@ class LlamaServerSidecar(
         }
 
         val requestBody = mapOf(
-            "messages" to messages,
-            "stream" to true,
-            "n_predict" to 512,
-            "temperature" to 0.7
+            "messages"    to messages,
+            "stream"      to config.stream,
+            "n_predict"   to config.maxTokens,
+            "temperature" to config.temperature,
+            "top_p"       to config.topP
         )
 
         val request = HttpRequest.newBuilder()
