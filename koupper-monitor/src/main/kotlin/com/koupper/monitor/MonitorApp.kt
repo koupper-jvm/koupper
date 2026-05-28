@@ -144,7 +144,11 @@ class MonitorApp(private val jobsDir: File) {
 
     private fun rawMode(on: Boolean) {
         try {
-            val cmd = if (on) "stty raw -echo </dev/tty" else "stty -raw echo </dev/tty"
+            // -icanon: immediate key reads (no line buffering)
+            // -echo: don't echo input back
+            // opost kept ON: \n still triggers \r in output, preventing staircase in render
+            val cmd = if (on) "stty -icanon min 1 time 0 -echo </dev/tty"
+                      else    "stty icanon echo </dev/tty"
             Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd)).waitFor()
         } catch (_: Exception) {}
     }
