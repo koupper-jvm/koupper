@@ -64,19 +64,16 @@ class LinuxEnvironmentProfiler : EnvironmentProfiler {
     }
 
     private fun calculateBudget(telemetry: HardwareTelemetry): AgentBudget {
-        // 1. Verificación de Viabilidad (The "Kill Switch")
-        val isUnviable = telemetry.totalRamGb < 4.0 || (!telemetry.hasAvx2 && !telemetry.hasGpu)
-        
-        if (isUnviable) {
-            // Notificamos explícitamente la imposibilidad de ejecución
-            throw IllegalStateException("""
-                [KOUPPER AGENTIC ERROR]: Hardware insuficiente para inicializar el núcleo.
-                Mínimo requerido: 4GB RAM + (AVX2 o GPU).
-                Detectado: ${telemetry.totalRamGb}GB RAM, AVX2: ${telemetry.hasAvx2}, GPU: ${telemetry.hasGpu}
-            """.trimIndent())
+        // Warn when below recommended specs; degrade to LOW_END instead of hard-failing.
+        // llama.cpp works on CPUs without AVX2 (slower), and small models run on 4GB+.
+        val belowRecommended = telemetry.totalRamGb < 4.0 || (!telemetry.hasAvx2 && !telemetry.hasGpu)
+        if (belowRecommended) {
+            println("[KOUPPER AGENTIC WARN]: Below recommended specs (4GB RAM + AVX2 or GPU). " +
+                    "Running in LOW_END mode — inference will be slow. " +
+                    "Detected: ${telemetry.totalRamGb}GB RAM, AVX2=${telemetry.hasAvx2}, GPU=${telemetry.hasGpu}")
         }
 
-        // 2. Escalabilidad Proporcional Pura
+        // Tier selection — LOW_END is always a valid fallback
         val tier = when {
             telemetry.hasGpu -> HardwareTier.GPU_ACCELERATED
             telemetry.hasAvx512Vnni -> HardwareTier.CPU_OPTIMIZED // Alto performance CPU
