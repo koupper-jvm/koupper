@@ -1,6 +1,7 @@
 package com.koupper.providers.agent
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.koupper.container.app
 import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.mcp.MCPServerProvider
@@ -169,16 +170,22 @@ class DefaultAgentOrchestrator(
 
                 if (rawResponse.trim().startsWith("{\"toolName\"")) {
                     try {
-                        // Simulación de ToolCall via JSON
-                        val toolCall = ToolCall("hardware-checker", "execute") 
+                        val parsed   = mapper.readValue<Map<String, Any?>>(rawResponse.trim())
+                        val toolName = parsed["toolName"]?.toString()
+                            ?: throw IllegalArgumentException("LLM tool call missing 'toolName' field")
+                        val action   = parsed["action"]?.toString() ?: "execute"
+                        @Suppress("UNCHECKED_CAST")
+                        val arguments = parsed["arguments"] as? Map<String, Any?> ?: emptyMap()
+                        val toolCall  = ToolCall(toolName, action, arguments)
 
                         instance.updateState(AgentState.Executing(toolCall.toolName))
                         val toolResult = toolExecutor.execute(toolCall)
 
                         history.add(AgentMessage("assistant", rawResponse, toolCall))
-                        history.add(AgentMessage("tool", "result: ${toolResult.output}"))
-                        
+                        history.add(AgentMessage("tool", "TOOL_RESULT(${toolCall.toolName}): ${toolResult.output}"))
+
                     } catch (e: Exception) {
+                        println("[ORCHESTRATOR] Tool call parse error: ${e.message}")
                         isFinalAnswer = true
                     }
                 } else {
