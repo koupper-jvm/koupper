@@ -1,35 +1,32 @@
 package com.koupper.providers.agent
 
 import com.koupper.container.app
-import com.koupper.providers.files.FileHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
+// Fallback executor used when MCPToolExecutor is not available.
+// Routes known Koupper SP names to their real implementations.
 class DefaultToolExecutor : ToolExecutor {
 
     override suspend fun execute(call: ToolCall): ToolResult = withContext(Dispatchers.IO) {
         println("[TOOL_EXECUTOR] Executing ${call.toolName}.${call.action}")
-        
         try {
             when (call.toolName) {
                 "file-handler" -> {
-                    val handler = app.getInstance(FileHandler::class)
-                    val path = call.arguments["path"] as? String ?: ""
-                    
-                    val content = if (call.action == "read") {
-                        // Simulación de lectura de archivo
-                        "{\"metrics\": [{\"type\": \"cpu\", \"value\": 0.8}]}"
-                    } else "Unsupported action"
-                    
-                    ToolResult(call.toolName, content)
+                    val path = call.arguments["path"] as? String
+                        ?: return@withContext ToolResult(call.toolName, "Error: 'path' argument required", false)
+                    val f = File(path)
+                    when (call.action) {
+                        "read"   -> if (f.exists()) ToolResult(call.toolName, f.readText())
+                                    else ToolResult(call.toolName, "Error: file not found: $path", false)
+                        "exists" -> ToolResult(call.toolName, f.exists().toString())
+                        "list"   -> if (f.isDirectory) ToolResult(call.toolName, f.list()?.joinToString("\n") ?: "")
+                                    else ToolResult(call.toolName, "Error: not a directory: $path", false)
+                        else     -> ToolResult(call.toolName, "Error: unsupported action '${call.action}'", false)
+                    }
                 }
-                "command-runner" -> {
-                    // Simulación de ejecución de comando
-                    ToolResult(call.toolName, "ls output: AgenticCore.kt, InferenceEngine.kt")
-                }
-                else -> {
-                    ToolResult(call.toolName, "Error: Tool not found", false)
-                }
+                else -> ToolResult(call.toolName, "Error: tool '${call.toolName}' not registered in DefaultToolExecutor", false)
             }
         } catch (e: Exception) {
             ToolResult(call.toolName, "Exception: ${e.message}", false)
