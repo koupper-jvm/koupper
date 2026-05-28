@@ -359,15 +359,26 @@ internal class CortexMcpServer(
     }
 
     // ── Pipeline script generator ─────────────────────────────────────────────
+    // Emits structured markers that MonitorApp parses for the pipeline diagram:
+    //   [PIPELINE:START:<stage1>,<stage2>,...]
+    //   [PIPELINE:STAGE:<name>:START]
+    //   [PIPELINE:STAGE:<name>:DONE:<elapsedMs>]   or :FAILED:<elapsedMs>
+    //   [PIPELINE:DONE] | [PIPELINE:FAILED:<stageName>]
 
     private fun buildPipelineScript(pipelineId: String, stages: List<String>): String {
-        val stageLines = stages.joinToString("\n") { name ->
-            """
-    println("=== Stage: $name ===")
-    val exit_$name = ProcessBuilder("${'$'}home/.koupper/bin/koupper", "run", "${'$'}home/.koupper/agents/$name.kts")
-        .inheritIO().start().waitFor()
-    if (exit_$name != 0) error("Stage $name failed (exit ${'$'}exit_$name)")
-    println("=== Stage $name: DONE ===")""".trimIndent()
+        val stageList  = stages.joinToString(",")
+        val stageLines = stages.joinToString("\n\n") { name ->
+            """println("[PIPELINE:STAGE:$name:START]")
+val startMs_$name = System.currentTimeMillis()
+val exit_$name = ProcessBuilder("${'$'}home/.koupper/bin/koupper", "run", "${'$'}home/.koupper/agents/$name.kts")
+    .inheritIO().start().waitFor()
+val elapsed_$name = System.currentTimeMillis() - startMs_$name
+if (exit_$name != 0) {
+    println("[PIPELINE:STAGE:$name:FAILED:${'$'}elapsed_$name]")
+    println("[PIPELINE:FAILED:$name]")
+    error("Stage $name failed (exit ${'$'}exit_$name)")
+}
+println("[PIPELINE:STAGE:$name:DONE:${'$'}elapsed_$name]")"""
         }
         return """
 // $pipelineId.kts — Auto-generated pipeline coordinator
@@ -378,9 +389,11 @@ import java.io.File
 
 val home = System.getProperty("user.home")
 
+println("[PIPELINE:START:$stageList]")
+
 $stageLines
 
-println("Pipeline $pipelineId: SUCCESS")
+println("[PIPELINE:DONE]")
 """.trimIndent()
     }
 }
