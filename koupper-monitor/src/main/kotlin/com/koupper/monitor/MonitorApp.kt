@@ -48,9 +48,10 @@ fun main(args: Array<String>) {
 // ── Application ───────────────────────────────────────────────────────────────
 class MonitorApp(private val jobsDir: File) {
 
-    private val jobs  = ConcurrentHashMap<String, JobEntry>()
-    private val alive = AtomicBoolean(true)
+    private val jobs   = ConcurrentHashMap<String, JobEntry>()
+    private val alive  = AtomicBoolean(true)
     @Volatile private var watchSt = "STARTING"
+    @Volatile private var dirty   = true   // set true by watchLoop on any job change
 
     fun run() {
         val terminal = DefaultTerminalFactory().createTerminal()
@@ -67,6 +68,7 @@ class MonitorApp(private val jobsDir: File) {
         thread(name = "watcher", isDaemon = true) { watchLoop() }
 
         try {
+            var lastSecond = -1
             while (alive.get()) {
                 val key = screen.pollInput()
                 if (key != null) when {
@@ -74,10 +76,29 @@ class MonitorApp(private val jobsDir: File) {
                     key.keyType == KeyType.Escape                 -> { alive.set(false); break }
                     key.keyType == KeyType.EOF                    -> { alive.set(false); break }
                 }
-                screen.doResizeIfNecessary()
-                render(screen)
-                screen.refresh()
-                Thread.sleep(100)
+
+                val resized     = screen.doResizeIfNecessary() != null
+                val nowSecond   = LocalDateTime.now().second
+                val clockTicked = nowSecond != lastSecond
+
+                when {
+                    // Jobs changed or terminal resized: clear + full redraw to erase stale rows
+                    dirty || resized -> {
+                        screen.clear()
+                        render(screen)
+                        screen.refresh()
+                        dirty = false
+                        lastSecond = nowSecond
+                    }
+                    // Only the clock changed: overwrite in-place (no clear needed, no rows changed)
+                    clockTicked -> {
+                        render(screen)
+                        screen.refresh()
+                        lastSecond = nowSecond
+                    }
+                    // Nothing changed: skip refresh entirely — no bytes sent to terminal
+                }
+                Thread.sleep(50)
             }
         } finally {
             screen.stopScreen()
@@ -90,7 +111,6 @@ class MonitorApp(private val jobsDir: File) {
         val tw = screen.terminalSize.columns
         val th = screen.terminalSize.rows
         val g  = screen.newTextGraphics()
-        screen.clear()  // wipe back-buffer; refresh() only sends the diff — no flicker
 
         val snap       = jobs.values.toList().sortedWith(compareBy({ statusRank(it.status) }, { it.queue }, { it.id }))
         val pending    = snap.count { it.status == Status.PENDING }
@@ -333,10 +353,11 @@ class MonitorApp(private val jobsDir: File) {
                         fname.endsWith(".json.processing") -> {
                             val id = fname.removeSuffix(".json.processing")
                             when (ev.kind()) {
-                                ENTRY_CREATE -> jobs[id] = JobEntry(id, q ?: "?", Status.PROCESSING, t)
+                                ENTRY_CREATE -> { jobs[id] = JobEntry(id, q ?: "?", Status.PROCESSING, t); dirty = true }
                                 ENTRY_DELETE -> {
                                     jobs[id]?.let { it.status = Status.DONE; it.lastUpdate = t }
-                                    thread(isDaemon = true) { Thread.sleep(3_000); jobs.remove(id) }
+                                    dirty = true
+                                    thread(isDaemon = true) { Thread.sleep(3_000); jobs.remove(id); dirty = true }
                                 }
                                 else -> Unit
                             }
@@ -344,9 +365,9 @@ class MonitorApp(private val jobsDir: File) {
                         fname.endsWith(".json") && !fname.startsWith(".") -> {
                             val id = fname.removeSuffix(".json")
                             when (ev.kind()) {
-                                ENTRY_CREATE -> jobs.putIfAbsent(id, JobEntry(id, q ?: "?", Status.PENDING, t))
-                                ENTRY_DELETE -> if (jobs[id]?.status != Status.PROCESSING) jobs.remove(id)
-                                ENTRY_MODIFY -> jobs[id]?.lastUpdate = t
+                                ENTRY_CREATE -> { jobs.putIfAbsent(id, JobEntry(id, q ?: "?", Status.PENDING, t)); dirty = true }
+                                ENTRY_DELETE -> { if (jobs[id]?.status != Status.PROCESSING) { jobs.remove(id); dirty = true } }
+                                ENTRY_MODIFY -> { jobs[id]?.lastUpdate = t; dirty = true }
                                 else -> Unit
                             }
                         }
