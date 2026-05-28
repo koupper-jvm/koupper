@@ -70,9 +70,9 @@ class MonitorApp(private val jobsDir: File) {
     private val agentsDir  = File(home, ".koupper/agents").also { it.mkdirs() }
     private val koupperBin = "$home/.koupper/bin/koupper"
 
-    // Greeting: auto-select the cortex-greeting job when it appears
+    // Auto-select CORTEX session job when it appears
     private var greetingPending = true
-    private val GREETING_ID     = "cortex-greeting"
+    private val GREETING_ID     = "cortex-session"
 
     // Wizard state
     @Volatile private var wizardActive    = false
@@ -90,15 +90,14 @@ class MonitorApp(private val jobsDir: File) {
             runCatching { screen.stopScreen() }
         })
 
-        greeting(screen)
+        // No splash animation — go straight to dashboard
 
         initialScan()
         thread(name = "watcher", isDaemon = true) { watchLoop() }
 
-        // Built-in greeting analysis — no external process needed
-        thread(name = "greeting", isDaemon = true) {
-            Thread.sleep(400)   // let WatchService register dirs first
-            runBuiltinGreeting()
+        thread(name = "cortex-launcher", isDaemon = true) {
+            Thread.sleep(400)
+            launchCortex()
         }
 
         try {
@@ -168,67 +167,57 @@ class MonitorApp(private val jobsDir: File) {
 
     // ── Agent launchers ───────────────────────────────────────────────────────
 
-    private fun runBuiltinGreeting() {
-        // Write greeting job directly into the in-memory map (no Octopus needed)
+    private fun launchCortex() {
+        val script = File(agentsDir, "CortexAgent.kts")
+        val koupper = File(koupperBin)
+
+        if (!script.exists() || !koupper.exists()) {
+            runFallbackGreeting()
+            return
+        }
+
+        // Set CORTEX_JOBS_DIR so the agent knows where to write
+        val env = mapOf("CORTEX_JOBS_DIR" to jobsDir.absolutePath)
+
+        val started = runCatching {
+            val pb = ProcessBuilder(koupperBin, "run", script.absolutePath)
+            pb.environment().putAll(env)
+            pb.redirectErrorStream(true)
+            pb.start()
+        }.isSuccess
+
+        if (!started) runFallbackGreeting()
+        // If started: WatchService will detect cortex-session.json.processing
+        // and auto-select it, setting wizardActive = true
+    }
+
+    private fun runFallbackGreeting() {
+        // Octopus not available — show static status, no LLM
         jobs[GREETING_ID] = JobEntry(GREETING_ID, "cortex", Status.PROCESSING)
         dirty = true
 
         val logDir  = File(jobsDir, "logs/cortex").also { it.mkdirs() }
         val logFile = File(logDir, "$GREETING_ID.log")
         logFile.writeText("")
-
         fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
 
-        // Swarm analysis
-        var pending = 0; var processing = 0; var failed = 0
-        val queues  = mutableSetOf<String>()
-        for (qDir in jobsDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") && it.name != "logs" } ?: emptyList()) {
-            queues.add(qDir.name)
-            for (f in qDir.listFiles() ?: continue) {
-                when {
-                    f.name.endsWith(".json.processing") && f.nameWithoutExtension.removeSuffix(".json") != GREETING_ID -> processing++
-                    f.name.endsWith(".json") -> pending++
-                }
-            }
-            failed += File(qDir, ".failed").listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
-        }
-        val agentCount = agentsDir.listFiles { f -> f.name.endsWith(".kts") }?.size ?: 0
-
-        val statusLine = when {
-            processing > 0 -> "ACTIVE     $processing job(s) in flight"
-            pending    > 0 -> "STANDBY    $pending job(s) queued"
-            failed     > 0 -> "ALERT      $failed job(s) failed"
-            else            -> "IDLE       No active jobs"
-        }
-
-        log("┌─────────────────────────────────────┐")
-        log("│   CORTEX ONLINE — SWARM ANALYSIS    │")
-        log("└─────────────────────────────────────┘")
+        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        log("  CORTEX — OFFLINE MODE")
+        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        log("  Octopus daemon is not running.")
+        log("  Start it to enable AI features.")
         log("")
-        log("  DEPLOYED AGENTS  : $agentCount")
-        log("  ACTIVE QUEUES    : ${if (queues.isEmpty()) "none" else queues.joinToString(", ")}")
-        log("  JOBS PENDING     : $pending")
-        log("  JOBS IN FLIGHT   : $processing")
-        log("  JOBS FAILED      : $failed")
+        log("  Run: koupper serve")
         log("")
-        log("  STATUS ► $statusLine")
-        log("")
-        log("┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
-        log("  COMMANDS")
-        log("   :create     spawn a new agent via wizard")
-        log("   :help       show available commands")
-        log("   j / k       navigate job table")
-        log("   Enter       view job log")
-        log("   ESC         back / cancel")
-        log("┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
-        log("  Ready for instruction.")
-        dirty = true  // trigger auto-select + LOG mode
+        log("  In offline mode the monitor still")
+        log("  tracks jobs in real time.")
+        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        dirty = true
 
-        // Mark done after a moment, then linger 5s so user can read it
-        Thread.sleep(400)
+        Thread.sleep(500)
         jobs[GREETING_ID]?.status = Status.DONE
         dirty = true
-        Thread.sleep(5_000)
+        Thread.sleep(4_000)
         jobs.remove(GREETING_ID)
         dirty = true
     }
@@ -668,7 +657,15 @@ class MonitorApp(private val jobsDir: File) {
                         fname.endsWith(".json.processing") -> {
                             val id = fname.removeSuffix(".json.processing")
                             when (ev.kind()) {
-                                ENTRY_CREATE -> { jobs[id] = JobEntry(id, q ?: "?", Status.PROCESSING, t); dirty = true }
+                                ENTRY_CREATE -> {
+                                    jobs[id] = JobEntry(id, q ?: "?", Status.PROCESSING, t)
+                                    // CORTEX agent just started — activate wizard mode
+                                    if (id == "cortex-session") {
+                                        wizardActive = true
+                                        wizardSessionId = "cortex-session"
+                                    }
+                                    dirty = true
+                                }
                                 ENTRY_DELETE -> {
                                     jobs[id]?.let { it.status = Status.DONE; it.lastUpdate = t }
                                     dirty = true
