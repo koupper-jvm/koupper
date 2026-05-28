@@ -550,9 +550,7 @@ class MonitorApp(private val jobsDir: File) {
 
     private fun initialScan() {
         if (!jobsDir.exists()) return
-        val jobsRoot = File(jobsDir, "jobs")
-        if (!jobsRoot.exists()) return
-        for (qDir in jobsRoot.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") } ?: return) {
+        for (qDir in jobsDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") } ?: return) {
             val q = qDir.name
             for (f in qDir.listFiles() ?: continue) {
                 when {
@@ -572,8 +570,7 @@ class MonitorApp(private val jobsDir: File) {
     // ── WatchService ──────────────────────────────────────────────────────────
 
     private fun watchLoop() {
-        jobsDir.mkdirs()
-        val jobsRoot = File(jobsDir, "jobs").also { it.mkdirs() }
+        if (!jobsDir.exists()) jobsDir.mkdirs()
         val ws     = FileSystems.getDefault().newWatchService()
         val dirMap = mutableMapOf<Path, String?>()
 
@@ -583,8 +580,8 @@ class MonitorApp(private val jobsDir: File) {
             dirMap[d.toPath()] = q
         }
 
-        reg(jobsRoot, null)
-        for (d in jobsRoot.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") } ?: emptyList())
+        reg(jobsDir, null)
+        for (d in jobsDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") } ?: emptyList())
             reg(d, d.name)
 
         // Watch logs/ for live log streaming
@@ -606,7 +603,7 @@ class MonitorApp(private val jobsDir: File) {
                     val t = ts()
                     when {
                         q == null && ev.kind() == ENTRY_CREATE && !fname.startsWith(".") -> {
-                            val nd = File(jobsRoot, fname)
+                            val nd = File(jobsDir, fname)
                             if (nd.isDirectory) reg(nd, fname)
                             // Also register log subdirs
                             val logSub = File(jobsDir, "logs/$fname")
