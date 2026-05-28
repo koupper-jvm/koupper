@@ -7,14 +7,152 @@ import com.googlecode.lanterna.input.KeyType
 import com.googlecode.lanterna.screen.TerminalScreen
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory
 import java.io.File
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.nio.file.*
 import java.nio.file.StandardWatchEventKinds.*
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
+
+// ── CortexEngine: local LLM via llama-server, no external deps ────────────────
+private class CortexEngine(
+    private val logFile: File,
+    private val agentsDir: File,
+    private val modelPath: String  = System.getenv("KOUPPER_LLM_MODEL_PATH")
+                                      ?: "/home/tdn-dell/develop/llama.cpp/modelo_prueba.gguf",
+    private val serverBin: String  = System.getenv("KOUPPER_LLM_EXECUTABLE")
+                                      ?: "/home/tdn-dell/develop/llama.cpp/build/bin/llama-server",
+    private val port: Int          = 8081
+) {
+    private val http      = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
+    private val history   = mutableListOf<Map<String, String>>()
+    private var serverProc: Process? = null
+
+    private val SYSTEM = """
+You are CORTEX, the AI orchestrator of a Koupper automation swarm.
+You run entirely on a local LLM — no cloud, no remote APIs.
+When asked to create an agent, generate a complete Koupper .kts script wrapped in a kotlin code block:
+```kotlin
+// Agent: Name
+// Role: what it does
+import java.io.File
+val home = System.getProperty("user.home")
+// implementation
+```
+After generating code, confirm the file was saved.
+Be concise — this is a terminal. Keep replies under 8 lines unless generating code.
+    """.trimIndent()
+
+    private fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    fun start(): Boolean {
+        if (!File(serverBin).exists()) { log("⚠ llama-server not found: $serverBin"); return false }
+        if (!File(modelPath).exists()) { log("⚠ Model not found: $modelPath"); return false }
+
+        // Check if already running
+        if (isHealthy()) { log("  llama-server already running on port $port"); return true }
+
+        log("  Starting llama-server…")
+        serverProc = ProcessBuilder(
+            serverBin, "-m", modelPath,
+            "--port", port.toString(), "--log-disable"
+        ).redirectErrorStream(true)
+         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+         .start()
+
+        Runtime.getRuntime().addShutdownHook(Thread { serverProc?.destroy() })
+
+        // Wait up to 60s for health
+        repeat(60) {
+            if (isHealthy()) return true
+            Thread.sleep(1000)
+        }
+        log("⚠ llama-server failed to start after 60s")
+        return false
+    }
+
+    private fun isHealthy(): Boolean = runCatching {
+        val req = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:$port/health"))
+            .timeout(Duration.ofSeconds(2)).GET().build()
+        http.send(req, HttpResponse.BodyHandlers.ofString()).statusCode() == 200
+    }.getOrDefault(false)
+
+    // ── Inference ─────────────────────────────────────────────────────────────
+
+    fun greet(swarmContext: String) {
+        history.clear()
+        history.add(mapOf("role" to "system", "content" to SYSTEM))
+        history.add(mapOf("role" to "user",   "content" to "Context: $swarmContext\nGreet the user (2 lines max) and ask what they need built today."))
+        val reply = infer()
+        history.add(mapOf("role" to "assistant", "content" to reply))
+        reply.lines().forEach { log(it) }
+        log("")
+        log("  Press Enter on this job, then type your request.")
+    }
+
+    fun respond(userMsg: String) {
+        log("▶ $userMsg")
+        log("")
+        history.add(mapOf("role" to "user", "content" to userMsg))
+        val reply = infer()
+        history.add(mapOf("role" to "assistant", "content" to reply))
+
+        val scriptMatch = Regex("```kotlin(.*?)```", RegexOption.DOT_MATCHES_ALL).find(reply)
+        if (scriptMatch != null) {
+            val script    = scriptMatch.groupValues[1].trim()
+            val agentName = Regex("//\\s*Agent:\\s*(.+)").find(script)
+                ?.groupValues?.get(1)?.trim()?.replace(" ", "") ?: "Agent${System.currentTimeMillis() % 1000}"
+            File(agentsDir, "$agentName.kts").writeText(script)
+            val out = reply.replace(scriptMatch.value,
+                "\n[✓ Saved → ~/.koupper/agents/$agentName.kts]\n[  Run: koupper run ~/.koupper/agents/$agentName.kts]")
+            out.lines().forEach { log(it) }
+        } else {
+            reply.lines().forEach { log(it) }
+        }
+        log("")
+    }
+
+    // ── HTTP to llama-server (/v1/chat/completions, blocking) ─────────────────
+
+    private fun infer(): String {
+        val msgs = history.joinToString(",") { m ->
+            """{"role":${jstr(m["role"]!!)},"content":${jstr(m["content"]!!)}}"""
+        }
+        val body = """{"messages":[$msgs],"stream":false,"n_predict":512,"temperature":0.7}"""
+
+        return runCatching {
+            val req = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:$port/v1/chat/completions"))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(60))
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build()
+            val resp = http.send(req, HttpResponse.BodyHandlers.ofString())
+            extractContent(resp.body())
+        }.getOrElse { e -> "Error: ${e.message?.take(80)}" }
+    }
+
+    private fun extractContent(json: String): String {
+        // parse "content":"..." from choices[0].message.content
+        val m = Regex(""""content"\s*:\s*"((?:[^"\\]|\\.)*)"""").findAll(json).lastOrNull()
+        return m?.groupValues?.get(1)
+            ?.replace("\\n", "\n")?.replace("\\\"", "\"")?.replace("\\\\", "\\")
+            ?: "[No response]"
+    }
+
+    private fun jstr(s: String) =
+        "\"${s.replace("\\","\\\\").replace("\"","\\\"").replace("\n","\\n")}\""
+}
 
 // ── Domain ────────────────────────────────────────────────────────────────────
 private enum class Status { PENDING, PROCESSING, DONE, FAILED }
@@ -74,9 +212,10 @@ class MonitorApp(private val jobsDir: File) {
     private var greetingPending = true
     private val GREETING_ID     = "cortex-session"
 
-    // Wizard state
+    // Wizard / CORTEX state
     @Volatile private var wizardActive    = false
     private var wizardSessionId: String?  = null
+    private var cortexEngine: CortexEngine? = null
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -168,27 +307,46 @@ class MonitorApp(private val jobsDir: File) {
     // ── Agent launchers ───────────────────────────────────────────────────────
 
     private fun launchCortex() {
-        val script = File(agentsDir, "CortexAgent.kts")
-        val koupper = File(koupperBin)
+        val logDir  = File(jobsDir, "logs/cortex").also { it.mkdirs() }
+        val logFile = File(logDir, "cortex-session.log")
+        logFile.writeText("")
 
-        if (!script.exists() || !koupper.exists()) {
-            runFallbackGreeting()
+        // Register CORTEX job directly in memory so WatchService isn't needed for startup
+        jobs["cortex-session"] = JobEntry("cortex-session", "cortex", Status.PROCESSING)
+        wizardActive    = true
+        wizardSessionId = "cortex-session"
+        dirty = true
+
+        val engine = CortexEngine(logFile, agentsDir)
+        cortexEngine = engine
+
+        fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
+
+        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        log("  CORTEX ONLINE — Local inference")
+        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        dirty = true
+
+        val started = engine.start()
+        if (!started) {
+            log("")
+            log("  llama-server could not start.")
+            log("  Check KOUPPER_LLM_MODEL_PATH and")
+            log("  KOUPPER_LLM_EXECUTABLE.")
+            jobs["cortex-session"]?.status = Status.FAILED
+            dirty = true
             return
         }
 
-        // Set CORTEX_JOBS_DIR so the agent knows where to write
-        val env = mapOf("CORTEX_JOBS_DIR" to jobsDir.absolutePath)
+        // Swarm context for greeting
+        val agentCount = agentsDir.listFiles { f -> f.name.endsWith(".kts") }?.size ?: 0
+        val pending    = jobsDir.listFiles()
+            ?.filter { it.isDirectory && !it.name.startsWith(".") && it.name != "logs" }
+            ?.flatMap { it.listFiles()?.filter { f -> f.name.endsWith(".json") } ?: emptyList() }
+            ?.size ?: 0
 
-        val started = runCatching {
-            val pb = ProcessBuilder(koupperBin, "run", script.absolutePath)
-            pb.environment().putAll(env)
-            pb.redirectErrorStream(true)
-            pb.start()
-        }.isSuccess
-
-        if (!started) runFallbackGreeting()
-        // If started: WatchService will detect cortex-session.json.processing
-        // and auto-select it, setting wizardActive = true
+        engine.greet("$agentCount agents deployed, $pending jobs pending")
+        dirty = true
     }
 
     private fun runFallbackGreeting() {
@@ -298,21 +456,22 @@ class MonitorApp(private val jobsDir: File) {
         val trimmed = cmd.trim()
         if (trimmed.isEmpty()) return
         when {
-            trimmed.equals("create", ignoreCase = true) -> launchWizard()
-            trimmed.equals("help",   ignoreCase = true) -> showHelp()
-            wizardActive -> sendWizardAnswer(trimmed)
+            trimmed.equals("help", ignoreCase = true) -> showHelp()
+            cortexEngine != null -> {
+                lastCommandResult = "◈ thinking…"
+                dirty = true
+                thread(isDaemon = true) {
+                    cortexEngine!!.respond(trimmed)
+                    lastCommandResult = null
+                    dirty = true
+                }
+            }
             else -> {
                 File(jobsDir, "commands").mkdirs()
                 File(jobsDir, "commands/${System.currentTimeMillis()}.cmd").writeText(trimmed)
                 lastCommandResult = "→ $trimmed"
             }
         }
-    }
-
-    private fun sendWizardAnswer(answer: String) {
-        File(jobsDir, "commands/wizard").mkdirs()
-        File(jobsDir, "commands/wizard/${System.currentTimeMillis()}.response").writeText(answer)
-        lastCommandResult = "◈ sent: $answer"
     }
 
     private fun showHelp() {
