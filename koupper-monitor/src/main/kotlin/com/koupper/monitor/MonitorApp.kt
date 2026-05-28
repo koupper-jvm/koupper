@@ -105,9 +105,9 @@ private class CortexEngine(
         history.clear()
         history.add(mapOf("role" to "system", "content" to buildSystem()))
         history.add(mapOf("role" to "user",   "content" to "Context: $swarmContext\nGreet the user (2 lines max) and ask what they need built today."))
-        val reply = infer()
+        logFile.appendText("[${ts()}] ")   // timestamp prefix before streaming starts
+        val reply = infer()                // tokens stream directly to logFile
         history.add(mapOf("role" to "assistant", "content" to reply))
-        reply.lines().forEach { log(it) }
         log("")
         log("  Press Enter on this job, then type your request.")
     }
@@ -117,18 +117,17 @@ private class CortexEngine(
         log("")
         history.add(mapOf("role" to "user", "content" to userMsg))
 
-        var reply = infer()
+        logFile.appendText("[${ts()}] ")   // timestamp prefix before first token
+        var reply = infer()                // streams to logFile token by token
         var iters = 0
 
-        // Agentic tool-calling loop: keep going as long as CORTEX_TOOL lines appear
-        val mcp = mcpServer  // local val so the compiler can smart-cast inside lambdas
+        val mcp = mcpServer
         while (iters < MAX_TOOL_ITERS) {
             val toolLine = reply.lines().firstOrNull { it.trimStart().startsWith("CORTEX_TOOL:") }
                 ?: break
             if (mcp == null) break
 
             val jsonStr = toolLine.trimStart().removePrefix("CORTEX_TOOL:").trim()
-            log("  ↳ $jsonStr")
 
             val result = runCatching {
                 val payload  = mapper.readValue<Map<String, Any?>>(jsonStr)
@@ -140,58 +139,77 @@ private class CortexEngine(
             }.getOrElse { e -> mapOf("error" to "parse error: ${e.message?.take(80)}") }
 
             val resultJson = mapper.writeValueAsString(result)
-            log("  ↳ ${resultJson.take(150)}")
+            log("  ↳ ${resultJson.take(150)}")   // tool result is not from LLM — log it explicitly
             log("")
 
             history.add(mapOf("role" to "assistant", "content" to reply))
             history.add(mapOf("role" to "user",      "content" to "TOOL_RESULT: $resultJson"))
-            reply = infer()
+            logFile.appendText("[${ts()}] ")
+            reply = infer()   // next response also streams
             iters++
         }
 
         history.add(mapOf("role" to "assistant", "content" to reply))
 
+        // Content already in log from streaming — only append save confirmation if code was generated
         val scriptMatch = Regex("```kotlin(.*?)```", RegexOption.DOT_MATCHES_ALL).find(reply)
         if (scriptMatch != null) {
             val script    = scriptMatch.groupValues[1].trim()
             val agentName = Regex("//\\s*Agent:\\s*(.+)").find(script)
                 ?.groupValues?.get(1)?.trim()?.replace(" ", "") ?: "Agent${System.currentTimeMillis() % 1000}"
             File(agentsDir, "$agentName.kts").writeText(script)
-            val out = reply.replace(scriptMatch.value,
-                "\n[✓ Saved → ~/.koupper/agents/$agentName.kts]\n[  Use run_agent to execute it]")
-            out.lines().forEach { log(it) }
-        } else {
-            reply.lines().forEach { log(it) }
+            log("[✓ Saved → ~/.koupper/agents/$agentName.kts]")
+            log("[  Use run_agent to execute it]")
         }
         log("")
     }
 
-    // ── HTTP to llama-server (/v1/chat/completions, blocking) ─────────────────
+    // ── HTTP SSE streaming to llama-server (/v1/chat/completions) ───────────────
+    // Tokens are written to logFile as they arrive so the monitor panel updates
+    // in real time. The full assembled response is returned for tool-call detection.
 
     private fun infer(): String {
         val msgs = history.joinToString(",") { m ->
             """{"role":${jstr(m["role"]!!)},"content":${jstr(m["content"]!!)}}"""
         }
-        val body = """{"messages":[$msgs],"stream":false,"n_predict":512,"temperature":0.7}"""
+        val body = """{"messages":[$msgs],"stream":true,"n_predict":512,"temperature":0.7}"""
 
         return runCatching {
             val req = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:$port/v1/chat/completions"))
                 .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(60))
+                .timeout(Duration.ofSeconds(120))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build()
-            val resp = http.send(req, HttpResponse.BodyHandlers.ofString())
-            extractContent(resp.body())
-        }.getOrElse { e -> "Error: ${e.message?.take(80)}" }
-    }
 
-    private fun extractContent(json: String): String {
-        // parse "content":"..." from choices[0].message.content
-        val m = Regex(""""content"\s*:\s*"((?:[^"\\]|\\.)*)"""").findAll(json).lastOrNull()
-        return m?.groupValues?.get(1)
-            ?.replace("\\n", "\n")?.replace("\\\"", "\"")?.replace("\\\\", "\\")
-            ?: "[No response]"
+            val resp = http.send(req, HttpResponse.BodyHandlers.ofLines())
+            if (resp.statusCode() != 200) {
+                val err = "[inference error: HTTP ${resp.statusCode()}]"
+                logFile.appendText("$err\n")
+                return@runCatching err
+            }
+
+            val sb = StringBuilder()
+            for (line in resp.body()) {
+                if (!line.startsWith("data: ")) continue
+                val data = line.removePrefix("data: ").trim()
+                if (data == "[DONE]") break
+                val token = runCatching {
+                    mapper.readTree(data)
+                        ?.get("choices")?.get(0)?.get("delta")?.get("content")?.asText() ?: ""
+                }.getOrDefault("")
+                if (token.isNotEmpty()) {
+                    sb.append(token)
+                    logFile.appendText(token)
+                }
+            }
+            logFile.appendText("\n")
+            sb.toString().ifEmpty { "[No response]" }
+        }.getOrElse { e ->
+            val err = "[Error: ${e.message?.take(80)}]"
+            logFile.appendText("$err\n")
+            err
+        }
     }
 
     private fun jstr(s: String) =
