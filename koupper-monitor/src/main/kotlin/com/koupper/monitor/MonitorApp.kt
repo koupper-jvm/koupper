@@ -443,7 +443,7 @@ class MonitorApp(private val jobsDir: File) {
                 key.character == 'q' || key.character == 'Q' -> alive.set(false)
                 key.keyType   == KeyType.EOF  -> alive.set(false)
                 // While viewing wizard log, Enter opens command bar to submit wizard answer
-                key.keyType == KeyType.Enter && wizardActive && selectedJobId?.startsWith("wizard-") == true -> {
+                key.keyType == KeyType.Enter && wizardActive -> {
                     mode = Mode.COMMAND; commandBuffer.clear(); dirty = true
                 }
             }
@@ -537,7 +537,7 @@ class MonitorApp(private val jobsDir: File) {
                 val sideX   = 1 + ti + 1
                 val maxRows = (th - 4 - 13).coerceAtLeast(1)
                 val logLines = readLog(selectedJobId ?: "").takeLast(maxRows)
-                val panelLbl = if (wizardActive && selectedJobId?.startsWith("wizard-") == true)
+                val panelLbl = if (wizardActive)
                     "═ WIZARD LOG " else "═ LOG "
                 renderBody(g, tw, th, snap, si, selectedIdx, panelLbl) { idx, row ->
                     drawLogSide(g, sideX, si, idx, row, selectedJobId ?: "", logLines)
