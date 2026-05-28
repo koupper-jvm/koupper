@@ -95,10 +95,10 @@ class MonitorApp(private val jobsDir: File) {
         initialScan()
         thread(name = "watcher", isDaemon = true) { watchLoop() }
 
-        // Launch GreetingAgent after WatchService is up
-        thread(name = "greeting-launcher", isDaemon = true) {
-            Thread.sleep(300)
-            launchGreeting()
+        // Built-in greeting analysis — no external process needed
+        thread(name = "greeting", isDaemon = true) {
+            Thread.sleep(400)   // let WatchService register dirs first
+            runBuiltinGreeting()
         }
 
         try {
@@ -168,14 +168,69 @@ class MonitorApp(private val jobsDir: File) {
 
     // ── Agent launchers ───────────────────────────────────────────────────────
 
-    private fun launchGreeting() {
-        val script = File(agentsDir, "GreetingAgent.kts")
-        if (!script.exists() || !File(koupperBin).exists()) { greetingPending = false; return }
-        runCatching {
-            ProcessBuilder(koupperBin, "run", script.absolutePath, jobsDir.absolutePath)
-                .redirectErrorStream(true)
-                .start()
-        }.onFailure { greetingPending = false }
+    private fun runBuiltinGreeting() {
+        // Write greeting job directly into the in-memory map (no Octopus needed)
+        jobs[GREETING_ID] = JobEntry(GREETING_ID, "cortex", Status.PROCESSING)
+        dirty = true
+
+        val logDir  = File(jobsDir, "logs/cortex").also { it.mkdirs() }
+        val logFile = File(logDir, "$GREETING_ID.log")
+        logFile.writeText("")
+
+        fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
+
+        // Swarm analysis
+        var pending = 0; var processing = 0; var failed = 0
+        val queues  = mutableSetOf<String>()
+        for (qDir in jobsDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") && it.name != "logs" } ?: emptyList()) {
+            queues.add(qDir.name)
+            for (f in qDir.listFiles() ?: continue) {
+                when {
+                    f.name.endsWith(".json.processing") && f.nameWithoutExtension.removeSuffix(".json") != GREETING_ID -> processing++
+                    f.name.endsWith(".json") -> pending++
+                }
+            }
+            failed += File(qDir, ".failed").listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
+        }
+        val agentCount = agentsDir.listFiles { f -> f.name.endsWith(".kts") }?.size ?: 0
+
+        val statusLine = when {
+            processing > 0 -> "ACTIVE     $processing job(s) in flight"
+            pending    > 0 -> "STANDBY    $pending job(s) queued"
+            failed     > 0 -> "ALERT      $failed job(s) failed"
+            else            -> "IDLE       No active jobs"
+        }
+
+        log("┌─────────────────────────────────────┐")
+        log("│   CORTEX ONLINE — SWARM ANALYSIS    │")
+        log("└─────────────────────────────────────┘")
+        log("")
+        log("  DEPLOYED AGENTS  : $agentCount")
+        log("  ACTIVE QUEUES    : ${if (queues.isEmpty()) "none" else queues.joinToString(", ")}")
+        log("  JOBS PENDING     : $pending")
+        log("  JOBS IN FLIGHT   : $processing")
+        log("  JOBS FAILED      : $failed")
+        log("")
+        log("  STATUS ► $statusLine")
+        log("")
+        log("┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
+        log("  COMMANDS")
+        log("   :create     spawn a new agent via wizard")
+        log("   :help       show available commands")
+        log("   j / k       navigate job table")
+        log("   Enter       view job log")
+        log("   ESC         back / cancel")
+        log("┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄")
+        log("  Ready for instruction.")
+        dirty = true  // trigger auto-select + LOG mode
+
+        // Mark done after a moment, then linger 5s so user can read it
+        Thread.sleep(400)
+        jobs[GREETING_ID]?.status = Status.DONE
+        dirty = true
+        Thread.sleep(5_000)
+        jobs.remove(GREETING_ID)
+        dirty = true
     }
 
     private fun launchWizard() {
