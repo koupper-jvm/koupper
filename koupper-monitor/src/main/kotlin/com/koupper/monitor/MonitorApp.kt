@@ -731,6 +731,37 @@ class MonitorApp(private val jobsDir: File) {
         }
     }
 
+    // ── Pipeline state ────────────────────────────────────────────────────────
+
+    private data class PipelineStage(
+        val name: String,
+        var status: String   = "PENDING",  // PENDING | RUNNING | DONE | FAILED
+        var elapsedMs: Long? = null
+    )
+
+    private fun parsePipeline(lines: List<String>): List<PipelineStage>? {
+        val startLine = lines.firstOrNull { "[PIPELINE:START:" in it } ?: return null
+        val names = Regex("""\[PIPELINE:START:([^\]]+)]""").find(startLine)
+            ?.groupValues?.get(1)?.split(",")?.filter { it.isNotBlank() } ?: return null
+        val stages = names.map { PipelineStage(it.trim()) }
+        for (line in lines) {
+            for (s in stages) {
+                when {
+                    "[PIPELINE:STAGE:${s.name}:START]"   in line -> s.status = "RUNNING"
+                    "[PIPELINE:STAGE:${s.name}:DONE:"    in line -> {
+                        s.status = "DONE"
+                        s.elapsedMs = Regex(":DONE:(\\d+)").find(line)?.groupValues?.get(1)?.toLongOrNull()
+                    }
+                    "[PIPELINE:STAGE:${s.name}:FAILED:"  in line -> {
+                        s.status = "FAILED"
+                        s.elapsedMs = Regex(":FAILED:(\\d+)").find(line)?.groupValues?.get(1)?.toLongOrNull()
+                    }
+                }
+            }
+        }
+        return stages
+    }
+
     // ── LOG side panel ────────────────────────────────────────────────────────
 
     private fun readLog(jobId: String): List<String> {
@@ -747,16 +778,48 @@ class MonitorApp(private val jobsDir: File) {
     private fun drawLogSide(g: TextGraphics, x: Int, si: Int,
                              idx: Int, row: Int, jobId: String, logLines: List<String>) {
         val maxW = si - 2
+
+        // Pipeline jobs get a stage diagram at the top, then filtered log lines below
+        if (jobId.startsWith("pipeline-")) {
+            val stages     = parsePipeline(logLines)
+            val diagramLen = if (stages != null) stages.size + 4 else 0  // header + sep + stages + sep
+
+            when {
+                idx == 0 -> g.put(x, row, " ${trunc(jobId, maxW - 11)} [PIPELINE]", C.MG, mods = arrayOf(SGR.BOLD))
+                idx == 1 -> g.put(x, row, " ${"─".repeat(maxW)}", C.GY)
+                stages != null && idx == 2 -> g.put(x, row, " STAGES", C.CY, mods = arrayOf(SGR.BOLD))
+                stages != null && idx == 3 -> g.put(x, row, " ${"┄".repeat(maxW - 1)}", C.GY)
+                stages != null && idx in 4 until 4 + stages.size -> {
+                    val s    = stages[idx - 4]
+                    val icon = when (s.status) { "DONE" -> "✓"; "RUNNING" -> "⟳"; "FAILED" -> "✗"; else -> "·" }
+                    val fg   = when (s.status) { "DONE" -> C.GR; "RUNNING" -> C.MG; "FAILED" -> C.RD; else -> C.GY }
+                    val dur  = s.elapsedMs?.let { " ${it / 1000}.${(it % 1000) / 100}s" } ?: if (s.status == "RUNNING") " …" else ""
+                    g.put(x, row, " $icon ${trunc(s.name, maxW - 8).padEnd(maxW - 8)}$dur", fg)
+                }
+                stages != null && idx == 4 + stages.size ->
+                    g.put(x, row, " ${"┄".repeat(maxW - 1)}", C.GY)
+                else -> {
+                    val logOffset = if (stages != null) diagramLen else 2
+                    val filteredLines = logLines.filterNot { "[PIPELINE:" in it }
+                    filteredLines.getOrNull(idx - logOffset)?.let { line ->
+                        g.put(x, row, " ${trunc(line, maxW)}", C.GY)
+                    }
+                }
+            }
+            return
+        }
+
+        // Regular job log
         when (idx) {
             0    -> g.put(x, row, " ${trunc(jobId, maxW - 2)}", C.YL, mods = arrayOf(SGR.BOLD))
             1    -> g.put(x, row, " ${"─".repeat(maxW)}", C.GY)
             else -> logLines.getOrNull(idx - 2)?.let { line ->
                 val (fg, txt) = when {
-                    line.contains("[?]")  -> Pair(C.CY, line)   // question — highlight
-                    line.contains("[✓]")  -> Pair(C.GR, line)   // confirmed answer
-                    line.contains("[!]")  -> Pair(C.RD, line)   // error/warning
-                    line.contains("READY") -> Pair(C.MG, line)  // success
-                    else                  -> Pair(C.GY, line)
+                    line.contains("[?]")   -> Pair(C.CY, line)
+                    line.contains("[✓]")   -> Pair(C.GR, line)
+                    line.contains("[!]")   -> Pair(C.RD, line)
+                    line.contains("READY") -> Pair(C.MG, line)
+                    else                   -> Pair(C.GY, line)
                 }
                 g.put(x, row, " ${trunc(txt, maxW)}", fg)
             }
