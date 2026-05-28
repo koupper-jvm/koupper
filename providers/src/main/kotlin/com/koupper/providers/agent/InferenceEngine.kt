@@ -39,14 +39,15 @@ interface InferenceEngine {
 class LlamaCppEngine(
     private val processSupervisor: ProcessSupervisor,
     private val jsonHandler: JSONFileHandler<*>,
-    private val budget: AgentBudget
+    private val budget: AgentBudget,
+    private val inferenceConfig: InferenceConfig = InferenceConfig()
 ) : InferenceEngine {
 
-    private val modelPath = System.getenv("KOUPPER_LLM_MODEL_PATH") ?: "/home/tdn-dell/develop/llama.cpp/modelo_prueba.gguf"
-    private val executablePath = System.getenv("KOUPPER_LLM_EXECUTABLE") ?: "/home/tdn-dell/develop/llama.cpp/build/bin/llama-server"
-    
-    // Persistent Sidecar (llama-server)
-    private val sidecar = LlamaServerSidecar(budget, modelPath, executablePath)
+    private val modelPath      = System.getenv("KOUPPER_LLM_MODEL_PATH")
+        ?: error("KOUPPER_LLM_MODEL_PATH env var is required")
+    private val executablePath = System.getenv("KOUPPER_LLM_EXECUTABLE") ?: "llama-server"
+
+    private val sidecar = LlamaServerSidecar(budget, modelPath, executablePath, config = inferenceConfig)
 
     override suspend fun <T : Any> predict(
         history: List<AgentMessage>, 
