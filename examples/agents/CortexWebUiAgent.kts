@@ -5,8 +5,7 @@
 // Usage:  koupper run CortexWebUiAgent.kts [jobsDir] [port]
 // Defaults: jobsDir=~/.koupper/jobs, port=18083
 
-import com.koupper.container.app
-import com.koupper.providers.runtime.router.RuntimeRouterProvider
+import com.koupper.providers.runtime.router.GrizzlyRuntimeRouterProvider
 import com.koupper.providers.runtime.router.StreamResponse
 import com.koupper.shared.annotations.Export
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -249,7 +248,7 @@ setInterval(() => { if (selectedJob) refreshLog(); }, 2000);
 val setup: () -> Unit = {
     startWatcher()
 
-    val router = app.getInstance(RuntimeRouterProvider::class)
+    val router = GrizzlyRuntimeRouterProvider()
 
     router.registerRouter {
         // Dashboard HTML
