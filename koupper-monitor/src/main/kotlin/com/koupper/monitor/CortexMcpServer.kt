@@ -198,6 +198,53 @@ internal class CortexMcpServer(
             val id = args["jobId"]?.toString() ?: return@reg err("jobId is required")
             cancelJob(id)
         }
+
+        // 9 ─ swarm_run ───────────────────────────────────────────────────────
+        reg("swarm_run",
+            "Run a sequence of LLM-powered agents using Koupper's SwarmCoordinator. " +
+            "Each agent has a role and task; results pass to the next agent as context.",
+            obj("type" to "object",
+                "properties" to mapOf(
+                    "agents" to mapOf(
+                        "type"        to "array",
+                        "description" to "Ordered agent configs: [{name, role, goal, task}, ...]",
+                        "items"       to mapOf(
+                            "type"       to "object",
+                            "properties" to mapOf(
+                                "name" to strP("Agent name"),
+                                "role" to strP("Agent identity / specialty"),
+                                "goal" to strP("What the agent is trying to achieve"),
+                                "task" to strP("Specific prompt / instruction for the agent")
+                            )
+                        )
+                    ),
+                    "queue" to strP("Queue for the swarm coordinator job (default: 'swarm')")
+                ),
+                "required" to listOf("agents"))
+        ) { args ->
+            @Suppress("UNCHECKED_CAST")
+            val agentList = (args["agents"] as? List<*>)
+                ?.mapNotNull { it as? Map<String, Any?> }
+                ?: return@reg err("agents must be a list of {name, role, goal, task} objects")
+
+            if (agentList.isEmpty()) return@reg err("agents list cannot be empty")
+
+            val missing = agentList.mapIndexedNotNull { i, a ->
+                if (a["name"] == null || a["task"] == null) "agents[$i] missing name or task" else null
+            }
+            if (missing.isNotEmpty()) return@reg err(missing.joinToString("; "))
+
+            val swarmId = "swarm-${System.currentTimeMillis()}"
+            val script  = buildSwarmScript(swarmId, agentList)
+            File(agentsDir, "$swarmId.kts").writeText(script)
+
+            val queue = args["queue"]?.toString() ?: "swarm"
+            val qDir  = File(jobsDir, queue).also { it.mkdirs() }
+            File(qDir, "$swarmId.json").writeText(
+                """{"id":"$swarmId","fileName":"$swarmId","functionName":"run","scriptPath":"agents/$swarmId.kts","sourceType":"script","submittedAt":"${mcpTs()}"}"""
+            )
+            mapOf("ok" to true, "swarmId" to swarmId, "agents" to agentList.size, "queue" to queue)
+        }
     }
 
     // ── In-process tool execution (called by CortexEngine directly) ───────────
@@ -417,6 +464,76 @@ ScriptExecutor.runPipeline(
     println("[PIPELINE:DONE]")
     println("Total: ${'$'}{report.totalMs}ms  OK: ${'$'}{report.okCount}/${'$'}{report.steps.size}")
 }
+""".trimIndent()
+    }
+
+    // ── Swarm script generator ────────────────────────────────────────────────
+    // Generates a .kts coordinator that uses Koupper's SwarmCoordinator.runSequence()
+    // with the agent {} DSL — real LLM-powered agents with role/goal/task and
+    // context handoff between them.
+
+    private fun buildSwarmScript(swarmId: String, agents: List<Map<String, Any?>>): String {
+        val agentNames = agents.joinToString(" → ") { it["name"]?.toString() ?: "Agent" }
+
+        val agentDefs = agents.joinToString(",\n        ") { cfg ->
+            val name = cfg["name"]?.toString()?.replace("\"", "\\\"") ?: "Agent"
+            val role = cfg["role"]?.toString()?.replace("\"", "\\\"") ?: "Specialist"
+            val goal = cfg["goal"]?.toString()?.replace("\"", "\\\"") ?: "Complete the assigned task"
+            val task = cfg["task"]?.toString()?.replace("\"", "\\\"") ?: "Execute your role"
+            """agent {
+            name = "$name"
+            role {
+                identity = "$role"
+                goal = "$goal"
+                instructions = "Use context from previous agents when available. Be concise."
+            }
+            task<String> { prompt = "$task" }
+        }"""
+        }
+
+        return """
+// $swarmId.kts — Auto-generated swarm coordinator
+// Agents: $agentNames
+// Uses Koupper's SwarmCoordinator.runSequence() with result handoff
+
+import com.koupper.container.app
+import com.koupper.providers.agent.*
+import kotlinx.coroutines.runBlocking
+import java.io.File
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
+val home    = System.getProperty("user.home")!!
+val logFile = File("${'$'}home/.koupper/jobs/logs/swarm/$swarmId.log")
+        .also { it.parentFile.mkdirs() }
+fun log(msg: String) = logFile.appendText(
+    "${'$'}{LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))} ${'$'}msg\n"
+)
+
+log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+log("  SWARM: $swarmId")
+log("  Agents: ${agents.size} — $agentNames")
+log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+val coordinator = app.getInstance(SwarmCoordinator::class)
+
+val agentConfigs = listOf(
+    $agentDefs
+)
+
+val results = runBlocking { coordinator.runSequence(agentConfigs) }
+
+results.forEachIndexed { i, instance ->
+    val statusStr = when (val s = instance.state) {
+        is AgentState.Idle   -> "DONE"
+        is AgentState.Failed -> "FAILED: ${'$'}{s.error}"
+        else                  -> "UNKNOWN"
+    }
+    log("  [${"\${i + 1}"}] ${'$'}{instance.config.name}: ${'$'}statusStr")
+    instance.result?.let { log("      → ${'$'}{it.toString().take(300)}") }
+}
+
+log("  SWARM COMPLETE")
 """.trimIndent()
     }
 }
