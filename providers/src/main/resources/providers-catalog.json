@@ -85,6 +85,21 @@
       "docs": "https://koupper.com/docs/providers/logger"
     },
     {
+      "id": "mcp-client",
+      "serviceProvider": "MCPClientServiceProvider",
+      "description": "MCP client provider for connecting to external MCP servers (HTTP or stdio transport) and calling their tools.",
+      "bindings": [
+        {
+          "contract": "MCPClientProvider",
+          "implementations": [
+            { "class": "LocalMCPClientProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/mcp-client"
+    },
+    {
       "id": "mcp",
       "serviceProvider": "MCPServiceProvider",
       "description": "MCP-style local tool server provider with HTTP tool discovery and invocation endpoints.",
