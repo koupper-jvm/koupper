@@ -12,6 +12,10 @@ import com.koupper.shared.annotations.Export
 import com.koupper.providers.agent.AgentMessage
 import com.koupper.providers.agent.InferenceEngine
 import com.koupper.providers.agent.TokenListener
+import com.koupper.providers.mcp.MCPClientProvider
+import com.koupper.providers.mcp.MCPConnectedServer
+import com.koupper.providers.mcp.MCPServerConfig
+import com.koupper.providers.mcp.MCPToolDescriptor
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.coroutines.runBlocking
@@ -50,6 +54,43 @@ fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
 // Register job so monitor table shows CORTEX
 procFile.writeText("""{"id":"$SESSION_ID","fileName":"CortexAgent","functionName":"cortex","scriptPath":"agents/CortexAgent.kts","sourceType":"script"}""")
 
+// ── External MCP servers ──────────────────────────────────────────────────────
+// Config: ~/.koupper/mcp/servers.json
+// Format: [{"name":"playwright","transport":"stdio","command":"npx","args":["@playwright/mcp"]},
+//          {"name":"github","transport":"http","url":"http://localhost:3001"}]
+
+data class ExternalMcpServer(val connected: MCPConnectedServer, val namePrefix: String)
+
+fun loadExternalMcpServers(): List<ExternalMcpServer> {
+    val configFile = File(home, ".koupper/mcp/servers.json")
+    if (!configFile.exists()) return emptyList()
+
+    val client = runCatching { app.getInstance(MCPClientProvider::class) }.getOrNull() ?: return emptyList()
+
+    return runCatching {
+        val configs = mapper.readValue<List<Map<String, Any>>>(configFile)
+        configs.mapNotNull { cfg ->
+            val name      = cfg["name"]?.toString() ?: return@mapNotNull null
+            val transport = cfg["transport"]?.toString() ?: "http"
+            @Suppress("UNCHECKED_CAST")
+            val serverConfig = MCPServerConfig(
+                name      = name,
+                transport = transport,
+                url       = cfg["url"]?.toString(),
+                command   = cfg["command"]?.toString(),
+                args      = (cfg["args"] as? List<String>) ?: emptyList(),
+                env       = (cfg["env"] as? Map<String, String>) ?: emptyMap()
+            )
+            runCatching {
+                val connected = client.connect(serverConfig)
+                log("  External MCP: $name (${connected.tools.size} tools) [$transport]")
+                ExternalMcpServer(connected, name)
+            }.onFailure { e -> log("  ⚠ Could not connect to MCP '$name': ${e.message?.take(60)}") }
+            .getOrNull()
+        }
+    }.getOrDefault(emptyList())
+}
+
 // ── MCP client (calls CortexMcpServer on port 18082) ─────────────────────────
 
 fun listMcpTools(): List<Map<String, String>> = runCatching {
@@ -83,18 +124,32 @@ fun callMcpTool(toolName: String, args: Map<String, Any?>): String = runCatching
 
 // ── System prompt with live tool list ────────────────────────────────────────
 
-fun buildSystemPrompt(tools: List<Map<String, String>>): String {
-    val toolLines = if (tools.isEmpty()) "  (MCP server not available)"
-    else tools.joinToString("\n") { "  • ${it["name"]}: ${it["description"]}" }
+fun buildSystemPrompt(
+    localTools: List<Map<String, String>>,
+    externalServers: List<ExternalMcpServer>
+): String {
+    val localLines = if (localTools.isEmpty()) "  (none)"
+    else localTools.joinToString("\n") { "  • ${it["name"]}: ${it["description"]}" }
+
+    val externalLines = if (externalServers.isEmpty()) ""
+    else "\nEXTERNAL MCP TOOLS (prefix: serverName.toolName):\n" +
+        externalServers.joinToString("\n") { srv ->
+            srv.connected.tools.joinToString("\n") { t ->
+                "  • ${srv.namePrefix}.${t.name}: ${t.description}"
+            }
+        }
+
     return buildString {
         appendLine("You are CORTEX, the AI orchestrator of a Koupper automation swarm.")
         appendLine("You run entirely on local LLM infrastructure — no cloud, no remote APIs.")
         appendLine()
-        appendLine("AVAILABLE MCP TOOLS:")
-        appendLine(toolLines)
+        appendLine("BUILT-IN TOOLS:")
+        appendLine(localLines)
+        if (externalLines.isNotBlank()) append(externalLines)
         appendLine()
         appendLine("TOOL CALLING: When you need to use a tool, output EXACTLY this on its own line:")
         appendLine("""  CORTEX_TOOL: {"tool":"<name>","args":{<arguments>}}""")
+        appendLine("For external tools use the prefix: playwright.screenshot, github.create_pr, etc.")
         appendLine("You will receive: TOOL_RESULT: <json>. Continue your response after it.")
         appendLine("Only use CORTEX_TOOL when taking action. Regular answers need no prefix.")
         appendLine()
@@ -128,9 +183,10 @@ fun infer(history: List<AgentMessage>, engine: InferenceEngine): String {
 fun inferWithTools(
     history: MutableList<AgentMessage>,
     engine: InferenceEngine,
+    externalServers: List<ExternalMcpServer> = emptyList(),
     maxIters: Int = 5
 ): String {
-    logFile.appendText("[${ts()}] ")  // timestamp before first token
+    logFile.appendText("[${ts()}] ")
     var reply = infer(history, engine)
     var iters = 0
 
@@ -140,11 +196,23 @@ fun inferWithTools(
 
         val result = runCatching {
             val parsed   = mapper.readValue<Map<String, Any?>>(jsonStr)
-            val toolName = parsed["tool"]?.toString() ?: return@runCatching "missing 'tool' field"
+            val fullName = parsed["tool"]?.toString() ?: return@runCatching "missing 'tool' field"
             @Suppress("UNCHECKED_CAST")
             val toolArgs = parsed["args"] as? Map<String, Any?> ?: emptyMap()
-            callMcpTool(toolName, toolArgs)
-        }.getOrElse { e -> "parse error: ${e.message?.take(80)}" }
+
+            // Route: "playwright.screenshot" → playwright server, "list_agents" → local MCP
+            val dotIdx = fullName.indexOf('.')
+            if (dotIdx > 0) {
+                val serverName = fullName.substring(0, dotIdx)
+                val actualTool = fullName.substring(dotIdx + 1)
+                val srv = externalServers.firstOrNull { it.namePrefix == serverName }
+                    ?: return@runCatching "Unknown external MCP server: $serverName"
+                val mcpClient = app.getInstance(MCPClientProvider::class)
+                mcpClient.callTool(srv.connected, actualTool, toolArgs).toString()
+            } else {
+                callMcpTool(fullName, toolArgs)
+            }
+        }.getOrElse { e -> "error: ${e.message?.take(80)}" }
 
         log("  ↳ ${result.take(200)}")
         log("")
@@ -178,14 +246,16 @@ val cortex: () -> Unit = {
         return@cortex
     }
 
-    val tools   = listMcpTools()
-    val history = mutableListOf(AgentMessage("system", buildSystemPrompt(tools)))
+    val localTools      = listMcpTools()
+    val externalServers = loadExternalMcpServers()
+    val history = mutableListOf(AgentMessage("system", buildSystemPrompt(localTools, externalServers)))
 
     // ── Greeting ──────────────────────────────────────────────────────────────
 
     log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     log("  CORTEX ONLINE — Koupper InferenceEngine")
-    log("  MCP tools : ${tools.size} available")
+    log("  Built-in tools : ${localTools.size}")
+    log("  External MCPs  : ${externalServers.size} servers")
     log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
     val agentCount = agentsDir.listFiles { f -> f.name.endsWith(".kts") && f.name != "CortexAgent.kts" }?.size ?: 0
@@ -198,7 +268,7 @@ val cortex: () -> Unit = {
         "Greet the user (2 lines max) and ask what they need built today."
     ))
 
-    val greeting = inferWithTools(history, engine)
+    val greeting = inferWithTools(history, engine, externalServers)
     history.add(AgentMessage("assistant", greeting))
     log("")
     log("  Press Enter on this job to open the command bar.")
@@ -229,7 +299,7 @@ val cortex: () -> Unit = {
             log("")
 
             history.add(AgentMessage("user", userMsg))
-            val reply = inferWithTools(history, engine)
+            val reply = inferWithTools(history, engine, externalServers)
             history.add(AgentMessage("assistant", reply))
 
             // Save any generated agent scripts
