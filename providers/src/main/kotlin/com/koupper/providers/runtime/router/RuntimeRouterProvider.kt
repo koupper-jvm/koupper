@@ -281,8 +281,15 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
 
     private fun respond(response: Response, status: Int, payload: Any) {
         response.status = status
-        response.setContentType("application/json")
-        val bytes = if (payload is String && (payload.startsWith("{") || payload.startsWith("["))) payload.toByteArray() else mapper.writeValueAsBytes(payload)
+        val (ct, bytes) = when {
+            payload is String && payload.trimStart().let { it.startsWith("<!DOCTYPE") || it.startsWith("<html") } ->
+                "text/html; charset=UTF-8" to payload.toByteArray(Charsets.UTF_8)
+            payload is String && (payload.startsWith("{") || payload.startsWith("[")) ->
+                "application/json" to payload.toByteArray(Charsets.UTF_8)
+            else ->
+                "application/json" to mapper.writeValueAsBytes(payload)
+        }
+        response.setContentType(ct)
         response.outputStream.write(bytes)
     }
 
