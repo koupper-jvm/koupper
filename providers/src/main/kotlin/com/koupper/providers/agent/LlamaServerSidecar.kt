@@ -160,7 +160,8 @@ class LlamaServerSidecar(
                 
                 try {
                     val json = mapper.readTree(data)
-                    val content = json.get("choices")?.get(0)?.get("delta")?.get("content")?.asText() ?: ""
+                    val contentNode = json.get("choices")?.get(0)?.get("delta")?.get("content")
+                    val content = if (contentNode != null && !contentNode.isNull) contentNode.asText() else ""
                     if (content.isNotEmpty()) {
                         emit(content)
                     }
