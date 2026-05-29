@@ -20,6 +20,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - `EnvironmentProfiler.calculateBudget()` — replaced hard `IllegalStateException` kill switch with graceful `LOW_END` tier degradation and a warning log. Machines without AVX2 or GPU no longer crash Octopus on startup.
 - `LlamaServerSidecar` — lazy initialization via `by lazy {}`. `KOUPPER_LLM_MODEL_PATH` is now validated only on first `predict()` call, not at container boot time.
+- `LlamaServerSidecar` SSE parser — skips events where the `content` node is `null` or the literal string `"null"`. Eliminates the spurious `null` token emitted at the start of every streaming response.
 - `AgentOrchestrator.runAgent()` — replaced hardcoded `ToolCall("hardware-checker", "execute")` stub with real JSON parsing of LLM response (`toolName`, `action`, `arguments` fields).
 - `DefaultToolExecutor` — removed fake simulation responses (`ls output: AgenticCore.kt`). Now performs real `java.io.File` operations for `read`, `exists`, and `list` actions.
 - `octopus/build.gradle` `optimized` task filter — replaced `contains('container')` (which captured `jersey-container-*`) with `matches("module-[0-9].*\\.jar")` regex. Optimized JAR dropped from ~3.4MB with Grizzly leakage to 1.6MB with zero external class leakage.
