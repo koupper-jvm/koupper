@@ -365,35 +365,58 @@ internal class CortexMcpServer(
     //   [PIPELINE:STAGE:<name>:DONE:<elapsedMs>]   or :FAILED:<elapsedMs>
     //   [PIPELINE:DONE] | [PIPELINE:FAILED:<stageName>]
 
+    // Generates a pipeline coordinator using ScriptExecutor.runPipeline with dependsOn —
+    // the Koupper pipeline API, not manual ProcessBuilder chaining.
     private fun buildPipelineScript(pipelineId: String, stages: List<String>): String {
-        val stageList  = stages.joinToString(",")
-        val stageLines = stages.joinToString("\n\n") { name ->
-            """println("[PIPELINE:STAGE:$name:START]")
-val startMs_$name = System.currentTimeMillis()
-val exit_$name = ProcessBuilder("${'$'}home/.koupper/bin/koupper", "run", "${'$'}home/.koupper/agents/$name.kts")
-    .inheritIO().start().waitFor()
-val elapsed_$name = System.currentTimeMillis() - startMs_$name
-if (exit_$name != 0) {
-    println("[PIPELINE:STAGE:$name:FAILED:${'$'}elapsed_$name]")
-    println("[PIPELINE:FAILED:$name]")
-    error("Stage $name failed (exit ${'$'}exit_$name)")
-}
-println("[PIPELINE:STAGE:$name:DONE:${'$'}elapsed_$name]")"""
+        val stageList = stages.joinToString(",")
+
+        // Each stage is a val so ::stageName gives KProperty0<() -> Unit> for dependsOn
+        val stageVals = stages.joinToString("\n\n") { name ->
+            """val stage_$name: () -> Unit = {
+    println("[PIPELINE:STAGE:$name:START]")
+    val t0 = System.currentTimeMillis()
+    val exit = ProcessBuilder("${'$'}home/.koupper/bin/koupper", "run", "${'$'}home/.koupper/agents/$name.kts")
+        .inheritIO().start().waitFor()
+    val elapsed = System.currentTimeMillis() - t0
+    if (exit != 0) {
+        println("[PIPELINE:STAGE:$name:FAILED:${'$'}elapsed]")
+        println("[PIPELINE:FAILED:$name]")
+        error("Stage $name failed (exit ${'$'}exit)")
+    }
+    println("[PIPELINE:STAGE:$name:DONE:${'$'}elapsed]")
+}"""
         }
+
+        // dependsOn chain: first stage standalone, each subsequent depends on the previous
+        val pipelineList = stages.mapIndexed { idx, name ->
+            if (idx == 0) "::stage_$name"
+            else "::stage_$name.dependsOn(::stage_${stages[idx - 1]})"
+        }.joinToString(",\n    ")
+
         return """
 // $pipelineId.kts — Auto-generated pipeline coordinator
 // Stages: ${stages.joinToString(" → ")}
-// Created by CORTEX
+// Uses ScriptExecutor.runPipeline with dependsOn — Koupper pipeline API
 
+import com.koupper.octopus.ScriptExecutor
+import com.koupper.shared.octopus.dependsOn
 import java.io.File
 
 val home = System.getProperty("user.home")
 
 println("[PIPELINE:START:$stageList]")
 
-$stageLines
+$stageVals
 
-println("[PIPELINE:DONE]")
+ScriptExecutor.runPipeline(
+    listOf(
+    $pipelineList
+    ),
+    async = false
+) { report ->
+    println("[PIPELINE:DONE]")
+    println("Total: ${'$'}{report.totalMs}ms  OK: ${'$'}{report.okCount}/${'$'}{report.steps.size}")
+}
 """.trimIndent()
     }
 }
