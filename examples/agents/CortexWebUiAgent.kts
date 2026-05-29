@@ -101,12 +101,27 @@ fun swarmSnapshot(): Map<String, Any> {
 fun startWatcher() = Thread {
     val ws = FileSystems.getDefault().newWatchService()
     jobsDir.mkdirs()
+
     fun reg(d: File) { if (d.exists()) d.toPath().register(ws, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY) }
     reg(jobsDir)
     jobsDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") }?.forEach { reg(it) }
+
     while (true) {
         val key = ws.poll(500, TimeUnit.MILLISECONDS) ?: continue
-        key.pollEvents()
+
+        for (ev in key.pollEvents()) {
+            // When a new subdirectory appears in jobsDir, register it immediately
+            // This handles cortex/, default/, pipeline/ etc. created after startup
+            @Suppress("UNCHECKED_CAST")
+            val fname = (ev as? java.nio.file.WatchEvent<java.nio.file.Path>)?.context()?.fileName?.toString() ?: continue
+            if (ev.kind() == ENTRY_CREATE) {
+                val newDir = File(jobsDir, fname)
+                if (newDir.isDirectory && !fname.startsWith(".") && fname !in excluded) {
+                    reg(newDir)
+                }
+            }
+        }
+
         if (sseClients.isNotEmpty()) broadcast(mapper.writeValueAsString(swarmSnapshot()))
         key.reset()
     }
