@@ -8,6 +8,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- `MCPClientProvider` / `MCPClientServiceProvider` — connects to external MCP servers via HTTP or stdio transport. Handles initialize handshake, tool discovery, and tool calls. Enables agents to use Playwright, GitHub, filesystem, and any MCP-compliant server as tools (prefix: `serverName.toolName`). Registered in container and catalog.
+- `LocalMCPServerProvider` rewritten to JSON-RPC 2.0 (MCP spec `2024-11-05`). Primary endpoint `POST /` handles `initialize`, `tools/list`, `tools/call`, `ping`, and notifications. Legacy `/mcp/tools` and `/mcp/call` preserved for backward compatibility.
+- `InferenceConfig` data class — configurable `maxTokens`, `temperature`, `topP`, `stream` for `LlamaServerSidecar` and `LlamaCppEngine`.
+- `koupper worker` CLI command — file-based job worker daemon. Polls queue directories atomically (POSIX `renameTo` claiming), executes agent scripts via `koupper run`, and streams output to `logs/<queue>/<jobId>.log`. Supports `--queues`, `--concurrency`, `--interval` flags.
+- `GrizzlyRuntimeRouterProvider.respond()` — detects HTML strings and serves with `text/html; charset=UTF-8` instead of `application/json`, enabling script-based HTML page serving.
+- `examples/agents/CortexAgent.kts` — reference agent using `InferenceEngine` SP with `TokenListener` streaming, MCP tool loop, and external MCP server discovery via `~/.koupper/mcp/servers.json`.
+- `examples/mcp/servers.json` — example configuration for external MCP servers (Playwright, GitHub, filesystem, Postgres).
+
+### Fixed
+- `EnvironmentProfiler.calculateBudget()` — replaced hard `IllegalStateException` kill switch with graceful `LOW_END` tier degradation and a warning log. Machines without AVX2 or GPU no longer crash Octopus on startup.
+- `LlamaServerSidecar` — lazy initialization via `by lazy {}`. `KOUPPER_LLM_MODEL_PATH` is now validated only on first `predict()` call, not at container boot time.
+- `AgentOrchestrator.runAgent()` — replaced hardcoded `ToolCall("hardware-checker", "execute")` stub with real JSON parsing of LLM response (`toolName`, `action`, `arguments` fields).
+- `DefaultToolExecutor` — removed fake simulation responses (`ls output: AgenticCore.kt`). Now performs real `java.io.File` operations for `read`, `exists`, and `list` actions.
+- `octopus/build.gradle` `optimized` task filter — replaced `contains('container')` (which captured `jersey-container-*`) with `matches("module-[0-9].*\\.jar")` regex. Optimized JAR dropped from ~3.4MB with Grizzly leakage to 1.6MB with zero external class leakage.
+
+### Release alignment
+- `octopus 6.5.3` / `koupper-cli 4.8.0`
+
+---
+
+## [6.5.3] - 2026-05-24
+
+### Added
+- Migration note for unified `@Export` annotation path in `docs/migrations/2026-05-export-annotation-path.md`.
+- Maintenance branches logic to the `develop` workflow for cleaner `gitignore` and IDE state management.
+
+### Changed
+- **BREAKING**: Moved `@Export` annotation from `com.koupper.octopus.annotations` to `com.koupper.shared.annotations` to support unified classpath resolution.
+- Updated all internal scripts, examples, and CLI templates to use the new `com.koupper.shared.annotations.Export` path.
+- Refactored `koupper-cli` command handlers for jobs, modules, and scripts to generate code with the updated annotation path.
+
+### Fixed
+- Fixed `gitignore` missing patterns for `bin/` directories in Gradle submodules and template projects.
+- Rescued missing bootstrap fixes from `main` back into `develop` in the root workspace repository.
+
+### Release alignment
+- `octopus 6.5.0` / `koupper-cli 4.8.0`
+
 ---
 
 ## [6.4.0] - 2026-04-10
