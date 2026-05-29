@@ -306,6 +306,8 @@ class MonitorApp(private val jobsDir: File) {
         Runtime.getRuntime().addShutdownHook(thread(start = false, isDaemon = true) {
             runCatching { screen.stopScreen() }
             mcpServer?.stopHttp()
+            // Clean up cortex-session processing file so web UI doesn't show stale job
+            runCatching { File(jobsDir, "cortex/cortex-session.json.processing").delete() }
         })
 
         // No splash animation — go straight to dashboard
@@ -390,7 +392,11 @@ class MonitorApp(private val jobsDir: File) {
         val logFile = File(logDir, "cortex-session.log")
         logFile.writeText("")
 
-        // Register CORTEX job directly in memory so WatchService isn't needed for startup
+        // Register CORTEX job in memory AND on disk so both TUI and web UI see it
+        val cortexQueueDir = File(jobsDir, "cortex").also { it.mkdirs() }
+        File(cortexQueueDir, "cortex-session.json.processing").writeText(
+            """{"id":"cortex-session","fileName":"CortexAgent","functionName":"cortex","scriptPath":"agents/CortexAgent.kts","sourceType":"script"}"""
+        )
         jobs["cortex-session"] = JobEntry("cortex-session", "cortex", Status.PROCESSING)
         wizardActive    = true
         wizardSessionId = "cortex-session"
