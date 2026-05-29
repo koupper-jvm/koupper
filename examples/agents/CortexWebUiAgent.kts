@@ -17,8 +17,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
 val home    = System.getProperty("user.home")!!
-val jobsDir = File(args.firstOrNull() ?: "$home/.koupper/jobs")
-val uiPort  = args.getOrNull(1)?.toIntOrNull() ?: 18083
+val jobsDir = File(System.getenv("CORTEX_JOBS_DIR") ?: "$home/.koupper/jobs")
+val uiPort  = System.getenv("CORTEX_WEB_PORT")?.toIntOrNull() ?: 18083
 val mapper  = jacksonObjectMapper()
 
 // ── SSE broadcast ─────────────────────────────────────────────────────────────
@@ -267,14 +267,16 @@ val setup: () -> Unit = {
         // Job log — last 200 lines
         get<String> {
             path { "/api/logs/{jobId}" }
-            script { jobId: String ->
-                val logRoot = File(jobsDir, "logs")
-                val found   = logRoot.walkTopDown().firstOrNull { it.name == "$jobId.log" }
-                when {
-                    found != null && found.exists() ->
-                        mapper.writeValueAsString(mapOf("jobId" to jobId, "lines" to found.readLines().takeLast(200)))
-                    else ->
-                        mapper.writeValueAsString(mapOf("jobId" to jobId, "lines" to emptyList<String>(), "error" to "log not found"))
+            script {
+                { jobId: String ->
+                    val logRoot = File(jobsDir, "logs")
+                    val found   = logRoot.walkTopDown().firstOrNull { it.name == "$jobId.log" }
+                    when {
+                        found != null && found.exists() ->
+                            mapper.writeValueAsString(mapOf("jobId" to jobId, "lines" to found.readLines().takeLast(200)))
+                        else ->
+                            mapper.writeValueAsString(mapOf("jobId" to jobId, "lines" to emptyList<String>(), "error" to "log not found"))
+                    }
                 }
             }
         }
