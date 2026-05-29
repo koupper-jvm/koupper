@@ -702,6 +702,19 @@
         { "name": "KOUPPER_LLM_EXECUTABLE", "required": false, "description": "Path to llama-server binary." }
       ],
       "docs": "https://koupper.com/docs/providers/agent"
+    },
+    {
+      "id": "command-bridge",
+      "serviceProvider": "CommandBridgeServiceProvider",
+      "description": "File-based command channel for interactive agents. Watches a directory for *.response files written by the CLI or web UI and delivers them as commands to the agent loop.",
+      "bindings": [
+        {
+          "contract": "CommandBridgeProvider",
+          "implementations": [{ "class": "CommandBridgeProviderImpl" }]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/command-bridge"
     }
   ]
 }
