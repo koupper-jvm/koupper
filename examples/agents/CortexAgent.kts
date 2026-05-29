@@ -237,89 +237,82 @@ cmdInDir.listFiles { f -> f.name.endsWith(".response") }?.forEach { it.delete() 
 @Export
 val cortex: () -> Unit = {
 
-    val engine = try {
-        app.getInstance(InferenceEngine::class)
-    } catch (e: Exception) {
+    val engine = runCatching { app.getInstance(InferenceEngine::class) }.getOrElse { e ->
         log("⚠ InferenceEngine not available: ${e.message}")
         log("  Set KOUPPER_LLM_MODEL_PATH and KOUPPER_LLM_EXECUTABLE.")
         procFile.delete()
-        return@cortex
+        null
     }
 
-    val localTools      = listMcpTools()
-    val externalServers = loadExternalMcpServers()
-    val history = mutableListOf(AgentMessage("system", buildSystemPrompt(localTools, externalServers)))
+    if (engine != null) {
+        val localTools      = listMcpTools()
+        val externalServers = loadExternalMcpServers()
+        val history = mutableListOf(AgentMessage("system", buildSystemPrompt(localTools, externalServers)))
 
-    // ── Greeting ──────────────────────────────────────────────────────────────
+        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        log("  CORTEX ONLINE — Koupper InferenceEngine")
+        log("  Built-in tools : ${localTools.size}")
+        log("  External MCPs  : ${externalServers.size} servers")
+        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-    log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    log("  CORTEX ONLINE — Koupper InferenceEngine")
-    log("  Built-in tools : ${localTools.size}")
-    log("  External MCPs  : ${externalServers.size} servers")
-    log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        val agentCount = agentsDir.listFiles { f -> f.name.endsWith(".kts") && f.name != "CortexAgent.kts" }?.size ?: 0
+        val pending    = jobsDir.listFiles()?.flatMap { q ->
+            q.listFiles()?.filter { it.name.endsWith(".json") } ?: emptyList()
+        }?.size ?: 0
 
-    val agentCount = agentsDir.listFiles { f -> f.name.endsWith(".kts") && f.name != "CortexAgent.kts" }?.size ?: 0
-    val pending    = jobsDir.listFiles()?.flatMap { q ->
-        q.listFiles()?.filter { it.name.endsWith(".json") } ?: emptyList()
-    }?.size ?: 0
+        history.add(AgentMessage("user",
+            "System state: $agentCount agents deployed, $pending jobs pending. " +
+            "Greet the user (2 lines max) and ask what they need built today."
+        ))
 
-    history.add(AgentMessage("user",
-        "System state: $agentCount agents deployed, $pending jobs pending. " +
-        "Greet the user (2 lines max) and ask what they need built today."
-    ))
+        val greeting = inferWithTools(history, engine, externalServers)
+        history.add(AgentMessage("assistant", greeting))
+        log("")
+        log("  Press Enter on this job to open the command bar.")
+        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-    val greeting = inferWithTools(history, engine, externalServers)
-    history.add(AgentMessage("assistant", greeting))
-    log("")
-    log("  Press Enter on this job to open the command bar.")
-    log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        val ws       = FileSystems.getDefault().newWatchService()
+        val deadline = System.currentTimeMillis() + 60 * 60 * 1000L
+        cmdInDir.toPath().register(ws, ENTRY_CREATE)
 
-    // ── Command loop ──────────────────────────────────────────────────────────
+        while (System.currentTimeMillis() < deadline) {
+            val key = ws.poll(500, TimeUnit.MILLISECONDS) ?: continue
 
-    val ws       = FileSystems.getDefault().newWatchService()
-    val deadline = System.currentTimeMillis() + 60 * 60 * 1000L
+            for (ev in key.pollEvents()) {
+                if (ev.kind() == OVERFLOW) continue
+                @Suppress("UNCHECKED_CAST")
+                val fname = (ev as WatchEvent<Path>).context().fileName.toString()
+                if (!fname.endsWith(".response")) continue
 
-    cmdInDir.toPath().register(ws, ENTRY_CREATE)
+                val responseFile = File(cmdInDir, fname)
+                val userMsg      = runCatching { responseFile.readText().trim() }.getOrDefault("")
+                responseFile.delete()
+                if (userMsg.isBlank()) continue
 
-    while (System.currentTimeMillis() < deadline) {
-        val key = ws.poll(500, TimeUnit.MILLISECONDS) ?: continue
+                log("▶ $userMsg")
+                log("")
 
-        for (ev in key.pollEvents()) {
-            if (ev.kind() == OVERFLOW) continue
-            @Suppress("UNCHECKED_CAST")
-            val fname = (ev as WatchEvent<Path>).context().fileName.toString()
-            if (!fname.endsWith(".response")) continue
+                history.add(AgentMessage("user", userMsg))
+                val reply = inferWithTools(history, engine, externalServers)
+                history.add(AgentMessage("assistant", reply))
 
-            val responseFile = File(cmdInDir, fname)
-            val userMsg      = runCatching { responseFile.readText().trim() }.getOrDefault("")
-            responseFile.delete()
-            if (userMsg.isBlank()) continue
-
-            log("▶ $userMsg")
-            log("")
-
-            history.add(AgentMessage("user", userMsg))
-            val reply = inferWithTools(history, engine, externalServers)
-            history.add(AgentMessage("assistant", reply))
-
-            // Save any generated agent scripts
-            val scriptMatch = Regex("```kotlin(.*?)```", RegexOption.DOT_MATCHES_ALL).find(reply)
-            if (scriptMatch != null) {
-                val script    = scriptMatch.groupValues[1].trim()
-                val agentName = Regex("//\\s*Agent:\\s*(.+)").find(script)
-                    ?.groupValues?.get(1)?.trim()?.replace(" ", "")
-                    ?: "Agent${System.currentTimeMillis() % 1000}"
-                File(agentsDir, "$agentName.kts").writeText(script)
-                log("[✓ Saved → ~/.koupper/agents/$agentName.kts]")
-                log("[  Use run_agent to execute it]")
+                val scriptMatch = Regex("```kotlin(.*?)```", RegexOption.DOT_MATCHES_ALL).find(reply)
+                if (scriptMatch != null) {
+                    val script    = scriptMatch.groupValues[1].trim()
+                    val agentName = Regex("//\\s*Agent:\\s*(.+)").find(script)
+                        ?.groupValues?.get(1)?.trim()?.replace(" ", "")
+                        ?: "Agent${System.currentTimeMillis() % 1000}"
+                    File(agentsDir, "$agentName.kts").writeText(script)
+                    log("[✓ Saved → ~/.koupper/agents/$agentName.kts]")
+                    log("[  Use run_agent to execute it]")
+                }
+                log("")
             }
-
-            log("")
+            key.reset()
         }
-        key.reset()
-    }
 
-    log("[!] Session expired after 1 hour.")
+        log("[!] Session expired after 1 hour.")
+        ws.close()
+    }
     procFile.delete()
-    ws.close()
 }
