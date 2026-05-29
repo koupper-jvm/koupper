@@ -43,11 +43,15 @@ class LlamaCppEngine(
     private val inferenceConfig: InferenceConfig = InferenceConfig()
 ) : InferenceEngine {
 
-    private val modelPath      = System.getenv("KOUPPER_LLM_MODEL_PATH")
-        ?: error("KOUPPER_LLM_MODEL_PATH env var is required")
+    private val modelPath      = System.getenv("KOUPPER_LLM_MODEL_PATH") ?: ""
     private val executablePath = System.getenv("KOUPPER_LLM_EXECUTABLE") ?: "llama-server"
 
-    private val sidecar = LlamaServerSidecar(budget, modelPath, executablePath, config = inferenceConfig)
+    private val sidecar by lazy {
+        require(modelPath.isNotBlank()) {
+            "KOUPPER_LLM_MODEL_PATH env var is required to run local inference"
+        }
+        LlamaServerSidecar(budget, modelPath, executablePath, config = inferenceConfig)
+    }
 
     override suspend fun <T : Any> predict(
         history: List<AgentMessage>, 
