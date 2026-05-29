@@ -39,6 +39,12 @@ private class CortexEngine(
     private val mapper    = jacksonObjectMapper()
     private var serverProc: Process? = null
 
+    private val memory = CortexMemoryStore(
+        http       = http,
+        llamaPort  = port,
+        memoryFile = File(System.getProperty("user.home"), ".koupper/memory/cortex_memory.json")
+    )
+
     private companion object { const val MAX_TOOL_ITERS = 5 }
 
     private fun buildSystem(): String {
@@ -102,11 +108,12 @@ private class CortexEngine(
     // ── Inference ─────────────────────────────────────────────────────────────
 
     fun greet(swarmContext: String) {
+        memory.load()     // restore memories from previous sessions
         history.clear()
         history.add(mapOf("role" to "system", "content" to buildSystem()))
         history.add(mapOf("role" to "user",   "content" to "Context: $swarmContext\nGreet the user (2 lines max) and ask what they need built today."))
-        logFile.appendText("[${ts()}] ")   // timestamp prefix before streaming starts
-        val reply = infer()                // tokens stream directly to logFile
+        logFile.appendText("[${ts()}] ")
+        val reply = infer()
         history.add(mapOf("role" to "assistant", "content" to reply))
         log("")
         log("  Press Enter on this job, then type your request.")
@@ -115,10 +122,15 @@ private class CortexEngine(
     fun respond(userMsg: String) {
         log("▶ $userMsg")
         log("")
+
+        // Inject relevant memories as context before adding the user message
+        val ctx = memory.retrieve(userMsg)
+        if (ctx.isNotEmpty()) history.add(mapOf("role" to "user", "content" to ctx))
+
         history.add(mapOf("role" to "user", "content" to userMsg))
 
-        logFile.appendText("[${ts()}] ")   // timestamp prefix before first token
-        var reply = infer()                // streams to logFile token by token
+        logFile.appendText("[${ts()}] ")
+        var reply = infer()
         var iters = 0
 
         val mcp = mcpServer
@@ -150,6 +162,9 @@ private class CortexEngine(
         }
 
         history.add(mapOf("role" to "assistant", "content" to reply))
+
+        // Store the Q&A turn for future retrieval (async to avoid blocking the UI)
+        thread(isDaemon = true) { memory.store(userMsg, reply) }
 
         // Content already in log from streaming — only append save confirmation if code was generated
         val scriptMatch = Regex("```kotlin(.*?)```", RegexOption.DOT_MATCHES_ALL).find(reply)
