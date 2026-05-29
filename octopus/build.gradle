@@ -66,17 +66,11 @@ tasks.register('optimized', Jar) {
 
     from sourceSets.main.output
     from({
+        // Match only Koupper's own modules: name must be exactly <module>-<version>.jar
+        // to avoid false positives like jersey-container-* or jackson-annotations-*
+        def koupperModules = ['container', 'providers', 'configurations', 'shared', 'os', 'annotations', 'orchestrator-core', 'logging']
         def filtered = configurations.runtimeClasspath.getFiles().findAll { f ->
-            f?.exists() && (
-                    f.name.contains('container') ||
-                            f.name.contains('providers') ||
-                            f.name.contains('configurations') ||
-                            f.name.contains('shared') ||
-                            f.name.contains('os') ||
-                            f.name.contains('annotations') ||
-                            f.name.contains('orchestrator-core') ||
-                            f.name.contains('logging')
-            )
+            f?.exists() && koupperModules.any { m -> f.name.matches("${m}-[0-9].*\\.jar") }
         }
         filtered.each { println "Octopus dependency Included: ${it.name}" }
         filtered.collect { it.isDirectory() ? it : zipTree(it) }
