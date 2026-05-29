@@ -413,6 +413,17 @@ class MonitorApp(private val jobsDir: File) {
         log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         dirty = true
 
+        // Launch web UI agent if installed
+        val webAgent = File(agentsDir, "CortexWebUiAgent.kts")
+        if (webAgent.exists() && File(koupperBin).exists()) {
+            thread(name = "web-ui", isDaemon = true) {
+                log("  Web UI    : http://localhost:18083")
+                ProcessBuilder(koupperBin, "run", webAgent.absolutePath, jobsDir.absolutePath)
+                    .redirectErrorStream(true)
+                    .start()
+            }
+        }
+
         val started = engine.start()
         if (!started) {
             log("")
