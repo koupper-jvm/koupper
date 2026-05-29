@@ -6,230 +6,15 @@ import com.googlecode.lanterna.graphics.TextGraphics
 import com.googlecode.lanterna.input.KeyType
 import com.googlecode.lanterna.screen.TerminalScreen
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.File
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.nio.file.*
 import java.nio.file.StandardWatchEventKinds.*
-import java.time.Duration
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
-
-// ── CortexEngine: local LLM via llama-server, MCP tool calling ───────────────
-private class CortexEngine(
-    private val logFile: File,
-    private val agentsDir: File,
-    private val mcpServer: CortexMcpServer? = null,
-    private val modelPath: String  = System.getenv("KOUPPER_LLM_MODEL_PATH")
-                                      ?: "/home/tdn-dell/develop/llama.cpp/modelo_prueba.gguf",
-    private val serverBin: String  = System.getenv("KOUPPER_LLM_EXECUTABLE")
-                                      ?: "/home/tdn-dell/develop/llama.cpp/build/bin/llama-server",
-    private val port: Int          = 8081
-) {
-    private val http      = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
-    private val history   = mutableListOf<Map<String, String>>()
-    private val mapper    = jacksonObjectMapper()
-    private var serverProc: Process? = null
-
-    private val memory = CortexMemoryStore(
-        http       = http,
-        llamaPort  = port,
-        memoryFile = File(System.getProperty("user.home"), ".koupper/memory/cortex_memory.json")
-    )
-
-    private companion object { const val MAX_TOOL_ITERS = 5 }
-
-    private fun buildSystem(): String {
-        val toolLines = mcpServer?.toolDefinitions()?.joinToString("\n") { t ->
-            "  • ${t["name"]}: ${t["description"]}"
-        } ?: "  (no tools available)"
-        return buildString {
-            appendLine("You are CORTEX, the AI orchestrator of a Koupper automation swarm.")
-            appendLine("You run entirely on a local LLM — no cloud, no remote APIs.")
-            appendLine()
-            appendLine("AVAILABLE TOOLS:")
-            appendLine(toolLines)
-            appendLine()
-            appendLine("TOOL CALLING: When you need to use a tool, output EXACTLY this on its own line:")
-            appendLine("""  CORTEX_TOOL: {"tool":"<name>","args":{<arguments>}}""")
-            appendLine("You will then receive: TOOL_RESULT: <json>. Continue your response after the result.")
-            appendLine("Only use CORTEX_TOOL when you need to take action or get information.")
-            appendLine()
-            appendLine("For agent code, wrap in a kotlin code block with '// Agent: Name' as first comment.")
-            append("Be concise — terminal UI. Under 8 lines unless generating code.")
-        }
-    }
-
-    private fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
-
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
-
-    fun start(): Boolean {
-        if (!File(serverBin).exists()) { log("⚠ llama-server not found: $serverBin"); return false }
-        if (!File(modelPath).exists()) { log("⚠ Model not found: $modelPath"); return false }
-
-        // Check if already running
-        if (isHealthy()) { log("  llama-server already running on port $port"); return true }
-
-        log("  Starting llama-server…")
-        serverProc = ProcessBuilder(
-            serverBin, "-m", modelPath,
-            "--port", port.toString(), "--log-disable"
-        ).redirectErrorStream(true)
-         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-         .start()
-
-        Runtime.getRuntime().addShutdownHook(Thread { serverProc?.destroy() })
-
-        // Wait up to 60s for health
-        repeat(60) {
-            if (isHealthy()) return true
-            Thread.sleep(1000)
-        }
-        log("⚠ llama-server failed to start after 60s")
-        return false
-    }
-
-    private fun isHealthy(): Boolean = runCatching {
-        val req = HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:$port/health"))
-            .timeout(Duration.ofSeconds(2)).GET().build()
-        http.send(req, HttpResponse.BodyHandlers.ofString()).statusCode() == 200
-    }.getOrDefault(false)
-
-    // ── Inference ─────────────────────────────────────────────────────────────
-
-    fun greet(swarmContext: String) {
-        memory.load()     // restore memories from previous sessions
-        history.clear()
-        history.add(mapOf("role" to "system", "content" to buildSystem()))
-        history.add(mapOf("role" to "user",   "content" to "Context: $swarmContext\nGreet the user (2 lines max) and ask what they need built today."))
-        logFile.appendText("[${ts()}] ")
-        val reply = infer()
-        history.add(mapOf("role" to "assistant", "content" to reply))
-        log("")
-        log("  Press Enter on this job, then type your request.")
-    }
-
-    fun respond(userMsg: String) {
-        log("▶ $userMsg")
-        log("")
-
-        // Inject relevant memories as context before adding the user message
-        val ctx = memory.retrieve(userMsg)
-        if (ctx.isNotEmpty()) history.add(mapOf("role" to "user", "content" to ctx))
-
-        history.add(mapOf("role" to "user", "content" to userMsg))
-
-        logFile.appendText("[${ts()}] ")
-        var reply = infer()
-        var iters = 0
-
-        val mcp = mcpServer
-        while (iters < MAX_TOOL_ITERS) {
-            val toolLine = reply.lines().firstOrNull { it.trimStart().startsWith("CORTEX_TOOL:") }
-                ?: break
-            if (mcp == null) break
-
-            val jsonStr = toolLine.trimStart().removePrefix("CORTEX_TOOL:").trim()
-
-            val result = runCatching {
-                val payload  = mapper.readValue<Map<String, Any?>>(jsonStr)
-                val toolName = payload["tool"]?.toString()
-                    ?: return@runCatching mapOf("error" to "missing 'tool' field in CORTEX_TOOL")
-                @Suppress("UNCHECKED_CAST")
-                val toolArgs = payload["args"] as? Map<String, Any?> ?: emptyMap()
-                mcp.callTool(toolName, toolArgs)
-            }.getOrElse { e -> mapOf("error" to "parse error: ${e.message?.take(80)}") }
-
-            val resultJson = mapper.writeValueAsString(result)
-            log("  ↳ ${resultJson.take(150)}")   // tool result is not from LLM — log it explicitly
-            log("")
-
-            history.add(mapOf("role" to "assistant", "content" to reply))
-            history.add(mapOf("role" to "user",      "content" to "TOOL_RESULT: $resultJson"))
-            logFile.appendText("[${ts()}] ")
-            reply = infer()   // next response also streams
-            iters++
-        }
-
-        history.add(mapOf("role" to "assistant", "content" to reply))
-
-        // Store the Q&A turn for future retrieval (async to avoid blocking the UI)
-        thread(isDaemon = true) { memory.store(userMsg, reply) }
-
-        // Content already in log from streaming — only append save confirmation if code was generated
-        val scriptMatch = Regex("```kotlin(.*?)```", RegexOption.DOT_MATCHES_ALL).find(reply)
-        if (scriptMatch != null) {
-            val script    = scriptMatch.groupValues[1].trim()
-            val agentName = Regex("//\\s*Agent:\\s*(.+)").find(script)
-                ?.groupValues?.get(1)?.trim()?.replace(" ", "") ?: "Agent${System.currentTimeMillis() % 1000}"
-            File(agentsDir, "$agentName.kts").writeText(script)
-            log("[✓ Saved → ~/.koupper/agents/$agentName.kts]")
-            log("[  Use run_agent to execute it]")
-        }
-        log("")
-    }
-
-    // ── HTTP SSE streaming to llama-server (/v1/chat/completions) ───────────────
-    // Tokens are written to logFile as they arrive so the monitor panel updates
-    // in real time. The full assembled response is returned for tool-call detection.
-
-    private fun infer(): String {
-        val msgs = history.joinToString(",") { m ->
-            """{"role":${jstr(m["role"]!!)},"content":${jstr(m["content"]!!)}}"""
-        }
-        val body = """{"messages":[$msgs],"stream":true,"n_predict":512,"temperature":0.7}"""
-
-        return runCatching {
-            val req = HttpRequest.newBuilder()
-                .uri(URI.create("http://127.0.0.1:$port/v1/chat/completions"))
-                .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(120))
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build()
-
-            val resp = http.send(req, HttpResponse.BodyHandlers.ofLines())
-            if (resp.statusCode() != 200) {
-                val err = "[inference error: HTTP ${resp.statusCode()}]"
-                logFile.appendText("$err\n")
-                return@runCatching err
-            }
-
-            val sb = StringBuilder()
-            for (line in resp.body()) {
-                if (!line.startsWith("data: ")) continue
-                val data = line.removePrefix("data: ").trim()
-                if (data == "[DONE]") break
-                val token = runCatching {
-                    mapper.readTree(data)
-                        ?.get("choices")?.get(0)?.get("delta")?.get("content")?.asText() ?: ""
-                }.getOrDefault("")
-                if (token.isNotEmpty()) {
-                    sb.append(token)
-                    logFile.appendText(token)
-                }
-            }
-            logFile.appendText("\n")
-            sb.toString().ifEmpty { "[No response]" }
-        }.getOrElse { e ->
-            val err = "[Error: ${e.message?.take(80)}]"
-            logFile.appendText("$err\n")
-            err
-        }
-    }
-
-    private fun jstr(s: String) =
-        "\"${s.replace("\\","\\\\").replace("\"","\\\"").replace("\n","\\n")}\""
-}
 
 // ── Domain ────────────────────────────────────────────────────────────────────
 private enum class Status { PENDING, PROCESSING, DONE, FAILED }
@@ -290,10 +75,9 @@ class MonitorApp(private val jobsDir: File) {
     private val GREETING_ID     = "cortex-session"
 
     // Wizard / CORTEX state
-    @Volatile private var wizardActive    = false
-    private var wizardSessionId: String?  = null
-    private var cortexEngine: CortexEngine?  = null
-    private var mcpServer: CortexMcpServer?  = null
+    @Volatile private var wizardActive   = false
+    private var wizardSessionId: String? = null
+    private var mcpServer: CortexMcpServer? = null
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -391,8 +175,9 @@ class MonitorApp(private val jobsDir: File) {
         val logDir  = File(jobsDir, "logs/cortex").also { it.mkdirs() }
         val logFile = File(logDir, "cortex-session.log")
         logFile.writeText("")
+        fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
 
-        // Register CORTEX job in memory AND on disk so both TUI and web UI see it
+        // Register job in memory AND on disk so TUI and web UI both see it
         val cortexQueueDir = File(jobsDir, "cortex").also { it.mkdirs() }
         File(cortexQueueDir, "cortex-session.json.processing").writeText(
             """{"id":"cortex-session","fileName":"CortexAgent","functionName":"cortex","scriptPath":"agents/CortexAgent.kts","sourceType":"script"}"""
@@ -402,53 +187,52 @@ class MonitorApp(private val jobsDir: File) {
         wizardSessionId = "cortex-session"
         dirty = true
 
-        // Start MCP server (port 18082) before creating CortexEngine
+        // Start MCP server — tools available before the agent connects
         val mcp = CortexMcpServer(jobsDir, agentsDir)
         mcp.startHttp()
         mcpServer = mcp
 
-        val engine = CortexEngine(logFile, agentsDir, mcpServer = mcp)
-        cortexEngine = engine
-
-        fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
-
-        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        log("  CORTEX ONLINE — Local inference")
-        log("  MCP tools : ${mcp.toolDefinitions().size} registered")
-        log("  MCP port  : 18082")
-        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        dirty = true
-
-        // Launch web UI agent if installed
-        val webAgent = File(agentsDir, "CortexWebUiAgent.kts")
-        if (webAgent.exists() && File(koupperBin).exists()) {
-            thread(name = "web-ui", isDaemon = true) {
-                log("  Web UI    : http://localhost:18083")
-                ProcessBuilder(koupperBin, "run", webAgent.absolutePath, jobsDir.absolutePath)
-                    .redirectErrorStream(true)
-                    .start()
-            }
-        }
-
-        val started = engine.start()
-        if (!started) {
-            log("")
-            log("  llama-server could not start.")
-            log("  Check KOUPPER_LLM_MODEL_PATH and")
-            log("  KOUPPER_LLM_EXECUTABLE.")
+        val agentScript = File(agentsDir, "CortexAgent.kts")
+        if (!agentScript.exists() || !File(koupperBin).exists()) {
+            log("⚠ CortexAgent.kts or koupper binary not found.")
+            log("  Install: cp examples/agents/CortexAgent.kts ~/.koupper/agents/")
             jobs["cortex-session"]?.status = Status.FAILED
             dirty = true
             return
         }
 
-        // Swarm context for greeting
-        val agentCount = agentsDir.listFiles { f -> f.name.endsWith(".kts") }?.size ?: 0
-        val pending    = jobsDir.listFiles()
-            ?.filter { it.isDirectory && !it.name.startsWith(".") && it.name != "logs" }
-            ?.flatMap { it.listFiles()?.filter { f -> f.name.endsWith(".json") } ?: emptyList() }
-            ?.size ?: 0
+        // Launch CortexAgent.kts via Koupper — uses InferenceEngine SP (LlamaServerSidecar)
+        thread(name = "cortex-agent", isDaemon = true) {
+            runCatching {
+                ProcessBuilder(koupperBin, "run", agentScript.absolutePath)
+                    .also { pb ->
+                        pb.environment().apply {
+                            System.getenv("KOUPPER_LLM_MODEL_PATH")?.let { put("KOUPPER_LLM_MODEL_PATH", it) }
+                            System.getenv("KOUPPER_LLM_EXECUTABLE")?.let { put("KOUPPER_LLM_EXECUTABLE", it) }
+                            put("CORTEX_JOBS_DIR", jobsDir.absolutePath)
+                        }
+                        pb.redirectErrorStream(true)
+                    }
+                    .start()
+                    .waitFor()
+            }
+            jobs["cortex-session"]?.status = Status.DONE
+            dirty = true
+        }
 
-        engine.greet("$agentCount agents deployed, $pending jobs pending")
+        // Launch web UI agent if installed
+        val webAgent = File(agentsDir, "CortexWebUiAgent.kts")
+        if (webAgent.exists()) {
+            thread(name = "web-ui", isDaemon = true) {
+                log("  Web UI    : http://localhost:18083")
+                runCatching {
+                    ProcessBuilder(koupperBin, "run", webAgent.absolutePath)
+                        .also { it.environment()["CORTEX_JOBS_DIR"] = jobsDir.absolutePath }
+                        .redirectErrorStream(true).start()
+                }
+            }
+        }
+
         dirty = true
     }
 
@@ -560,14 +344,12 @@ class MonitorApp(private val jobsDir: File) {
         if (trimmed.isEmpty()) return
         when {
             trimmed.equals("help", ignoreCase = true) -> showHelp()
-            cortexEngine != null -> {
+            wizardActive -> {
+                // Write to commands/wizard/<ts>.response — CortexAgent.kts reads via WatchService
+                val cmdDir = File(jobsDir, "commands/wizard").also { it.mkdirs() }
+                File(cmdDir, "${System.currentTimeMillis()}.response").writeText(trimmed)
                 lastCommandResult = "◈ thinking…"
                 dirty = true
-                thread(isDaemon = true) {
-                    cortexEngine!!.respond(trimmed)
-                    lastCommandResult = null
-                    dirty = true
-                }
             }
             else -> {
                 File(jobsDir, "commands").mkdirs()
