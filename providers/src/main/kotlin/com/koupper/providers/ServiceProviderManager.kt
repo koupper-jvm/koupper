@@ -37,6 +37,7 @@ import com.koupper.providers.secrets.SecretsServiceProvider
 import com.koupper.providers.ssh.SSHServiceProvider
 import com.koupper.providers.templates.TemplateServiceProvider
 import com.koupper.providers.vectordb.VectorDbServiceProvider
+import com.koupper.providers.memory.MemoryServiceProvider
 import kotlin.reflect.KClass
 
 val launchProcess: (() -> Unit) -> Thread = { callback ->
@@ -100,6 +101,7 @@ class ServiceProviderManager {
             AILlmOpsServiceProvider::class,
             TemplateServiceProvider::class,
             VectorDbServiceProvider::class,
+            MemoryServiceProvider::class,
             RSSServiceProvider::class,
             RuntimeRouterServiceProvider::class,
             SecretsServiceProvider::class,
