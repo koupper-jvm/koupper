@@ -17,64 +17,76 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 // ── Domain ────────────────────────────────────────────────────────────────────
+
 private enum class Status { PENDING, PROCESSING, DONE, FAILED }
-private data class JobEntry(
-    val id: String,
-    val queue: String,
-    @Volatile var status: Status,
-    @Volatile var lastUpdate: String = ts()
-)
+private data class JobEntry(val id: String, val queue: String,
+    @Volatile var status: Status, @Volatile var lastUpdate: String = ts())
+
 private fun ts() = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-private fun trunc(s: String, n: Int) = if (s.length > n) s.take(n - 1) + "…" else s
+private val ANSI = Regex("\u001B\\[[;\\d]*[mGKHFJA-Za-z]|\r")
+private fun clean(s: String) = s.replace(ANSI, "")
+private fun trunc(s: String, n: Int) = when { n <= 0 -> ""; s.length > n -> s.take(n - 1) + "…"; else -> s }
 
 // ── Colors ────────────────────────────────────────────────────────────────────
+
 private object C {
-    val CY  = TextColor.Indexed(14)
-    val GR  = TextColor.Indexed(10)
-    val MG  = TextColor.Indexed(13)
-    val YL  = TextColor.Indexed(11)
-    val RD  = TextColor.Indexed(9)
-    val WH  = TextColor.Indexed(15)
-    val GY  = TextColor.Indexed(8)
-    val SEL = TextColor.Indexed(236)
+    val CY  = TextColor.Indexed(39)   // bright cyan
+    val GR  = TextColor.Indexed(82)   // bright green
+    val MG  = TextColor.Indexed(135)  // purple-magenta
+    val YL  = TextColor.Indexed(220)  // yellow
+    val RD  = TextColor.Indexed(196)  // red
+    val WH  = TextColor.Indexed(255)  // white
+    val GY  = TextColor.Indexed(244)  // gray
+    val DM  = TextColor.Indexed(238)  // dim
+    val BG  = TextColor.Indexed(235)  // dark bg for selected
     val DF  = TextColor.ANSI.DEFAULT
 }
 
-private enum class Mode { WATCH, COMMAND, LOG }
+private enum class Mode { WATCH, LOG, COMMAND }
+
+// ── ASCII assets ──────────────────────────────────────────────────────────────
+
+private val BRAIN = listOf(
+    "   ╭──∿──╮   ",
+    " ╭─╯ ◉ ◉ ╰─╮ ",
+    " ╰─╮ ─── ╭─╯ ",
+    "   ╰──────╯   "
+)
+
+private val CORTEX_ART = listOf(
+    " ██████╗ ██████╗ ██████╗ ████████╗███████╗██╗  ██╗",
+    "██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝██╔════╝╚██╗██╔╝",
+    "██║     ██║   ██║██████╔╝   ██║   █████╗   ╚███╔╝ ",
+    "╚██████╗╚██████╔╝██║  ██║   ██║   ███████╗██╔╝ ██╗",
+    " ╚═════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝"
+)
 
 // ── Entry point ───────────────────────────────────────────────────────────────
+
 fun main(args: Array<String>) {
-    val jobsDir = File(args.firstOrNull { !it.startsWith("-") } ?: "jobs")
-    MonitorApp(jobsDir).run()
+    MonitorApp(File(args.firstOrNull { !it.startsWith("-") } ?: "jobs")).run()
 }
 
 // ── Application ───────────────────────────────────────────────────────────────
+
 class MonitorApp(private val jobsDir: File) {
 
-    private val jobs  = ConcurrentHashMap<String, JobEntry>()
-    private val alive = AtomicBoolean(true)
+    private val jobs   = ConcurrentHashMap<String, JobEntry>()
+    private val alive  = AtomicBoolean(true)
     @Volatile private var watchSt = "STARTING"
     @Volatile private var dirty   = true
 
-    // Mode state
-    @Volatile private var mode    = Mode.WATCH
-    private val commandBuffer     = StringBuilder()
-    private var lastCommandResult: String? = null
-
-    // Selection
-    private var selectedIdx   = -1
-    private var selectedJobId: String? = null
-
-    // Agent system
     private val home       = System.getProperty("user.home")!!
     private val agentsDir  = File(home, ".koupper/agents").also { it.mkdirs() }
     private val koupperBin = "$home/.koupper/bin/koupper"
 
-    // Auto-select CORTEX session job when it appears
-    private var greetingPending = true
-    private val GREETING_ID     = "cortex-session"
+    @Volatile private var mode = Mode.WATCH
+    private val cmdBuf = StringBuilder()
+    private var cmdResult: String? = null
 
-    // Wizard / CORTEX state
+    private var selectedIdx   = -1
+    private var selectedJobId: String? = null
+
     @Volatile private var wizardActive   = false
     private var wizardSessionId: String? = null
     private var mcpServer: CortexMcpServer? = null
@@ -82,672 +94,488 @@ class MonitorApp(private val jobsDir: File) {
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     fun run() {
-        val terminal = DefaultTerminalFactory().createTerminal()
-        val screen   = TerminalScreen(terminal)
+        val screen = TerminalScreen(DefaultTerminalFactory().createTerminal())
         screen.startScreen()
         screen.cursorPosition = null
 
         Runtime.getRuntime().addShutdownHook(thread(start = false, isDaemon = true) {
             runCatching { screen.stopScreen() }
             mcpServer?.stopHttp()
-            // Clean up cortex-session processing file so web UI doesn't show stale job
             runCatching { File(jobsDir, "cortex/cortex-session.json.processing").delete() }
         })
 
-        // No splash animation — go straight to dashboard
-
         initialScan()
-        thread(name = "watcher", isDaemon = true) { watchLoop() }
-
-        thread(name = "cortex-launcher", isDaemon = true) {
-            Thread.sleep(400)
-            launchCortex()
-        }
+        thread(name = "watcher",         isDaemon = true) { watchLoop() }
+        thread(name = "cortex-launcher", isDaemon = true) { Thread.sleep(400); launchCortex() }
 
         try {
-            var lastSecond = -1
+            var lastRenderMs = 0L
+            var lastSec      = -1
+            val FRAME_MS     = 100L   // max 10 fps — eliminates flicker
+
             while (alive.get()) {
                 val key = screen.pollInput()
-                if (key != null) {
-                    val snap = currentSnap()
-                    handleKey(key, snap)
-                }
+                if (key != null) handleKey(key, currentSnap())
 
-                val resized   = screen.doResizeIfNecessary() != null
-                val nowSecond = LocalDateTime.now().second
-                val clockTick = nowSecond != lastSecond
+                val resized = screen.doResizeIfNecessary() != null
+                val nowSec  = LocalDateTime.now().second
+                val nowMs   = System.currentTimeMillis()
+                val frameOk = nowMs - lastRenderMs >= FRAME_MS
 
-                when {
-                    dirty || resized -> {
-                        screen.clear()
-                        render(screen)
-                        screen.refresh()
-                        dirty = false
-                        lastSecond = nowSecond
-                    }
-                    clockTick || mode == Mode.COMMAND -> {
-                        render(screen)
-                        screen.refresh()
-                        lastSecond = nowSecond
-                    }
+                if ((dirty || resized || nowSec != lastSec || mode == Mode.COMMAND) && frameOk) {
+                    screen.clear()
+                    render(screen)
+                    screen.refresh()
+                    dirty      = false
+                    lastSec    = nowSec
+                    lastRenderMs = nowMs
                 }
-                Thread.sleep(50)
+                Thread.sleep(16)   // ~60fps polling, 10fps rendering
             }
         } finally {
             screen.stopScreen()
         }
     }
 
-    private fun currentSnap() = jobs.values.toList()
+    private fun currentSnap(): List<JobEntry> = jobs.values.toList()
         .sortedWith(compareBy({ statusRank(it.status) }, { it.queue }, { it.id }))
-
-    // ── Greeting animation (startup splash) ───────────────────────────────────
-
-    private fun greeting(screen: TerminalScreen) {
-        val tw = screen.terminalSize.columns
-        val th = screen.terminalSize.rows
-        val g  = screen.newTextGraphics()
-        screen.clear(); screen.refresh()
-
-        data class Line(val text: String, val row: Int, val color: TextColor, val bold: Boolean, val ms: Long)
-        val lines = listOf(
-            Line("CORTEX ONLINE",           th / 2 - 2, C.CY, true,  80L),
-            Line("READY FOR INSTRUCTION",   th / 2,     C.GR, false, 45L),
-            Line("— IGLY SWARM MONITOR —",  th / 2 + 2, C.GY, false, 30L)
-        )
-        for (line in lines) {
-            val x = ((tw - line.text.length) / 2).coerceAtLeast(0)
-            for (i in line.text.indices) {
-                if (screen.pollInput() != null) return
-                val mods = if (line.bold) arrayOf(SGR.BOLD) else emptyArray()
-                g.put(x + i, line.row, line.text[i].toString(), line.color, mods = mods)
-                screen.refresh()
-                Thread.sleep(line.ms)
-            }
-            Thread.sleep(200)
-        }
-        Thread.sleep(700)
-    }
-
-    // ── Agent launchers ───────────────────────────────────────────────────────
-
-    private fun launchCortex() {
-        val logDir  = File(jobsDir, "logs/cortex").also { it.mkdirs() }
-        val logFile = File(logDir, "cortex-session.log")
-        logFile.writeText("")
-        fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
-
-        // Register job in memory AND on disk so TUI and web UI both see it
-        val cortexQueueDir = File(jobsDir, "cortex").also { it.mkdirs() }
-        File(cortexQueueDir, "cortex-session.json.processing").writeText(
-            """{"id":"cortex-session","fileName":"CortexAgent","functionName":"cortex","scriptPath":"agents/CortexAgent.kts","sourceType":"script"}"""
-        )
-        jobs["cortex-session"] = JobEntry("cortex-session", "cortex", Status.PROCESSING)
-        wizardActive    = true
-        wizardSessionId = "cortex-session"
-        dirty = true
-
-        // Start MCP server — tools available before the agent connects
-        val mcp = CortexMcpServer(jobsDir, agentsDir)
-        mcp.startHttp()
-        mcpServer = mcp
-
-        val agentScript = File(agentsDir, "CortexAgent.kts")
-        if (!agentScript.exists() || !File(koupperBin).exists()) {
-            log("⚠ CortexAgent.kts or koupper binary not found.")
-            log("  Install: cp examples/agents/CortexAgent.kts ~/.koupper/agents/")
-            jobs["cortex-session"]?.status = Status.FAILED
-            dirty = true
-            return
-        }
-
-        // Launch CortexAgent.kts via Koupper — uses InferenceEngine SP (LlamaServerSidecar)
-        thread(name = "cortex-agent", isDaemon = true) {
-            runCatching {
-                ProcessBuilder(koupperBin, "run", agentScript.absolutePath)
-                    .also { pb ->
-                        pb.environment().apply {
-                            System.getenv("KOUPPER_LLM_MODEL_PATH")?.let { put("KOUPPER_LLM_MODEL_PATH", it) }
-                            System.getenv("KOUPPER_LLM_EXECUTABLE")?.let { put("KOUPPER_LLM_EXECUTABLE", it) }
-                            put("CORTEX_JOBS_DIR", jobsDir.absolutePath)
-                        }
-                        pb.redirectErrorStream(true)
-                    }
-                    .start()
-                    .waitFor()
-            }
-            jobs["cortex-session"]?.status = Status.DONE
-            dirty = true
-        }
-
-        // Launch web UI agent if installed
-        val webAgent = File(agentsDir, "CortexWebUiAgent.kts")
-        if (webAgent.exists()) {
-            thread(name = "web-ui", isDaemon = true) {
-                log("  Web UI    : http://localhost:18083")
-                runCatching {
-                    ProcessBuilder(koupperBin, "run", webAgent.absolutePath)
-                        .also { it.environment()["CORTEX_JOBS_DIR"] = jobsDir.absolutePath }
-                        .redirectErrorStream(true).start()
-                }
-            }
-        }
-
-        dirty = true
-    }
-
-    private fun runFallbackGreeting() {
-        // Octopus not available — show static status, no LLM
-        jobs[GREETING_ID] = JobEntry(GREETING_ID, "cortex", Status.PROCESSING)
-        dirty = true
-
-        val logDir  = File(jobsDir, "logs/cortex").also { it.mkdirs() }
-        val logFile = File(logDir, "$GREETING_ID.log")
-        logFile.writeText("")
-        fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
-
-        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        log("  CORTEX — OFFLINE MODE")
-        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        log("  Octopus daemon is not running.")
-        log("  Start it to enable AI features.")
-        log("")
-        log("  Run: koupper serve")
-        log("")
-        log("  In offline mode the monitor still")
-        log("  tracks jobs in real time.")
-        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        dirty = true
-
-        Thread.sleep(500)
-        jobs[GREETING_ID]?.status = Status.DONE
-        dirty = true
-        Thread.sleep(4_000)
-        jobs.remove(GREETING_ID)
-        dirty = true
-    }
-
-    private fun launchWizard() {
-        if (wizardActive) {
-            lastCommandResult = "⚠ Wizard active — session: $wizardSessionId"
-            dirty = true; return
-        }
-        val script = File(agentsDir, "AgentCreatorAgent.kts")
-        if (!script.exists()) {
-            lastCommandResult = "⚠ AgentCreatorAgent.kts not found in $agentsDir"
-            dirty = true; return
-        }
-        if (!File(koupperBin).exists()) {
-            lastCommandResult = "⚠ koupper not found at $koupperBin"
-            dirty = true; return
-        }
-        val sessionId = "wizard-${System.currentTimeMillis()}"
-        wizardSessionId   = sessionId
-        wizardActive      = true
-        runCatching {
-            ProcessBuilder(koupperBin, "run", script.absolutePath, jobsDir.absolutePath, sessionId)
-                .redirectErrorStream(true)
-                .start()
-        }.onFailure { wizardActive = false; wizardSessionId = null }
-        lastCommandResult = "◈ Wizard started"
-        dirty = true
-    }
 
     // ── Key handling ──────────────────────────────────────────────────────────
 
     private fun handleKey(key: com.googlecode.lanterna.input.KeyStroke, snap: List<JobEntry>) {
         when (mode) {
             Mode.WATCH -> when {
-                key.character == 'q' || key.character == 'Q' -> alive.set(false)
-                key.keyType   == KeyType.Escape               -> alive.set(false)
-                key.keyType   == KeyType.EOF                  -> alive.set(false)
-                key.character == ':'                          -> { mode = Mode.COMMAND; commandBuffer.clear(); dirty = true }
+                key.character == 'q' || key.character == 'Q'
+                    || key.keyType == KeyType.Escape
+                    || key.keyType == KeyType.EOF -> alive.set(false)
+                key.character == ':' -> { mode = Mode.COMMAND; cmdBuf.clear(); dirty = true }
                 key.keyType == KeyType.ArrowDown || key.character == 'j' -> {
-                    if (snap.isNotEmpty()) { selectedIdx = (selectedIdx + 1).coerceAtMost(snap.size - 1); dirty = true }
+                    if (snap.isNotEmpty()) {
+                        selectedIdx = (selectedIdx + 1).coerceAtMost(snap.size - 1)
+                        selectedJobId = snap[selectedIdx].id; dirty = true
+                    }
                 }
                 key.keyType == KeyType.ArrowUp || key.character == 'k' -> {
-                    selectedIdx = (selectedIdx - 1).coerceAtLeast(-1); dirty = true
+                    if (snap.isNotEmpty()) {
+                        selectedIdx = (selectedIdx - 1).coerceAtLeast(0)
+                        selectedJobId = snap[selectedIdx].id; dirty = true
+                    }
                 }
                 key.keyType == KeyType.Enter && selectedIdx in snap.indices -> {
                     selectedJobId = snap[selectedIdx].id; mode = Mode.LOG; dirty = true
                 }
             }
-            Mode.COMMAND -> when {
-                key.keyType == KeyType.Escape  -> { mode = Mode.WATCH; commandBuffer.clear(); dirty = true }
-                key.keyType == KeyType.Enter   -> {
-                    executeCommand(commandBuffer.toString())
-                    commandBuffer.clear(); mode = Mode.WATCH; dirty = true
+            Mode.LOG -> when {
+                key.keyType == KeyType.Escape -> {
+                    wizardActive = false; mode = Mode.WATCH; dirty = true
                 }
-                key.keyType == KeyType.Backspace && commandBuffer.isNotEmpty() -> {
-                    commandBuffer.deleteCharAt(commandBuffer.length - 1); dirty = true
+                key.keyType == KeyType.ArrowDown || key.character == 'j' -> {
+                    if (snap.isNotEmpty()) {
+                        selectedIdx = (selectedIdx + 1).coerceAtMost(snap.size - 1)
+                        selectedJobId = snap[selectedIdx].id; dirty = true
+                    }
+                }
+                key.keyType == KeyType.ArrowUp || key.character == 'k' -> {
+                    if (snap.isNotEmpty()) {
+                        selectedIdx = (selectedIdx - 1).coerceAtLeast(0)
+                        selectedJobId = snap[selectedIdx].id; dirty = true
+                    }
+                }
+                key.keyType == KeyType.Enter && wizardActive -> {
+                    mode = Mode.COMMAND; cmdBuf.clear(); dirty = true
+                }
+                key.character == 'q' || key.character == 'Q'
+                    || key.keyType == KeyType.EOF -> alive.set(false)
+            }
+            Mode.COMMAND -> when {
+                key.keyType == KeyType.Escape -> {
+                    mode = if (wizardActive) Mode.LOG else Mode.WATCH
+                    cmdBuf.clear(); dirty = true
+                }
+                key.keyType == KeyType.Enter -> {
+                    executeCommand(cmdBuf.toString()); cmdBuf.clear()
+                    mode = if (wizardActive) Mode.LOG else Mode.WATCH; dirty = true
+                }
+                key.keyType == KeyType.Backspace && cmdBuf.isNotEmpty() -> {
+                    cmdBuf.deleteCharAt(cmdBuf.length - 1); dirty = true
                 }
                 key.keyType == KeyType.Character && key.character != null -> {
-                    commandBuffer.append(key.character); dirty = true
-                }
-            }
-            Mode.LOG -> when {
-                key.keyType == KeyType.Escape -> { mode = Mode.WATCH; selectedJobId = null; selectedIdx = -1; dirty = true }
-                key.character == 'q' || key.character == 'Q' -> alive.set(false)
-                key.keyType   == KeyType.EOF  -> alive.set(false)
-                // While viewing wizard log, Enter opens command bar to submit wizard answer
-                key.keyType == KeyType.Enter && wizardActive -> {
-                    mode = Mode.COMMAND; commandBuffer.clear(); dirty = true
+                    cmdBuf.append(key.character); dirty = true
                 }
             }
         }
     }
 
-    // ── Command Bridge ────────────────────────────────────────────────────────
+    // ── Commands ──────────────────────────────────────────────────────────────
 
     private fun executeCommand(cmd: String) {
-        val trimmed = cmd.trim()
-        if (trimmed.isEmpty()) return
+        val t = cmd.trim().ifEmpty { return }
         when {
-            trimmed.equals("help", ignoreCase = true) -> showHelp()
+            t.equals("help", ignoreCase = true) ->
+                cmdResult = "  ↑↓  navigate   Enter  view log   Esc  back   q  quit   :  cmd"
             wizardActive -> {
-                // Write to commands/wizard/<ts>.response — CortexAgent.kts reads via WatchService
-                val cmdDir = File(jobsDir, "commands/wizard").also { it.mkdirs() }
-                File(cmdDir, "${System.currentTimeMillis()}.response").writeText(trimmed)
-                lastCommandResult = "◈ thinking…"
-                dirty = true
+                File(jobsDir, "commands/wizard").also { it.mkdirs() }
+                    .let { File(it, "${System.currentTimeMillis()}.response").writeText(t) }
+                cmdResult = "◈ sent"
             }
             else -> {
-                File(jobsDir, "commands").mkdirs()
-                File(jobsDir, "commands/${System.currentTimeMillis()}.cmd").writeText(trimmed)
-                lastCommandResult = "→ $trimmed"
+                File(jobsDir, "commands/${System.currentTimeMillis()}.cmd").writeText(t)
+                cmdResult = "→ $t"
             }
         }
-    }
-
-    private fun showHelp() {
-        lastCommandResult = ":create  :help  j/k navigate  Enter log  ESC back  q quit"
     }
 
     // ── Render ────────────────────────────────────────────────────────────────
 
     private fun render(screen: TerminalScreen) {
-        val tw   = screen.terminalSize.columns
-        val th   = screen.terminalSize.rows
-        val g    = screen.newTextGraphics()
+        val tw = screen.terminalSize.columns
+        val th = screen.terminalSize.rows
+        val g  = screen.newTextGraphics()
         val snap = currentSnap()
 
-        // Sync selection
+        // Keep selection in bounds
         if (snap.isEmpty()) {
             selectedIdx = -1; selectedJobId = null
-            if (mode == Mode.LOG) { mode = Mode.WATCH; dirty = true }
+            if (mode == Mode.LOG) mode = Mode.WATCH
         } else {
-            if (selectedIdx >= snap.size) selectedIdx = snap.size - 1
-            if (selectedIdx >= 0) selectedJobId = snap[selectedIdx].id
-        }
-
-        // Auto-select greeting job when it first appears
-        if (greetingPending && selectedIdx < 0) {
-            val gi = snap.indexOfFirst { it.id == GREETING_ID }
-            if (gi >= 0) {
-                selectedIdx = gi; selectedJobId = GREETING_ID
-                mode = Mode.LOG; greetingPending = false
+            if (selectedIdx < 0) {
+                val ci = snap.indexOfFirst { it.id == "cortex-session" }
+                selectedIdx = if (ci >= 0) ci else 0
             }
+            selectedIdx   = selectedIdx.coerceIn(0, snap.size - 1)
+            selectedJobId = snap[selectedIdx].id
         }
 
-        // Auto-select wizard job only from WATCH — never override COMMAND mode
-        if (wizardActive && wizardSessionId != null && mode == Mode.WATCH) {
-            val wi = snap.indexOfFirst { it.id == wizardSessionId }
-            if (wi >= 0) { selectedIdx = wi; selectedJobId = wizardSessionId; mode = Mode.LOG }
-        }
-
-        // Deactivate wizard when its job disappears
         if (wizardActive && wizardSessionId != null && snap.none { it.id == wizardSessionId }) {
             wizardActive = false; wizardSessionId = null
         }
 
+        // Layout constants
+        val HDR = 9   // rows 0..8  (border0, brain+cortex 1..5, divider 6, subtitle 7, border 8)
+        val FOT = 2   // footer rows at bottom
+
+        renderHeader(g, tw)
+        renderBody(g, tw, th, HDR, FOT, snap)
+        if (mode == Mode.COMMAND) renderCmdBar(g, tw, th) else renderFooter(g, tw, th)
+    }
+
+    // ── Header (rows 0–8) ─────────────────────────────────────────────────────
+
+    private fun renderHeader(g: TextGraphics, tw: Int) {
+        val inner = (tw - 2).coerceAtLeast(0)
+        g.put(0, 0, "╔" + "═".repeat(inner) + "╗", C.CY)
+        g.put(0, 8, "╚" + "═".repeat(inner) + "╝", C.CY)
+
+        // Borders left/right for rows 1-7
+        for (r in 1..7) { g.put(0, r, "║", C.CY); g.put(tw - 1, r, "║", C.CY) }
+
+        // Brain (4 rows) on the left, CORTEX art (5 rows) on the right
+        val brainW = BRAIN[0].length
+        val cortexX = brainW + 4
+
+        BRAIN.forEachIndexed       { i, line -> g.put(2,       i + 1, line,           C.MG) }
+        CORTEX_ART.forEachIndexed  { i, line -> g.put(cortexX, i + 1, line,           C.CY, mods = arrayOf(SGR.BOLD)) }
+
+        // Divider row 6
+        g.put(1, 6, "─".repeat(inner - 1), C.DM)
+
+        // Subtitle row 7
+        val subtitle = "  IGLY · SWARM MONITOR"
+        val timeStr  = "  ${ts()}"
+        val wstate   = if (watchSt == "ACTIVE") "  ● ACTIVE" else "  ○ $watchSt"
+        var col = 1
+        g.put(col, 7, subtitle, C.GY); col += subtitle.length
+        g.put(col, 7, timeStr, C.DM); col += timeStr.length
+        g.put(col, 7, wstate, if (watchSt == "ACTIVE") C.GR else C.RD)
+    }
+
+    // ── Body (rows HDR..(th-FOT-1)) ───────────────────────────────────────────
+
+    private fun renderBody(g: TextGraphics, tw: Int, th: Int,
+                            HDR: Int, FOT: Int, snap: List<JobEntry>) {
+        val top = HDR
+        val bot = th - FOT - 1   // inclusive last body row
+
+        val leftW  = (tw * 52 / 100).coerceAtLeast(25)
+        val rightW = (tw - leftW - 3).coerceAtLeast(20)
+        val divX   = leftW + 1
+
+        val lbl  = if (mode == Mode.LOG) "═ JOBS " else "═ JOBS "
+        val rlbl = if (mode == Mode.LOG) "═ LOG " else "═ STATS "
+
+        // Top border
+        g.put(0, top,
+            "╔$lbl${"═".repeat((leftW - lbl.length).coerceAtLeast(0))}╦" +
+            "$rlbl${"═".repeat((rightW - rlbl.length).coerceAtLeast(0))}╗", C.CY)
+
+        val COL_ID = (leftW - 26).coerceIn(8, 28)
+        val COL_Q  = 9
+
+        // Column header
+        g.put(0, top + 1, "║", C.CY)
+        g.put(1, top + 1,
+            "  ${"ID".padEnd(COL_ID)} ${"QUEUE".padEnd(COL_Q)} ${"STATUS".padEnd(10)} TIME    ",
+            C.GY)
+        g.put(divX, top + 1, "║", C.CY); g.put(tw - 1, top + 1, "║", C.CY)
+
+        // Separator
+        g.put(0, top + 2, "║", C.CY)
+        g.put(1, top + 2, "  " + "─".repeat(COL_ID) + " " +
+            "─".repeat(COL_Q) + " " + "─".repeat(10) + " " + "─".repeat(8), C.DM)
+        g.put(divX, top + 2, "║", C.CY); g.put(tw - 1, top + 2, "║", C.CY)
+
+        val maxRows = (bot - (top + 3)).coerceAtLeast(0)
+        val logLines = if (mode == Mode.LOG) readLog(selectedJobId ?: "", maxRows) else emptyList()
+
+        snap.take(maxRows).forEachIndexed { idx, j ->
+            val row = top + 3 + idx
+            val isSel = idx == selectedIdx
+            val bg = if (isSel) C.BG else C.DF
+            val (fc, lbl2) = statusStyle(j.status)
+            val arrow = if (isSel) "▶" else " "
+            g.put(0, row, "║", C.CY)
+            g.put(1, row,
+                "$arrow ${trunc(j.id, COL_ID).padEnd(COL_ID)} " +
+                "${trunc(j.queue, COL_Q).padEnd(COL_Q)} " +
+                "${lbl2.padEnd(10)} ${j.lastUpdate} ",
+                if (isSel) C.WH else C.GY, bg,
+                if (j.status == Status.PROCESSING) arrayOf(SGR.BOLD) else emptyArray())
+            // Status badge color override
+            val badgeX = 1 + 2 + COL_ID + 1 + COL_Q + 1
+            g.put(badgeX, row, lbl2.padEnd(10), fc, bg,
+                if (j.status == Status.PROCESSING) arrayOf(SGR.BOLD) else emptyArray())
+            g.put(divX, row, "║", C.CY)
+            drawRightPanel(g, divX + 1, rightW, idx, row, snap, logLines)
+            g.put(tw - 1, row, "║", C.CY)
+        }
+
+        for (i in snap.size.coerceAtMost(maxRows) until maxRows) {
+            val row = top + 3 + i
+            g.put(0, row, "║", C.CY)
+            g.put(1, row, " ".repeat((divX - 1).coerceAtLeast(0)), C.DF)
+            g.put(divX, row, "║", C.CY)
+            drawRightPanel(g, divX + 1, rightW, i, row, snap, logLines)
+            g.put(tw - 1, row, "║", C.CY)
+        }
+
+        g.put(0, bot, "╚${"═".repeat(leftW)}╩${"═".repeat(rightW)}╝", C.CY)
+    }
+
+    // ── Right panel ───────────────────────────────────────────────────────────
+
+    private fun drawRightPanel(g: TextGraphics, x: Int, w: Int, idx: Int, row: Int, snap: List<JobEntry>, logLines: List<String>) {
+        if (mode == Mode.LOG) {
+            drawLogRow(g, x, w, idx, row, selectedJobId ?: "", logLines)
+        } else {
+            drawStatsRow(g, x, w, idx, row, snap)
+        }
+    }
+
+    private fun drawStatsRow(g: TextGraphics, x: Int, w: Int, idx: Int, row: Int, snap: List<JobEntry>) {
         val pending    = snap.count { it.status == Status.PENDING }
         val processing = snap.count { it.status == Status.PROCESSING }
         val done       = snap.count { it.status == Status.DONE }
         val failed     = snap.count { it.status == Status.FAILED }
+        g.put(x, row, " ".repeat(w.coerceAtLeast(0)), C.DF)  // clear row
+        when (idx) {
+            0  -> g.put(x, row, " METRICS", C.CY, mods = arrayOf(SGR.BOLD))
+            1  -> g.put(x, row, " ${"─".repeat((w - 2).coerceAtLeast(0))}", C.DM)
+            2  -> { g.put(x,      row, " ● PENDING  ", C.YL); g.put(x + 13, row, pending.toString().padStart(4), C.WH) }
+            3  -> { g.put(x,      row, " ● RUNNING  ", C.MG, mods = arrayOf(SGR.BOLD)); g.put(x + 13, row, processing.toString().padStart(4), C.WH) }
+            4  -> { g.put(x,      row, " ● DONE     ", C.GR); g.put(x + 13, row, done.toString().padStart(4), C.WH) }
+            5  -> { g.put(x,      row, " ● FAILED   ", C.RD); g.put(x + 13, row, failed.toString().padStart(4), C.WH) }
+            7  -> { g.put(x, row, " DIR  ", C.DM); g.put(x + 6, row, trunc(jobsDir.name, w - 7), C.WH) }
+            8  -> { g.put(x, row, " TIME ", C.DM); g.put(x + 6, row, ts(), C.GY) }
+            10 -> if (wizardActive) g.put(x, row, " ◈ WIZARD ACTIVE", C.MG, mods = arrayOf(SGR.BOLD))
+                  else cmdResult?.let { g.put(x, row, " ${trunc(it, w - 2)}", C.GR) }
+        }
+    }
 
-        renderHeader(g, tw)
-
-        when (mode) {
-            Mode.WATCH, Mode.COMMAND -> {
-                val si = 24; val ti = (tw - si - 3).coerceAtLeast(30)
-                val sideX = 1 + ti + 1
-                renderBody(g, tw, th, snap, si, selectedIdx, "═ STATS ") { idx, row ->
-                    drawStatsSide(g, sideX, idx, row, pending, processing, done, failed)
+    private fun drawLogRow(g: TextGraphics, x: Int, w: Int, idx: Int, row: Int, jobId: String, lines: List<String>) {
+        val maxW = (w - 2).coerceAtLeast(1)
+        g.put(x, row, " ".repeat(w.coerceAtLeast(0)), C.DF)  // clear row
+        when (idx) {
+            0 -> g.put(x, row, " ${trunc(jobId, maxW)}", C.YL, mods = arrayOf(SGR.BOLD))
+            1 -> g.put(x, row, " ${"─".repeat(maxW)}", C.DM)
+            else -> lines.getOrNull(idx - 2)?.let { line ->
+                val c = clean(line)
+                val fc = when {
+                    c.contains("[DONE]") || c.contains("✓") || c.contains("[OK]") -> C.GR
+                    c.contains("ERROR") || c.contains("FAIL") || c.contains("[!]") || c.contains("[FAILED]") || c.contains("[TIMEOUT]") -> C.RD
+                    c.contains("▶") || c.contains("CORTEX") || c.contains("[WORKER]") -> C.CY
+                    c.contains("[DEBUG]") || (c.startsWith("[") && c.contains("]")) -> C.GY
+                    else -> C.WH
                 }
-                if (mode == Mode.COMMAND) renderCommandBar(g, tw, th)
-                else renderFooter(g, tw, th, failed)
-            }
-            Mode.LOG -> {
-                val si = (tw / 2).coerceAtLeast(30); val ti = (tw - si - 3).coerceAtLeast(30)
-                val sideX   = 1 + ti + 1
-                val maxRows = (th - 4 - 13).coerceAtLeast(1)
-                val logLines = readLog(selectedJobId ?: "").takeLast(maxRows)
-                val panelLbl = if (wizardActive)
-                    "═ WIZARD LOG " else "═ LOG "
-                renderBody(g, tw, th, snap, si, selectedIdx, panelLbl) { idx, row ->
-                    drawLogSide(g, sideX, si, idx, row, selectedJobId ?: "", logLines)
-                }
-                renderFooter(g, tw, th, failed)
+                g.put(x, row, " ${trunc(c, maxW)}", fc)
             }
         }
     }
 
-    private fun statusRank(s: Status) = when (s) {
-        Status.PROCESSING -> 0; Status.PENDING -> 1; Status.FAILED -> 2; Status.DONE -> 3
+    // ── Footer (2 rows) ───────────────────────────────────────────────────────
+
+    private fun renderFooter(g: TextGraphics, tw: Int, th: Int) {
+        val r = th - 2; val inner = (tw - 2).coerceAtLeast(0)
+        g.put(0, r,     "╔" + "═".repeat(inner) + "╗", C.CY)
+        g.put(0, r + 1, "╚" + "═".repeat(inner) + "╝", C.CY)
+        g.put(0, r, "║", C.CY); g.put(tw - 1, r, "║", C.CY)
+
+        val hint = when (mode) {
+            Mode.LOG   -> "  [↑↓ / j·k]  prev·next job    [Esc]  back to list    [q]  quit" +
+                          if (wizardActive) "    [Enter]  answer CORTEX" else ""
+            Mode.WATCH -> "  [↑↓ / j·k]  navigate    [Enter]  view log    [:]  command    [q]  quit"
+            else -> ""
+        }
+        g.put(2, r, trunc(hint, inner - 2), C.DM)
     }
 
-    // ── Drawing helper ────────────────────────────────────────────────────────
+    // ── Command bar ───────────────────────────────────────────────────────────
 
-    private fun TextGraphics.put(
-        col: Int, row: Int, text: String,
-        fg: TextColor, bg: TextColor = C.DF,
-        mods: Array<SGR> = emptyArray()
-    ) {
+    private fun renderCmdBar(g: TextGraphics, tw: Int, th: Int) {
+        val r = th - 2; val inner = (tw - 2).coerceAtLeast(0)
+        g.put(0, r,     "╔" + "═".repeat(inner) + "╗", C.CY)
+        g.put(0, r + 1, "╚" + "═".repeat(inner) + "╝", C.CY)
+        g.put(0, r, "║", C.CY); g.put(tw - 1, r, "║", C.CY)
+
+        if (wizardActive) {
+            val prompt = wizardSessionId?.let { id ->
+                readLog(id, 50).lastOrNull { it.contains("[?]") }
+                    ?.substringAfter("[?]")?.trim()
+            } ?: "answer"
+            g.put(2, r, "[WIZARD]  $prompt › $cmdBuf█", C.WH)
+        } else {
+            g.put(2, r, ":  $cmdBuf█", C.CY)
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun TextGraphics.put(col: Int, row: Int, text: String,
+        fg: TextColor = C.WH, bg: TextColor = C.DF, mods: Array<SGR> = emptyArray()) {
         foregroundColor = fg; backgroundColor = bg
         if (mods.isNotEmpty()) enableModifiers(*mods)
         putString(col, row, text)
         if (mods.isNotEmpty()) disableModifiers(*mods)
     }
 
-    // ── Header (rows 0–9) ─────────────────────────────────────────────────────
-
-    private val LOGO = listOf(
-        " ██████╗ ██████╗ ██████╗ ████████╗███████╗██╗  ██╗",
-        "██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝██╔════╝╚██╗██╔╝",
-        "██║     ██║   ██║██████╔╝   ██║   █████╗   ╚███╔╝ ",
-        "██║     ██║   ██║██╔══██╗   ██║   ██╔══╝   ██╔██╗ ",
-        "╚██████╗╚██████╔╝██║  ██║   ██║   ███████╗██╔╝ ██╗",
-        " ╚═════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝"
-    )
-
-    private fun renderHeader(g: TextGraphics, tw: Int) {
-        val inner = (tw - 2).coerceAtLeast(0)
-        g.put(0, 0, "╔" + "═".repeat(inner) + "╗", C.CY)
-        LOGO.forEachIndexed { i, line ->
-            g.put(0, i + 1, "║", C.CY); g.put(2, i + 1, line, C.CY, mods = arrayOf(SGR.BOLD)); g.put(tw - 1, i + 1, "║", C.CY)
-        }
-        g.put(0, 7, "║", C.CY)
-        g.put((tw - 1 - 13).coerceAtLeast(1), 7, "SWARM MONITOR", C.GY)
-        g.put(tw - 1, 7, "║", C.CY)
-        val title = "◈  IGLY CORTEX — SWARM MONITOR  ◈"
-        val tc = ((inner - title.length) / 2 + 1).coerceAtLeast(1)
-        g.put(0, 8, "║", C.CY); g.put(tc, 8, title, C.MG, mods = arrayOf(SGR.BOLD)); g.put(tw - 1, 8, "║", C.CY)
-        g.put(0, 9, "╚" + "═".repeat(inner) + "╝", C.CY)
+    private fun statusRank(s: Status) = when (s) {
+        Status.PROCESSING -> 0; Status.PENDING -> 1; Status.FAILED -> 2; Status.DONE -> 3
     }
-
-    // ── Body ──────────────────────────────────────────────────────────────────
-
-    private fun renderBody(
-        g: TextGraphics, tw: Int, th: Int, snap: List<JobEntry>,
-        si: Int, selIdx: Int, sideLabel: String,
-        drawSideRow: (idx: Int, row: Int) -> Unit
-    ) {
-        val ti     = (tw - si - 3).coerceAtLeast(30)
-        val divCol = 1 + ti
-        val top = 10; val bot = th - 4
-        val COL_ID = if (ti > 65) 22 else 15
-        val COL_Q  = if (ti > 65) 16 else 10
-
-        val lbl1 = "═ ACTIVE JOBS "
-        g.put(0, top,
-            "╔$lbl1${"═".repeat((ti - lbl1.length).coerceAtLeast(0))}" +
-            "╦$sideLabel${"═".repeat((si - sideLabel.length).coerceAtLeast(0))}╗", C.CY)
-
-        fun borders(row: Int) { g.put(0, row, "║", C.CY); g.put(divCol, row, "║", C.CY); g.put(tw - 1, row, "║", C.CY) }
-
-        borders(top + 1)
-        g.put(1, top + 1, " ${"JOB ID".padEnd(COL_ID)} ${"QUEUE".padEnd(COL_Q)} ${"STATUS".padEnd(12)} UPDATED", C.GY)
-        drawSideRow(0, top + 1)
-
-        borders(top + 2)
-        g.put(1, top + 2, " ${"─".repeat(COL_ID)} ${"─".repeat(COL_Q)} ${"─".repeat(12)} ${"─".repeat(8)}", C.GY)
-        drawSideRow(1, top + 2)
-
-        val maxRows = (bot - (top + 3)).coerceAtLeast(0)
-        snap.take(maxRows).forEachIndexed { idx, j ->
-            val row = top + 3 + idx
-            val isSelected = idx == selIdx
-            val bg = if (isSelected) C.SEL else C.DF
-            val (fgColor, label) = statusStyle(j.status)
-            val mods = if (j.status == Status.PROCESSING) arrayOf(SGR.BOLD) else emptyArray()
-            g.put(0, row, "║", C.CY)
-            g.put(1,                               row, " ${trunc(j.id, COL_ID).padEnd(COL_ID)}",  C.WH, bg)
-            g.put(1 + 1 + COL_ID,                  row, " ${trunc(j.queue, COL_Q).padEnd(COL_Q)}", C.GY, bg)
-            g.put(1 + 1 + COL_ID + 1 + COL_Q,      row, " ${label.padEnd(12)}",                    fgColor, bg, mods)
-            g.put(1 + 1 + COL_ID + 1 + COL_Q + 13, row, " ${j.lastUpdate}",                        C.GY, bg)
-            g.put(divCol, row, "║", C.CY)
-            drawSideRow(idx + 2, row)
-            g.put(tw - 1, row, "║", C.CY)
-        }
-        for (i in snap.size.coerceAtMost(maxRows) until maxRows) {
-            borders(top + 3 + i); drawSideRow(i + 2, top + 3 + i)
-        }
-        g.put(0, bot, "╚${"═".repeat(ti)}╩${"═".repeat(si)}╝", C.CY)
-    }
-
-    // ── STATS side panel ──────────────────────────────────────────────────────
-
-    private fun drawStatsSide(g: TextGraphics, x: Int, idx: Int, row: Int,
-                               pending: Int, processing: Int, done: Int, failed: Int) {
-        when (idx) {
-            0  -> g.put(x, row, " METRICS", C.CY, mods = arrayOf(SGR.BOLD))
-            1  -> g.put(x, row, " ${"─".repeat(22)}", C.GY)
-            2  -> { g.put(x, row, " ◉ PENDING  ", C.YL); g.put(x + 13, row, pending.toString().padStart(3),    C.WH) }
-            3  -> { g.put(x, row, " ◉ PROC'ING ", C.MG); g.put(x + 13, row, processing.toString().padStart(3), C.WH) }
-            4  -> { g.put(x, row, " ◉ DONE     ", C.GR); g.put(x + 13, row, done.toString().padStart(3),       C.WH) }
-            5  -> { g.put(x, row, " ◉ FAILED   ", C.RD); g.put(x + 13, row, failed.toString().padStart(3),     C.WH) }
-            7  -> { g.put(x, row, " DRIVER ", C.GY); g.put(x + 8, row, "file", C.CY) }
-            8  -> { g.put(x, row, " WATCH  ", C.GY); g.put(x + 8, row, watchSt, if (watchSt == "ACTIVE") C.GR else C.RD) }
-            9  -> { g.put(x, row, " DIR    ", C.GY); g.put(x + 8, row, trunc(jobsDir.name, 12), C.WH) }
-            10 -> g.put(x, row, " ${ts()}", C.GY)
-            11 -> if (wizardActive) g.put(x, row, " ◈ WIZARD ACTIVE", C.MG, mods = arrayOf(SGR.BOLD))
-                  else lastCommandResult?.let { g.put(x, row, " ${trunc(it, 22)}", C.GR) }
-        }
-    }
-
-    // ── Pipeline state ────────────────────────────────────────────────────────
-
-    private data class PipelineStage(
-        val name: String,
-        var status: String   = "PENDING",  // PENDING | RUNNING | DONE | FAILED
-        var elapsedMs: Long? = null
-    )
-
-    private fun parsePipeline(lines: List<String>): List<PipelineStage>? {
-        val startLine = lines.firstOrNull { "[PIPELINE:START:" in it } ?: return null
-        val names = Regex("""\[PIPELINE:START:([^\]]+)]""").find(startLine)
-            ?.groupValues?.get(1)?.split(",")?.filter { it.isNotBlank() } ?: return null
-        val stages = names.map { PipelineStage(it.trim()) }
-        for (line in lines) {
-            for (s in stages) {
-                when {
-                    "[PIPELINE:STAGE:${s.name}:START]"   in line -> s.status = "RUNNING"
-                    "[PIPELINE:STAGE:${s.name}:DONE:"    in line -> {
-                        s.status = "DONE"
-                        s.elapsedMs = Regex(":DONE:(\\d+)").find(line)?.groupValues?.get(1)?.toLongOrNull()
-                    }
-                    "[PIPELINE:STAGE:${s.name}:FAILED:"  in line -> {
-                        s.status = "FAILED"
-                        s.elapsedMs = Regex(":FAILED:(\\d+)").find(line)?.groupValues?.get(1)?.toLongOrNull()
-                    }
-                }
-            }
-        }
-        return stages
-    }
-
-    // ── LOG side panel ────────────────────────────────────────────────────────
-
-    private fun readLog(jobId: String): List<String> {
-        // Search logs in all subdirs: logs/cortex/, logs/wizard/, logs/default/, etc.
-        val logRoot = File(jobsDir, "logs")
-        val found = logRoot.walkTopDown()
-            .firstOrNull { it.name == "$jobId.log" }
-        return when {
-            found != null && found.exists() -> found.readLines()
-            else -> listOf("— no log found —", "expected: logs/<queue>/$jobId.log")
-        }
-    }
-
-    private fun drawLogSide(g: TextGraphics, x: Int, si: Int,
-                             idx: Int, row: Int, jobId: String, logLines: List<String>) {
-        val maxW = si - 2
-
-        // Pipeline jobs get a stage diagram at the top, then filtered log lines below
-        if (jobId.startsWith("pipeline-")) {
-            val stages     = parsePipeline(logLines)
-            val diagramLen = if (stages != null) stages.size + 4 else 0  // header + sep + stages + sep
-
-            when {
-                idx == 0 -> g.put(x, row, " ${trunc(jobId, maxW - 11)} [PIPELINE]", C.MG, mods = arrayOf(SGR.BOLD))
-                idx == 1 -> g.put(x, row, " ${"─".repeat(maxW)}", C.GY)
-                stages != null && idx == 2 -> g.put(x, row, " STAGES", C.CY, mods = arrayOf(SGR.BOLD))
-                stages != null && idx == 3 -> g.put(x, row, " ${"┄".repeat(maxW - 1)}", C.GY)
-                stages != null && idx in 4 until 4 + stages.size -> {
-                    val s    = stages[idx - 4]
-                    val icon = when (s.status) { "DONE" -> "✓"; "RUNNING" -> "⟳"; "FAILED" -> "✗"; else -> "·" }
-                    val fg   = when (s.status) { "DONE" -> C.GR; "RUNNING" -> C.MG; "FAILED" -> C.RD; else -> C.GY }
-                    val dur  = s.elapsedMs?.let { " ${it / 1000}.${(it % 1000) / 100}s" } ?: if (s.status == "RUNNING") " …" else ""
-                    g.put(x, row, " $icon ${trunc(s.name, maxW - 8).padEnd(maxW - 8)}$dur", fg)
-                }
-                stages != null && idx == 4 + stages.size ->
-                    g.put(x, row, " ${"┄".repeat(maxW - 1)}", C.GY)
-                else -> {
-                    val logOffset = if (stages != null) diagramLen else 2
-                    val filteredLines = logLines.filterNot { "[PIPELINE:" in it }
-                    filteredLines.getOrNull(idx - logOffset)?.let { line ->
-                        g.put(x, row, " ${trunc(line, maxW)}", C.GY)
-                    }
-                }
-            }
-            return
-        }
-
-        // Regular job log
-        when (idx) {
-            0    -> g.put(x, row, " ${trunc(jobId, maxW - 2)}", C.YL, mods = arrayOf(SGR.BOLD))
-            1    -> g.put(x, row, " ${"─".repeat(maxW)}", C.GY)
-            else -> logLines.getOrNull(idx - 2)?.let { line ->
-                val (fg, txt) = when {
-                    line.contains("[?]")   -> Pair(C.CY, line)
-                    line.contains("[✓]")   -> Pair(C.GR, line)
-                    line.contains("[!]")   -> Pair(C.RD, line)
-                    line.contains("READY") -> Pair(C.MG, line)
-                    else                   -> Pair(C.GY, line)
-                }
-                g.put(x, row, " ${trunc(txt, maxW)}", fg)
-            }
-        }
-    }
-
-    // ── Footer ────────────────────────────────────────────────────────────────
-
-    private fun renderFooter(g: TextGraphics, tw: Int, th: Int, failed: Int) {
-        val r0 = th - 3; val inner = (tw - 2).coerceAtLeast(0)
-        g.put(0, r0, "╔" + "═".repeat(inner) + "╗", C.CY)
-        var col = 2
-        if (failed == 0) { g.put(col, r0 + 1, "● System: OK   ", C.GR); col += 15 }
-        else             { g.put(col, r0 + 1, "● System: ALERT", C.RD); col += 15 }
-        g.put(col, r0 + 1, "  ● Watch: ", C.GY); col += 11
-        g.put(col, r0 + 1, watchSt, if (watchSt == "ACTIVE") C.GR else C.RD); col += watchSt.length
-        g.put(col, r0 + 1, "   ${ts()}", C.GY); col += 12
-        val hint = when {
-            wizardActive && mode == Mode.LOG -> "   [Enter] answer wizard  [ESC] watch  [q] quit"
-            mode == Mode.LOG                 -> "   [ESC] back  [q] quit"
-            else                             -> "   [:] command  [j/k] select  [Enter] log  [q] quit"
-        }
-        g.put(col, r0 + 1, hint, C.GY)
-        g.put(0, r0 + 2, "╚" + "═".repeat(inner) + "╝", C.CY)
-    }
-
-    // ── Command bar ───────────────────────────────────────────────────────────
-
-    private fun renderCommandBar(g: TextGraphics, tw: Int, th: Int) {
-        val r0 = th - 3; val inner = (tw - 2).coerceAtLeast(0)
-        g.put(0, r0, "╔" + "═".repeat(inner) + "╗", C.CY)
-        g.put(0, r0 + 1, "║", C.CY)
-
-        if (wizardActive) {
-            // Show wizard context: last [?] line as prompt
-            val wizardPrompt = wizardSessionId?.let { id ->
-                readLog(id).lastOrNull { it.contains("[?]") }
-                    ?.substringAfter("[?]")?.trim()
-            } ?: "answer"
-            g.put(2, r0 + 1, "[WIZARD] ", C.MG, mods = arrayOf(SGR.BOLD))
-            g.put(11, r0 + 1, "$wizardPrompt › ", C.GY)
-            val offset = 11 + wizardPrompt.length + 3
-            g.put(offset, r0 + 1, commandBuffer.toString(), C.WH)
-            g.put(offset + commandBuffer.length, r0 + 1, "█", C.CY)
-        } else {
-            g.put(2, r0 + 1, ": ", C.YL, mods = arrayOf(SGR.BOLD))
-            g.put(4, r0 + 1, commandBuffer.toString(), C.WH)
-            g.put(4 + commandBuffer.length, r0 + 1, "█", C.CY)
-        }
-
-        g.put(tw - 1, r0 + 1, "║", C.CY)
-        g.put(0, r0 + 2, "╚" + "═".repeat(inner) + "╝", C.CY)
-    }
-
-    // ── Style ─────────────────────────────────────────────────────────────────
 
     private fun statusStyle(s: Status): Pair<TextColor, String> = when (s) {
-        Status.PENDING    -> Pair(C.YL, "PENDING")
-        Status.PROCESSING -> Pair(C.MG, "PROCESSING")
-        Status.DONE       -> Pair(C.GR, "DONE")
-        Status.FAILED     -> Pair(C.RD, "FAILED")
+        Status.PENDING    -> Pair(C.YL,  "PENDING")
+        Status.PROCESSING -> Pair(C.MG,  "RUNNING")
+        Status.DONE       -> Pair(C.GR,  "DONE")
+        Status.FAILED     -> Pair(C.RD,  "FAILED")
     }
 
-    // ── Initial scan ──────────────────────────────────────────────────────────
+    private fun readLog(jobId: String, maxLines: Int): List<String> {
+        val found = File(jobsDir, "logs").walkTopDown().firstOrNull { it.name == "$jobId.log" }
+        if (found == null || !found.exists()) return listOf("— no log —", "expected: logs/<queue>/$jobId.log")
+        
+        return try {
+            val allLines = found.readLines()
+            if (allLines.size <= maxLines) allLines else allLines.takeLast(maxLines)
+        } catch (e: Exception) {
+            listOf("— error reading log —", e.message ?: "unknown error")
+        }
+    }
+
+    // ── Backend (unchanged) ───────────────────────────────────────────────────
+
+    private fun launchCortex() {
+        val logDir  = File(jobsDir, "logs/cortex").also { it.mkdirs() }
+        val logFile = File(logDir, "cortex-session.log")
+        logFile.writeText("")
+        val cortexQueueDir = File(jobsDir, "cortex").also { it.mkdirs() }
+        File(cortexQueueDir, "cortex-session.json.processing").writeText(
+            """{"id":"cortex-session","fileName":"CortexAgent","functionName":"cortex","scriptPath":"agents/CortexAgent.kts","sourceType":"script"}"""
+        )
+        jobs["cortex-session"] = JobEntry("cortex-session", "cortex", Status.PROCESSING)
+        wizardActive = true; wizardSessionId = "cortex-session"; dirty = true
+
+        val mcp = CortexMcpServer(jobsDir, agentsDir)
+        mcp.startHttp(); mcpServer = mcp
+
+        val agentScript = File(agentsDir, "CortexAgent.kts")
+        if (!agentScript.exists() || !File(koupperBin).exists()) {
+            logFile.appendText("[${ts()}] ⚠ CortexAgent.kts not found.\n")
+            jobs["cortex-session"]?.status = Status.FAILED; dirty = true; return
+        }
+
+        thread(name = "cortex-agent", isDaemon = true) {
+            runCatching {
+                ProcessBuilder(koupperBin, "run", agentScript.absolutePath)
+                    .also { pb -> pb.environment().apply {
+                        System.getenv("KOUPPER_LLM_MODEL_PATH")?.let { put("KOUPPER_LLM_MODEL_PATH", it) }
+                        System.getenv("KOUPPER_LLM_EXECUTABLE")?.let { put("KOUPPER_LLM_EXECUTABLE", it) }
+                        put("CORTEX_JOBS_DIR", jobsDir.absolutePath)
+                    }; pb.redirectErrorStream(true) }.start().waitFor()
+            }
+            jobs["cortex-session"]?.status = Status.DONE; dirty = true
+        }
+
+        val webAgent = File(agentsDir, "CortexWebUiAgent.kts")
+        if (webAgent.exists()) thread(name = "web-ui", isDaemon = true) {
+            runCatching {
+                ProcessBuilder(koupperBin, "run", webAgent.absolutePath)
+                    .also { it.environment()["CORTEX_JOBS_DIR"] = jobsDir.absolutePath }
+                    .redirectErrorStream(true).start()
+            }
+        }
+        dirty = true
+    }
+
+    private fun launchWizard() {
+        if (wizardActive) { cmdResult = "⚠ wizard already active"; dirty = true; return }
+        val script = File(agentsDir, "AgentCreatorAgent.kts")
+        if (!script.exists()) { cmdResult = "⚠ AgentCreatorAgent.kts not found"; dirty = true; return }
+        val sid = "wizard-${System.currentTimeMillis()}"
+        wizardSessionId = sid; wizardActive = true
+        runCatching {
+            ProcessBuilder(koupperBin, "run", script.absolutePath, jobsDir.absolutePath, sid)
+                .redirectErrorStream(true).start()
+        }.onFailure { wizardActive = false; wizardSessionId = null }
+        cmdResult = "◈ wizard started"; dirty = true
+    }
 
     private fun initialScan() {
         if (!jobsDir.exists()) return
         for (qDir in jobsDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") } ?: return) {
             val q = qDir.name
-            for (f in qDir.listFiles() ?: continue) {
-                when {
-                    f.name.endsWith(".json.processing") -> {
-                        val id = f.name.removeSuffix(".json.processing")
-                        jobs[id] = JobEntry(id, q, Status.PROCESSING)
-                    }
-                    f.name.endsWith(".json") ->
-                        jobs.putIfAbsent(f.nameWithoutExtension, JobEntry(f.nameWithoutExtension, q, Status.PENDING))
+            for (f in qDir.listFiles() ?: continue) when {
+                f.name.endsWith(".json.processing") -> {
+                    val id = f.name.removeSuffix(".json.processing")
+                    jobs[id] = JobEntry(id, q, Status.PROCESSING)
+                    if (id == "cortex-session") { wizardActive = true; wizardSessionId = id }
                 }
+                f.name.endsWith(".json") ->
+                    jobs.putIfAbsent(f.nameWithoutExtension, JobEntry(f.nameWithoutExtension, q, Status.PENDING))
             }
             for (f in File(qDir, ".failed").listFiles { f -> f.name.endsWith(".json") } ?: continue)
                 jobs.putIfAbsent(f.nameWithoutExtension, JobEntry(f.nameWithoutExtension, q, Status.FAILED))
         }
     }
 
-    // ── WatchService ──────────────────────────────────────────────────────────
-
     private fun watchLoop() {
         if (!jobsDir.exists()) jobsDir.mkdirs()
-        val ws     = FileSystems.getDefault().newWatchService()
+        val ws = FileSystems.getDefault().newWatchService()
         val dirMap = mutableMapOf<Path, String?>()
-
         fun reg(d: File, q: String?) {
             if (!d.exists()) d.mkdirs()
             d.toPath().register(ws, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY)
             dirMap[d.toPath()] = q
         }
-
         reg(jobsDir, null)
         for (d in jobsDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") } ?: emptyList())
             reg(d, d.name)
-
-        // Watch logs/ for live log streaming
-        File(jobsDir, "logs").also { it.mkdirs() }.toPath()
-            .register(ws, ENTRY_CREATE, ENTRY_MODIFY)
-
+        File(jobsDir, "logs").also { it.mkdirs() }.toPath().register(ws, ENTRY_CREATE, ENTRY_MODIFY)
         watchSt = "ACTIVE"
         try {
             while (alive.get()) {
-                val key       = ws.poll(300, TimeUnit.MILLISECONDS) ?: continue
-                val watchable = key.watchable()
-                if (watchable !is Path) { key.reset(); continue }
+                val wk = ws.poll(300, TimeUnit.MILLISECONDS) ?: continue
+                val watchable = wk.watchable(); if (watchable !is Path) { wk.reset(); continue }
                 val q = dirMap[watchable]
-
-                for (ev in key.pollEvents()) {
+                for (ev in wk.pollEvents()) {
                     if (ev.kind() == OVERFLOW) continue
                     @Suppress("UNCHECKED_CAST")
                     val fname = (ev as WatchEvent<Path>).context().fileName.toString()
@@ -756,9 +584,8 @@ class MonitorApp(private val jobsDir: File) {
                         q == null && ev.kind() == ENTRY_CREATE && !fname.startsWith(".") -> {
                             val nd = File(jobsDir, fname)
                             if (nd.isDirectory) reg(nd, fname)
-                            // Also register log subdirs
-                            val logSub = File(jobsDir, "logs/$fname")
-                            if (logSub.isDirectory) logSub.toPath().register(ws, ENTRY_CREATE, ENTRY_MODIFY)
+                            val ls = File(jobsDir, "logs/$fname")
+                            if (ls.isDirectory) ls.toPath().register(ws, ENTRY_CREATE, ENTRY_MODIFY)
                         }
                         fname.endsWith(".log") -> if (mode == Mode.LOG) dirty = true
                         fname.endsWith(".json.processing") -> {
@@ -766,19 +593,13 @@ class MonitorApp(private val jobsDir: File) {
                             when (ev.kind()) {
                                 ENTRY_CREATE -> {
                                     jobs[id] = JobEntry(id, q ?: "?", Status.PROCESSING, t)
-                                    // CORTEX agent just started — activate wizard mode
-                                    if (id == "cortex-session") {
-                                        wizardActive = true
-                                        wizardSessionId = "cortex-session"
-                                    }
+                                    if (id == "cortex-session") { wizardActive = true; wizardSessionId = id }
                                     dirty = true
                                 }
                                 ENTRY_DELETE -> {
-                                    jobs[id]?.let { it.status = Status.DONE; it.lastUpdate = t }
-                                    dirty = true
+                                    jobs[id]?.let { it.status = Status.DONE; it.lastUpdate = t }; dirty = true
                                     thread(isDaemon = true) {
-                                        Thread.sleep(3_000)
-                                        jobs.remove(id)
+                                        Thread.sleep(3_000); jobs.remove(id)
                                         if (id == wizardSessionId) { wizardActive = false; wizardSessionId = null }
                                         dirty = true
                                     }
@@ -797,7 +618,7 @@ class MonitorApp(private val jobsDir: File) {
                         }
                     }
                 }
-                key.reset()
+                wk.reset()
             }
         } catch (_: InterruptedException) {
         } finally { ws.close(); watchSt = "STOPPED" }
