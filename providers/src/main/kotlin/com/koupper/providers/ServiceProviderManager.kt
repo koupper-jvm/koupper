@@ -2,6 +2,7 @@ package com.koupper.providers
 
 import com.koupper.providers.agent.AgentServiceProvider
 import com.koupper.providers.commandbridge.CommandBridgeServiceProvider
+import com.koupper.providers.telegram.TelegramServiceProvider
 import com.koupper.providers.ai.AIServiceProvider
 import com.koupper.providers.aillmops.AILlmOpsServiceProvider
 import com.koupper.providers.aws.dynamo.AwsServiceProvider
@@ -105,6 +106,7 @@ class ServiceProviderManager {
             SSHServiceProvider::class,
             AgentServiceProvider::class,
             CommandBridgeServiceProvider::class,
+            TelegramServiceProvider::class,
         )
     }
 }
