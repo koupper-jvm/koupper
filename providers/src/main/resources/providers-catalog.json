@@ -581,7 +581,7 @@
     {
       "id": "vector-db",
       "serviceProvider": "VectorDbServiceProvider",
-      "description": "Vector storage and similarity query provider with local in-memory backend.",
+      "description": "Vector storage and similarity query provider with disk-persistent local backend.",
       "bindings": [
         {
           "contract": "VectorDbProvider",
@@ -592,6 +592,21 @@
       ],
       "env": [],
       "docs": "https://koupper.com/docs/providers/vector-db"
+    },
+    {
+      "id": "memory",
+      "serviceProvider": "MemoryServiceProvider",
+      "description": "High-level memory provider: remember(text), recall(query), persists to ~/.koupper/memory/ and writes memory.md.",
+      "bindings": [
+        {
+          "contract": "MemoryProvider",
+          "implementations": [
+            { "class": "LocalMemoryProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/memory"
     },
     {
       "id": "rss",
