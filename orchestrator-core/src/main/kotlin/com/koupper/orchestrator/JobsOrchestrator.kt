@@ -269,6 +269,7 @@ object JobRunner {
                         return@map JobResult.Error("❌ Execution failed for job '${task.id}': ${e.message}", e)
                     }
 
+                    runCatching { res.resultFn?.invoke(execResult) }
                     res.ackFn?.invoke()
                     JobInfo(
                         configId = res.configName,
@@ -512,7 +513,8 @@ sealed class JobResult {
         val configName: String?,
         val task: KouTask,
         val ackFn: (() -> Unit)? = null,
-        val releaseFn: (() -> Unit)? = null
+        val releaseFn: (() -> Unit)? = null,
+        val resultFn: ((Any?) -> Unit)? = null   // optional: persist result before ack
     ) : JobResult()
     data class Error(val message: String, val exception: Exception? = null) : JobResult()
 }
@@ -784,6 +786,7 @@ object FileJobDriver : ContextualJobDriver {
         }
 
         val failedDir = File(dir, ".failed").also { it.mkdirs() }
+        val doneDir   = File(dir, ".done").also { it.mkdirs() }
 
         files.forEach { file ->
             val processingFile = File(file.parent, "${file.name}.processing")
@@ -808,7 +811,20 @@ object FileJobDriver : ContextualJobDriver {
                             println("⚠️ Could not delete processing file: ${processingFile.name}")
                         }
                     },
-                    releaseFn = ::moveToFailed
+                    releaseFn = ::moveToFailed,
+                    resultFn = { result ->
+                        runCatching {
+                            val serialized = when (result) {
+                                null -> null
+                                is String -> result
+                                else -> jacksonObjectMapper().writeValueAsString(result)
+                            }
+                            File(doneDir, "${task.id}.result.json")
+                                .writeText(jacksonObjectMapper().writeValueAsString(
+                                    mapOf("id" to task.id, "result" to serialized)
+                                ))
+                        }
+                    }
                 ))
             } catch (e: Exception) {
                 results.add(JobResult.Error("❌ Failed to read job from file '${file.name}': ${e.message}", e))
