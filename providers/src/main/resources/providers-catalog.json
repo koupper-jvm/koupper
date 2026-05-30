@@ -715,6 +715,22 @@
       ],
       "env": [],
       "docs": "https://koupper.com/docs/providers/command-bridge"
+    },
+    {
+      "id": "telegram",
+      "serviceProvider": "TelegramServiceProvider",
+      "description": "Bidirectional Telegram channel for agent communication. Long-polls the Bot API for incoming messages and sends responses back to the user.",
+      "bindings": [
+        {
+          "contract": "TelegramChannelProvider",
+          "implementations": [{ "class": "TelegramChannelProviderImpl" }]
+        }
+      ],
+      "env": [
+        { "name": "KOUPPER_TELEGRAM_TOKEN",    "required": true,  "description": "Telegram Bot API token from BotFather." },
+        { "name": "KOUPPER_TELEGRAM_CHAT_IDS", "required": false, "description": "Comma-separated list of allowed chat IDs. Empty = accept all." }
+      ],
+      "docs": "https://koupper.com/docs/providers/telegram"
     }
   ]
 }
