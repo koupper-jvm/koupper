@@ -29,18 +29,38 @@ private val ANSI = Regex("\u001B\\[[;\\d]*[mGKHFJA-Za-z]|\r")
 private fun clean(s: String) = s.replace(ANSI, "")
 private fun trunc(s: String, n: Int) = when { n <= 0 -> ""; s.length > n -> s.take(n - 1) + "…"; else -> s }
 
+private fun wrap(s: String, w: Int): List<String> {
+    if (s.length <= w) return listOf(s)
+    val words = s.split(" ")
+    val result = mutableListOf<String>()
+    val current = StringBuilder()
+    for (word in words) {
+        if (current.isEmpty()) {
+            current.append(word)
+        } else if (current.length + 1 + word.length <= w) {
+            current.append(" ").append(word)
+        } else {
+            result.add(current.toString())
+            current.setLength(0)
+            current.append(word)
+        }
+    }
+    if (current.isNotEmpty()) result.add(current.toString())
+    return result
+}
+
 // ── Dashboard Theme (Sync with Web UI) ────────────────────────────────────────
 
 private object C {
-    val ACCENT   = TextColor.Indexed(135)  // #7c3aed (Deep Purple)
-    val SUCCESS  = TextColor.Indexed(82)   // #10b981 (Emerald)
-    val ERROR    = TextColor.Indexed(196)  // #ef4444 (Red)
-    val WARNING  = TextColor.Indexed(214)  // #f59e0b (Amber)
-    val TEXT     = TextColor.Indexed(255)  // #ffffff (White)
-    val MUTED    = TextColor.Indexed(244)  // #8b949e (Gray)
-    val SUBTLE   = TextColor.Indexed(238)  // #30363d (Border Gray)
-    val BG_PANEL = TextColor.Indexed(235)  // #161b22 (Panel BG)
-    val BG_MAIN  = TextColor.Indexed(234)  // #0d1117 (Main BG)
+    val ACCENT   = TextColor.Indexed(135)  // #7c3aed
+    val SUCCESS  = TextColor.Indexed(82)   // #10b981
+    val ERROR    = TextColor.Indexed(196)  // #ef4444
+    val WARNING  = TextColor.Indexed(214)  // #f59e0b
+    val TEXT     = TextColor.Indexed(255)  // #ffffff
+    val MUTED    = TextColor.Indexed(244)  // #8b949e
+    val SUBTLE   = TextColor.Indexed(238)  // #30363d
+    val BG_PANEL = TextColor.Indexed(235)  // #161b22
+    val BG_MAIN  = TextColor.Indexed(234)  // #0d1117
     val SEL      = TextColor.Indexed(237)  // Selection BG
 }
 
@@ -71,6 +91,7 @@ class MonitorApp(private val jobsDir: File) {
 
     private var selectedIdx   = -1
     private var selectedJobId: String? = null
+    private var logScroll     = 0
 
     @Volatile private var wizardActive   = false
     private var wizardSessionId: String? = null
@@ -79,8 +100,19 @@ class MonitorApp(private val jobsDir: File) {
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     fun run() {
-        val terminal = DefaultTerminalFactory().createTerminal()
-        val screen   = TerminalScreen(terminal)
+        initialScan()
+        thread(name = "watcher",         isDaemon = true) { watchLoop() }
+        thread(name = "cortex-launcher", isDaemon = true) { Thread.sleep(400); launchCortex() }
+
+        val terminal = try {
+            DefaultTerminalFactory().createTerminal()
+        } catch (e: Exception) {
+            println("⚠ Headless mode: Terminal not available. Tools (18082) and Web (18083) are still active.")
+            while(alive.get()) Thread.sleep(1000)
+            return
+        }
+
+        val screen = TerminalScreen(terminal)
         screen.startScreen()
         screen.cursorPosition = null
 
@@ -89,10 +121,6 @@ class MonitorApp(private val jobsDir: File) {
             mcpServer?.stopHttp()
             runCatching { File(jobsDir, "cortex/cortex-session.json.processing").delete() }
         })
-
-        initialScan()
-        thread(name = "watcher",         isDaemon = true) { watchLoop() }
-        thread(name = "cortex-launcher", isDaemon = true) { Thread.sleep(400); launchCortex() }
 
         try {
             var lastRenderMs = 0L
@@ -143,8 +171,10 @@ class MonitorApp(private val jobsDir: File) {
                 }
             }
             Mode.LOG -> when {
-                key.keyType == KeyType.Escape -> { mode = Mode.WATCH; dirty = true }
+                key.keyType == KeyType.Escape -> { mode = Mode.WATCH; logScroll = 0; dirty = true }
                 key.keyType == KeyType.Enter -> { mode = Mode.COMMAND; cmdBuf.clear(); dirty = true }
+                key.keyType == KeyType.PageUp -> { logScroll += 5; dirty = true }
+                key.keyType == KeyType.PageDown -> { logScroll = (logScroll - 5).coerceAtLeast(0); dirty = true }
                 key.keyType == KeyType.ArrowDown || key.character == 'j' -> {
                     if (snap.isNotEmpty()) {
                         selectedIdx = (selectedIdx + 1).coerceAtMost(snap.size - 1)
@@ -210,26 +240,34 @@ class MonitorApp(private val jobsDir: File) {
         val midW   = tw - leftW - rightW - 2
 
         renderTopBar(g, tw)
-        renderLeftPanel(g, 0, 2, leftW, th - 3, snap)
-        renderMidPanel(g, leftW + 1, 2, midW, th - 3)
-        renderRightPanel(g, tw - rightW, 2, rightW, th - 3, snap)
+        renderLeftPanel(g, 0, 3, leftW, th - 4, snap)
+        renderMidPanel(g, leftW + 1, 3, midW, th - 4)
+        renderRightPanel(g, tw - rightW, 3, rightW, th - 4, snap)
         renderBottomBar(g, tw, th)
     }
 
     private fun renderTopBar(g: TextGraphics, tw: Int) {
         g.backgroundColor = C.BG_PANEL
-        g.fillRectangle(TerminalPosition(0, 0), TerminalSize(tw, 1), ' ')
-        g.put(2, 0, " KOUPPER ", C.TEXT, mods = arrayOf(SGR.BOLD))
-        g.put(11, 0, "CORTEX", C.ACCENT, mods = arrayOf(SGR.BOLD))
+        g.fillRectangle(TerminalPosition(0, 0), TerminalSize(tw, 2), ' ')
+        
+        // Retro Brain ASCII (Improved)
+        g.put(1, 0, "  _---_  ", C.ACCENT)
+        g.put(1, 1, " ( @ @ ) ", C.ACCENT)
+        
+        // Stylized CORTEX (Fixed E)
+        g.put(11, 0, "█▀▀ █▀█ █▀█ ▀█▀ █▀▀ █ █", C.TEXT, mods = arrayOf(SGR.BOLD))
+        g.put(11, 1, "█▄▄ █▄█ █▀▄  █  █▄▄  █ ", C.ACCENT, mods = arrayOf(SGR.BOLD))
         
         val status = if (watchSt == "ACTIVE") "● ONLINE" else "○ $watchSt"
         g.put(tw - status.length - 2, 0, status, if (watchSt == "ACTIVE") C.SUCCESS else C.ERROR)
+        g.put(tw - 10, 1, ts(), C.MUTED)
         
-        val center = " SWARM MONITOR "
-        g.put(tw / 2 - center.length / 2, 0, center, C.TEXT)
+        val center = " SWARM ORCHESTRATOR "
+        g.put(tw / 2 - center.length / 2, 0, center, C.MUTED)
     }
 
     private fun renderLeftPanel(g: TextGraphics, x: Int, y: Int, w: Int, h: Int, snap: List<JobEntry>) {
+        val panelY = y + 1 // Offset for 2-line header
         g.put(x + 1, y, "JOBS", C.MUTED, mods = arrayOf(SGR.BOLD))
         g.put(x, y + 1, "─".repeat(w), C.SUBTLE)
         
@@ -253,26 +291,30 @@ class MonitorApp(private val jobsDir: File) {
         val title = if (mode == Mode.WATCH) "ACTIVITY" else "LOG: $selectedJobId"
         g.put(x + 2, y, title, C.MUTED, mods = arrayOf(SGR.BOLD))
         g.put(x, y + 1, "─".repeat(w), C.SUBTLE)
+if (mode == Mode.WATCH) {
+    g.put(x + w / 2 - 10, y + h / 2, "Select a job to view logs", C.SUBTLE)
+} else {
+    val lines = readLog(selectedJobId ?: "", h - 4, w - 4, logScroll)
+    lines.forEachIndexed { i, (line, color) ->
 
-        if (mode == Mode.WATCH) {
-            g.put(x + w / 2 - 10, y + h / 2, "Select a job to view logs", C.SUBTLE)
-        } else {
-            val lines = readLog(selectedJobId ?: "", h - 4)
-            lines.forEachIndexed { i, line ->
-                val row = y + 2 + i
-                if (row < y + h - 1) {
-                    val c = clean(line)
-                    g.put(x + 2, row, trunc(c, w - 4), logColor(c))
-                }
-            }
+        val row = y + 2 + i
+        if (row < y + h - 1) {
+            g.put(x + 2, row, line, color)
         }
+    }
+}
+
 
         if (mode == Mode.COMMAND) {
             val prompt = if (selectedJobId == wizardSessionId) "CORTEX › " else "CMD › "
+            val maxLen = w - prompt.length - 4
+            val fullCmd = cmdBuf.toString()
+            val displayCmd = if (fullCmd.length > maxLen) "…" + fullCmd.takeLast(maxLen - 1) else fullCmd
+            
             g.backgroundColor = C.SEL
             g.fillRectangle(TerminalPosition(x, y + h - 1), TerminalSize(w, 1), ' ')
             g.put(x + 2, y + h - 1, prompt, C.ACCENT, mods = arrayOf(SGR.BOLD))
-            g.put(x + 2 + prompt.length, y + h - 1, cmdBuf.toString() + "█", C.TEXT)
+            g.put(x + 2 + prompt.length, y + h - 1, displayCmd + "█", C.TEXT)
         }
         
         g.put(x + w, y, "│", C.SUBTLE) // Vertical separator
@@ -339,12 +381,18 @@ class MonitorApp(private val jobsDir: File) {
         Status.PROCESSING -> 0; Status.PENDING -> 1; Status.FAILED -> 2; Status.DONE -> 3
     }
 
-    private fun readLog(jobId: String, max: Int): List<String> {
+    private fun readLog(jobId: String, max: Int, width: Int, scroll: Int = 0): List<Pair<String, TextColor>> {
         val found = File(jobsDir, "logs").walkTopDown().firstOrNull { it.name == "$jobId.log" }
         if (found == null || !found.exists()) return emptyList()
         return try {
             val lines = found.readLines()
-            if (lines.size > max) lines.takeLast(max) else lines
+            val wrapped = lines.flatMap { line ->
+                val c = clean(line)
+                val color = logColor(c)
+                wrap(c, width).map { it to color }
+            }
+            val offset = (wrapped.size - max - scroll).coerceAtLeast(0)
+            wrapped.drop(offset).take(max)
         } catch (e: Exception) { emptyList() }
     }
 
