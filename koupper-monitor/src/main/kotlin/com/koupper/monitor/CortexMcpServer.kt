@@ -2,7 +2,9 @@ package com.koupper.monitor
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.koupper.container.app
 import com.koupper.providers.mcp.MCPServerProvider
+import com.koupper.providers.web.WebReaderProvider
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -205,6 +207,42 @@ log("  SWARM COMPLETE")
     }
 
     // ── Tool registrations ────────────────────────────────────────────────────
+
+    // 10 ─ fetch_url
+    mcp.registerTool(
+        "fetch_url",
+        "Fetch a URL and return its rendered content (JavaScript executed), plain text, images, and links. Use this to read any webpage before forming an opinion or analysis.",
+        obj("type" to "object",
+            "properties" to mapOf(
+                "url"        to strP("Full URL to fetch (must start with http:// or https://)"),
+                "screenshot" to mapOf("type" to "boolean", "description" to "If true, also return a base64 screenshot of the page")
+            ),
+            "required" to listOf("url"))
+    ) { args ->
+        val url        = args["url"]?.toString()        ?: return@registerTool err("url is required")
+        val wantShot   = args["screenshot"] as? Boolean ?: false
+
+        if (!url.startsWith("http://") && !url.startsWith("https://"))
+            return@registerTool err("url must start with http:// or https://")
+
+        runCatching {
+            val reader = app.getInstance(WebReaderProvider::class)
+            val page   = reader.fetch(url)
+            val result = mutableMapOf<String, Any?>(
+                "url"         to page.url,
+                "title"       to page.title,
+                "description" to page.description,
+                "text"        to page.text,
+                "links"       to page.links.take(20),
+                "images"      to page.images.take(20).map { mapOf("src" to it.src, "alt" to it.alt) }
+            )
+            if (wantShot) {
+                val bytes = reader.screenshot(url)
+                result["screenshot"] = java.util.Base64.getEncoder().encodeToString(bytes)
+            }
+            result
+        }.getOrElse { e -> err("fetch failed: ${e.message?.take(120)}") }
+    }
 
     // 1 ─ list_agents
     mcp.registerTool(

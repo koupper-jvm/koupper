@@ -21,6 +21,7 @@ tasks.register('fatJar', Jar) {
     archiveBaseName      = 'koupper-monitor'
     archiveClassifier    = ''
     duplicatesStrategy   = DuplicatesStrategy.EXCLUDE
+    zip64                = true
     manifest {
         attributes 'Main-Class'             : 'com.koupper.monitor.MonitorAppKt'
         attributes 'Implementation-Title'   : 'Koupper Monitor'
