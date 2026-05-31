@@ -39,6 +39,7 @@ import com.koupper.providers.templates.TemplateServiceProvider
 import com.koupper.providers.vectordb.VectorDbServiceProvider
 import com.koupper.providers.memory.MemoryServiceProvider
 import com.koupper.providers.web.WebReaderServiceProvider
+import com.koupper.providers.pdf.PDFReaderServiceProvider
 import kotlin.reflect.KClass
 
 val launchProcess: (() -> Unit) -> Thread = { callback ->
@@ -111,6 +112,7 @@ class ServiceProviderManager {
             CommandBridgeServiceProvider::class,
             TelegramServiceProvider::class,
             WebReaderServiceProvider::class,
+            PDFReaderServiceProvider::class,
         )
     }
 }
