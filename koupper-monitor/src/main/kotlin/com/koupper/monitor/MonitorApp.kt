@@ -18,6 +18,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import com.koupper.container.app
 import com.koupper.providers.mcp.MCPServerProvider
+import com.koupper.providers.mcp.MCPServiceProvider
+import com.koupper.providers.web.WebReaderServiceProvider
 import kotlin.concurrent.thread
 
 // ── Domain ────────────────────────────────────────────────────────────────────
@@ -410,6 +412,8 @@ class MonitorApp(private val jobsDir: File) {
         jobs["cortex-session"] = JobEntry("cortex-session", "cortex", Status.PROCESSING)
         wizardActive = true; wizardSessionId = "cortex-session"; dirty = true
 
+        MCPServiceProvider().up()
+        WebReaderServiceProvider().up()
         val mcp = app.getInstance(MCPServerProvider::class)
         registerCortexTools(mcp, jobsDir, agentsDir)
         mcp.startHttp(port = 18082); mcpServer = mcp
