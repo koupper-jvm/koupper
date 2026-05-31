@@ -29,18 +29,38 @@ private val ANSI = Regex("\u001B\\[[;\\d]*[mGKHFJA-Za-z]|\r")
 private fun clean(s: String) = s.replace(ANSI, "")
 private fun trunc(s: String, n: Int) = when { n <= 0 -> ""; s.length > n -> s.take(n - 1) + "…"; else -> s }
 
-// ── Framework Theme ───────────────────────────────────────────────────────────
+private fun wrap(s: String, w: Int): List<String> {
+    if (s.length <= w) return listOf(s)
+    val words = s.split(" ")
+    val result = mutableListOf<String>()
+    val current = StringBuilder()
+    for (word in words) {
+        if (current.isEmpty()) {
+            current.append(word)
+        } else if (current.length + 1 + word.length <= w) {
+            current.append(" ").append(word)
+        } else {
+            result.add(current.toString())
+            current.setLength(0)
+            current.append(word)
+        }
+    }
+    if (current.isNotEmpty()) result.add(current.toString())
+    return result
+}
+
+// ── Dashboard Theme (Sync with Web UI) ────────────────────────────────────────
 
 private object C {
-    val ACCENT   = TextColor.Indexed(111)  // #87afff (Soft Blue)
-    val SUCCESS  = TextColor.Indexed(82)   // #5fff00 (Green)
-    val ERROR    = TextColor.Indexed(196)  // #ff0000 (Red)
-    val WARNING  = TextColor.Indexed(214)  // #ffaf00 (Amber)
-    val TEXT     = TextColor.Indexed(255)  // #ffffff (White)
-    val MUTED    = TextColor.Indexed(244)  // #808080 (Gray)
-    val SUBTLE   = TextColor.Indexed(238)  // #444444 (Border Gray)
-    val BG_PANEL = TextColor.Indexed(235)  // #262626 (Panel BG)
-    val BG_MAIN  = TextColor.Indexed(234)  // #1c1c1c (Main BG)
+    val ACCENT   = TextColor.Indexed(135)  // #7c3aed
+    val SUCCESS  = TextColor.Indexed(82)   // #10b981
+    val ERROR    = TextColor.Indexed(196)  // #ef4444
+    val WARNING  = TextColor.Indexed(214)  // #f59e0b
+    val TEXT     = TextColor.Indexed(255)  // #ffffff
+    val MUTED    = TextColor.Indexed(244)  // #8b949e
+    val SUBTLE   = TextColor.Indexed(238)  // #30363d
+    val BG_PANEL = TextColor.Indexed(235)  // #161b22
+    val BG_MAIN  = TextColor.Indexed(234)  // #0d1117
     val SEL      = TextColor.Indexed(237)  // Selection BG
 }
 
@@ -49,8 +69,7 @@ private enum class Mode { WATCH, LOG, COMMAND }
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 fun main(args: Array<String>) {
-    val jobsDir = File(args.firstOrNull { !it.startsWith("-") } ?: "jobs")
-    MonitorApp(jobsDir).run()
+    MonitorApp(File(args.firstOrNull { !it.startsWith("-") } ?: "jobs")).run()
 }
 
 // ── Application ───────────────────────────────────────────────────────────────
@@ -62,27 +81,46 @@ class MonitorApp(private val jobsDir: File) {
     @Volatile private var watchSt = "STARTING"
     @Volatile private var dirty   = true
 
+    private val home       = System.getProperty("user.home")!!
+    private val agentsDir  = File(home, ".koupper/agents").also { it.mkdirs() }
+    private val koupperBin = "$home/.koupper/bin/koupper"
+
     @Volatile private var mode = Mode.WATCH
     private val cmdBuf = StringBuilder()
     private var cmdResult: String? = null
 
     private var selectedIdx   = -1
     private var selectedJobId: String? = null
+    private var logScroll     = 0
+
+    @Volatile private var wizardActive   = false
+    private var wizardSessionId: String? = null
+    private var mcpServer: CortexMcpServer? = null
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     fun run() {
-        val terminal = DefaultTerminalFactory().createTerminal()
-        val screen   = TerminalScreen(terminal)
+        initialScan()
+        thread(name = "watcher",         isDaemon = true) { watchLoop() }
+        thread(name = "cortex-launcher", isDaemon = true) { Thread.sleep(400); launchCortex() }
+
+        val terminal = try {
+            DefaultTerminalFactory().createTerminal()
+        } catch (e: Exception) {
+            println("⚠ Headless mode: Terminal not available. Tools (18082) and Web (18083) are still active.")
+            while(alive.get()) Thread.sleep(1000)
+            return
+        }
+
+        val screen = TerminalScreen(terminal)
         screen.startScreen()
         screen.cursorPosition = null
 
         Runtime.getRuntime().addShutdownHook(thread(start = false, isDaemon = true) {
             runCatching { screen.stopScreen() }
+            mcpServer?.stopHttp()
+            runCatching { File(jobsDir, "cortex/cortex-session.json.processing").delete() }
         })
-
-        initialScan()
-        thread(name = "watcher", isDaemon = true) { watchLoop() }
 
         try {
             var lastRenderMs = 0L
@@ -133,8 +171,10 @@ class MonitorApp(private val jobsDir: File) {
                 }
             }
             Mode.LOG -> when {
-                key.keyType == KeyType.Escape -> { mode = Mode.WATCH; dirty = true }
+                key.keyType == KeyType.Escape -> { mode = Mode.WATCH; logScroll = 0; dirty = true }
                 key.keyType == KeyType.Enter -> { mode = Mode.COMMAND; cmdBuf.clear(); dirty = true }
+                key.keyType == KeyType.PageUp -> { logScroll += 5; dirty = true }
+                key.keyType == KeyType.PageDown -> { logScroll = (logScroll - 5).coerceAtLeast(0); dirty = true }
                 key.keyType == KeyType.ArrowDown || key.character == 'j' -> {
                     if (snap.isNotEmpty()) {
                         selectedIdx = (selectedIdx + 1).coerceAtMost(snap.size - 1)
@@ -166,10 +206,15 @@ class MonitorApp(private val jobsDir: File) {
 
     private fun executeCommand(cmd: String) {
         val t = cmd.trim().ifEmpty { return }
-        // Generic command dispatch via files
-        val cmdDir = File(jobsDir, "commands").also { it.mkdirs() }
-        File(cmdDir, "${System.currentTimeMillis()}.cmd").writeText(t)
-        cmdResult = "→ Sent"
+        val isWizard = selectedJobId == wizardSessionId && wizardActive
+        if (isWizard) {
+            File(jobsDir, "commands/wizard").also { it.mkdirs() }
+                .let { File(it, "${System.currentTimeMillis()}.response").writeText(t) }
+            cmdResult = "◈ Sent"
+        } else {
+            File(jobsDir, "commands/${System.currentTimeMillis()}.cmd").writeText(t)
+            cmdResult = "→ Sent"
+        }
     }
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -184,37 +229,46 @@ class MonitorApp(private val jobsDir: File) {
 
         val snap = currentSnap()
         if (snap.isNotEmpty()) {
+            if (selectedIdx < 0) selectedIdx = snap.indexOfFirst { it.id == "cortex-session" }.coerceAtLeast(0)
             selectedIdx = selectedIdx.coerceIn(0, snap.size - 1)
             selectedJobId = snap[selectedIdx].id
         }
 
-        // Layout (Three columns)
+        // Layout (Three columns like Web UI)
         val leftW  = (tw * 0.25).toInt().coerceAtLeast(20)
         val rightW = (tw * 0.20).toInt().coerceAtLeast(20)
         val midW   = tw - leftW - rightW - 2
 
         renderTopBar(g, tw)
-        renderLeftPanel(g, 0, 2, leftW, th - 3, snap)
-        renderMidPanel(g, leftW + 1, 2, midW, th - 3)
-        renderRightPanel(g, tw - rightW, 2, rightW, th - 3, snap)
+        renderLeftPanel(g, 0, 3, leftW, th - 4, snap)
+        renderMidPanel(g, leftW + 1, 3, midW, th - 4)
+        renderRightPanel(g, tw - rightW, 3, rightW, th - 4, snap)
         renderBottomBar(g, tw, th)
     }
 
     private fun renderTopBar(g: TextGraphics, tw: Int) {
         g.backgroundColor = C.BG_PANEL
-        g.fillRectangle(TerminalPosition(0, 0), TerminalSize(tw, 1), ' ')
-        g.put(2, 0, " KOUPPER ", C.TEXT, mods = arrayOf(SGR.BOLD))
-        g.put(11, 0, "RUNTIME", C.ACCENT, mods = arrayOf(SGR.BOLD))
+        g.fillRectangle(TerminalPosition(0, 0), TerminalSize(tw, 2), ' ')
+        
+        // Retro Brain ASCII (Improved)
+        g.put(1, 0, "  _---_  ", C.ACCENT)
+        g.put(1, 1, " ( @ @ ) ", C.ACCENT)
+        
+        // Stylized CORTEX (Fixed E)
+        g.put(11, 0, "█▀▀ █▀█ █▀█ ▀█▀ █▀▀ █ █", C.TEXT, mods = arrayOf(SGR.BOLD))
+        g.put(11, 1, "█▄▄ █▄█ █▀▄  █  █▄▄  █ ", C.ACCENT, mods = arrayOf(SGR.BOLD))
         
         val status = if (watchSt == "ACTIVE") "● ONLINE" else "○ $watchSt"
         g.put(tw - status.length - 2, 0, status, if (watchSt == "ACTIVE") C.SUCCESS else C.ERROR)
+        g.put(tw - 10, 1, ts(), C.MUTED)
         
-        val center = " SWARM MONITOR "
-        g.put(tw / 2 - center.length / 2, 0, center, C.TEXT)
+        val center = " SWARM ORCHESTRATOR "
+        g.put(tw / 2 - center.length / 2, 0, center, C.MUTED)
     }
 
     private fun renderLeftPanel(g: TextGraphics, x: Int, y: Int, w: Int, h: Int, snap: List<JobEntry>) {
-        g.put(x + 1, y, "QUEUES", C.MUTED, mods = arrayOf(SGR.BOLD))
+        val panelY = y + 1 // Offset for 2-line header
+        g.put(x + 1, y, "JOBS", C.MUTED, mods = arrayOf(SGR.BOLD))
         g.put(x, y + 1, "─".repeat(w), C.SUBTLE)
         
         snap.take(h - 2).forEachIndexed { i, job ->
@@ -241,29 +295,32 @@ class MonitorApp(private val jobsDir: File) {
         if (mode == Mode.WATCH) {
             g.put(x + w / 2 - 10, y + h / 2, "Select a job to view logs", C.SUBTLE)
         } else {
-            val lines = readLog(selectedJobId ?: "", h - 4)
-            lines.forEachIndexed { i, line ->
+            val lines = readLog(selectedJobId ?: "", h - 4, w - 4, logScroll)
+            lines.forEachIndexed { i, (line, color) ->
                 val row = y + 2 + i
                 if (row < y + h - 1) {
-                    val c = clean(line)
-                    g.put(x + 2, row, trunc(c, w - 4), logColor(c))
+                    g.put(x + 2, row, line, color)
                 }
             }
         }
 
         if (mode == Mode.COMMAND) {
-            val prompt = "INPUT › "
+            val prompt = if (selectedJobId == wizardSessionId) "CORTEX › " else "CMD › "
+            val maxLen = w - prompt.length - 4
+            val fullCmd = cmdBuf.toString()
+            val displayCmd = if (fullCmd.length > maxLen) "…" + fullCmd.takeLast(maxLen - 1) else fullCmd
+            
             g.backgroundColor = C.SEL
             g.fillRectangle(TerminalPosition(x, y + h - 1), TerminalSize(w, 1), ' ')
             g.put(x + 2, y + h - 1, prompt, C.ACCENT, mods = arrayOf(SGR.BOLD))
-            g.put(x + 2 + prompt.length, y + h - 1, cmdBuf.toString() + "█", C.TEXT)
+            g.put(x + 2 + prompt.length, y + h - 1, displayCmd + "█", C.TEXT)
         }
         
         g.put(x + w, y, "│", C.SUBTLE) // Vertical separator
     }
 
     private fun renderRightPanel(g: TextGraphics, x: Int, y: Int, w: Int, h: Int, snap: List<JobEntry>) {
-        g.put(x + 1, y, "METRICS", C.MUTED, mods = arrayOf(SGR.BOLD))
+        g.put(x + 1, y, "STATS", C.MUTED, mods = arrayOf(SGR.BOLD))
         g.put(x, y + 1, "─".repeat(w), C.SUBTLE)
         
         val metrics = listOf(
@@ -286,7 +343,7 @@ class MonitorApp(private val jobsDir: File) {
         g.backgroundColor = C.BG_PANEL
         g.fillRectangle(TerminalPosition(0, th - 1), TerminalSize(tw, 1), ' ')
         val hint = when(mode) {
-            Mode.LOG -> "[Enter] Command  [Esc] Back  [j/k] Nav  [q] Quit"
+            Mode.LOG -> "[Enter] Chat  [Esc] Back  [j/k] Nav  [q] Quit"
             Mode.COMMAND -> "[Enter] Send  [Esc] Cancel"
             else -> "[Enter] View Log  [:] Command  [j/k] Nav  [q] Quit"
         }
@@ -307,7 +364,7 @@ class MonitorApp(private val jobsDir: File) {
     private fun logColor(c: String): TextColor = when {
         c.contains("[DONE]") || c.contains("✓") || c.contains("[OK]") -> C.SUCCESS
         c.contains("ERROR") || c.contains("FAIL") || c.contains("[!]") || c.contains("[FAILED]") -> C.ERROR
-        c.contains("▶") || c.contains("[INFO]") -> C.ACCENT
+        c.contains("▶") || c.contains("CORTEX") || c.contains("[WORKER]") -> C.ACCENT
         c.contains("[DEBUG]") || (c.startsWith("[") && c.contains("]")) -> C.MUTED
         else -> C.TEXT
     }
@@ -323,16 +380,64 @@ class MonitorApp(private val jobsDir: File) {
         Status.PROCESSING -> 0; Status.PENDING -> 1; Status.FAILED -> 2; Status.DONE -> 3
     }
 
-    private fun readLog(jobId: String, max: Int): List<String> {
+    private fun readLog(jobId: String, max: Int, width: Int, scroll: Int = 0): List<Pair<String, TextColor>> {
         val found = File(jobsDir, "logs").walkTopDown().firstOrNull { it.name == "$jobId.log" }
         if (found == null || !found.exists()) return emptyList()
         return try {
             val lines = found.readLines()
-            if (lines.size > max) lines.takeLast(max) else lines
+            val wrapped = lines.flatMap { line ->
+                val c = clean(line)
+                val color = logColor(c)
+                wrap(c, width).map { it to color }
+            }
+            val offset = (wrapped.size - max - scroll).coerceAtLeast(0)
+            wrapped.drop(offset).take(max)
         } catch (e: Exception) { emptyList() }
     }
 
-    // ── WatchService ──────────────────────────────────────────────────────────
+    // ── Backend ───────────────────────────────────────────────────────────────
+
+    private fun launchCortex() {
+        val logDir  = File(jobsDir, "logs/cortex").also { it.mkdirs() }
+        val logFile = File(logDir, "cortex-session.log")
+        logFile.writeText("")
+        val cortexQueueDir = File(jobsDir, "cortex").also { it.mkdirs() }
+        File(cortexQueueDir, "cortex-session.json.processing").writeText(
+            """{"id":"cortex-session","fileName":"CortexAgent","functionName":"cortex","scriptPath":"agents/CortexAgent.kts","sourceType":"script"}"""
+        )
+        jobs["cortex-session"] = JobEntry("cortex-session", "cortex", Status.PROCESSING)
+        wizardActive = true; wizardSessionId = "cortex-session"; dirty = true
+
+        val mcp = CortexMcpServer(jobsDir, agentsDir)
+        mcp.startHttp(); mcpServer = mcp
+
+        val agentScript = File(agentsDir, "CortexAgent.kts")
+        if (!agentScript.exists() || !File(koupperBin).exists()) {
+            jobs["cortex-session"]?.status = Status.FAILED; dirty = true; return
+        }
+
+        thread(name = "cortex-agent", isDaemon = true) {
+            runCatching {
+                ProcessBuilder(koupperBin, "run", agentScript.absolutePath)
+                    .also { pb -> pb.environment().apply {
+                        System.getenv("KOUPPER_LLM_MODEL_PATH")?.let { put("KOUPPER_LLM_MODEL_PATH", it) }
+                        System.getenv("KOUPPER_LLM_EXECUTABLE")?.let { put("KOUPPER_LLM_EXECUTABLE", it) }
+                        put("CORTEX_JOBS_DIR", jobsDir.absolutePath)
+                    }; pb.redirectErrorStream(true) }.start().waitFor()
+            }
+            jobs["cortex-session"]?.status = Status.DONE; dirty = true
+        }
+
+        val webAgent = File(agentsDir, "CortexWebUiAgent.kts")
+        if (webAgent.exists()) thread(name = "web-ui", isDaemon = true) {
+            runCatching {
+                ProcessBuilder(koupperBin, "run", webAgent.absolutePath)
+                    .also { it.environment()["CORTEX_JOBS_DIR"] = jobsDir.absolutePath }
+                    .redirectErrorStream(true).start()
+            }
+        }
+        dirty = true
+    }
 
     private fun initialScan() {
         if (!jobsDir.exists()) return
@@ -342,6 +447,7 @@ class MonitorApp(private val jobsDir: File) {
                 f.name.endsWith(".json.processing") -> {
                     val id = f.name.removeSuffix(".json.processing")
                     jobs[id] = JobEntry(id, q, Status.PROCESSING)
+                    if (id == "cortex-session") { wizardActive = true; wizardSessionId = id }
                 }
                 f.name.endsWith(".json") ->
                     jobs.putIfAbsent(f.nameWithoutExtension, JobEntry(f.nameWithoutExtension, q, Status.PENDING))
@@ -388,12 +494,14 @@ class MonitorApp(private val jobsDir: File) {
                             when (ev.kind()) {
                                 ENTRY_CREATE -> {
                                     jobs[id] = JobEntry(id, q ?: "?", Status.PROCESSING, t)
+                                    if (id == "cortex-session") { wizardActive = true; wizardSessionId = id }
                                     dirty = true
                                 }
                                 ENTRY_DELETE -> {
                                     jobs[id]?.let { it.status = Status.DONE; it.lastUpdate = t }; dirty = true
                                     thread(isDaemon = true) {
                                         Thread.sleep(3_000); jobs.remove(id)
+                                        if (id == wizardSessionId) { wizardActive = false; wizardSessionId = null }
                                         dirty = true
                                     }
                                 }
