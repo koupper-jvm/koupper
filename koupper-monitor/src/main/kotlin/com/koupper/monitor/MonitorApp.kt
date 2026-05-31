@@ -16,6 +16,8 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import com.koupper.container.app
+import com.koupper.providers.mcp.MCPServerProvider
 import kotlin.concurrent.thread
 
 // ── Domain ────────────────────────────────────────────────────────────────────
@@ -95,7 +97,7 @@ class MonitorApp(private val jobsDir: File) {
 
     @Volatile private var wizardActive   = false
     private var wizardSessionId: String? = null
-    private var mcpServer: CortexMcpServer? = null
+    private var mcpServer: MCPServerProvider? = null
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -118,7 +120,7 @@ class MonitorApp(private val jobsDir: File) {
 
         Runtime.getRuntime().addShutdownHook(thread(start = false, isDaemon = true) {
             runCatching { screen.stopScreen() }
-            mcpServer?.stopHttp()
+            mcpServer?.stop()
             runCatching { File(jobsDir, "cortex/cortex-session.json.processing").delete() }
         })
 
@@ -408,8 +410,9 @@ class MonitorApp(private val jobsDir: File) {
         jobs["cortex-session"] = JobEntry("cortex-session", "cortex", Status.PROCESSING)
         wizardActive = true; wizardSessionId = "cortex-session"; dirty = true
 
-        val mcp = CortexMcpServer(jobsDir, agentsDir)
-        mcp.startHttp(); mcpServer = mcp
+        val mcp = app.getInstance(MCPServerProvider::class)
+        registerCortexTools(mcp, jobsDir, agentsDir)
+        mcp.startHttp(port = 18082); mcpServer = mcp
 
         val agentScript = File(agentsDir, "CortexAgent.kts")
         if (!agentScript.exists() || !File(koupperBin).exists()) {

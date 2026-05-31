@@ -13,6 +13,8 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
     implementation 'com.googlecode.lanterna:lanterna:3.1.1'
     implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2'
+    implementation project(':container')
+    implementation project(':providers')
 }
 
 tasks.register('fatJar', Jar) {
