@@ -6,3 +6,7 @@
 {"type":"metric","name":"script.execution.durationMs","value":191.0,"tags":{"kind":"KTS","status":"ok"},"timestamp":"2026-05-18T21:40:34.251178Z"}
 {"type":"trace","span":"script.execution","attributes":{"exportId":"C:\\Users\\jacob\\develop\\tdn_workspace\\igly_workspace\\scripts\\local-up.kts::up","kind":"KTS","scriptPath":"C:\\Users\\jacob\\develop\\tdn_workspace\\igly_workspace\\scripts\\local-up.kts","status":"ok"},"durationMs":622,"timestamp":"2026-05-18T22:03:18.654883500Z"}
 {"type":"metric","name":"script.execution.durationMs","value":622.0,"tags":{"kind":"KTS","status":"ok"},"timestamp":"2026-05-18T22:03:18.654883500Z"}
+{"type":"event","eventType":"script.execution.failed","payload":{"exportId":"/home/tdn-dell/.koupper/agents/CortexWebUiAgent.kts::setup","kind":"KTS","scriptPath":"/home/tdn-dell/.koupper/agents/CortexWebUiAgent.kts","error":"InvocationTargetException","durationMs":145},"timestamp":"2026-05-30T20:53:10.526289038Z"}
+{"type":"metric","name":"script.execution.durationMs","value":145.0,"tags":{"kind":"KTS","status":"error"},"timestamp":"2026-05-30T20:53:10.553370282Z"}
+{"type":"event","eventType":"script.execution.failed","payload":{"exportId":"/home/tdn-dell/.koupper/agents/CortexWebUiAgent.kts::setup","kind":"KTS","scriptPath":"/home/tdn-dell/.koupper/agents/CortexWebUiAgent.kts","error":"InvocationTargetException","durationMs":132},"timestamp":"2026-05-30T20:57:26.119614969Z"}
+{"type":"metric","name":"script.execution.durationMs","value":132.0,"tags":{"kind":"KTS","status":"error"},"timestamp":"2026-05-30T20:57:26.144489582Z"}
