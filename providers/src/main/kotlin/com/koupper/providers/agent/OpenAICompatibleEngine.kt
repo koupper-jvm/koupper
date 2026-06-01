@@ -112,4 +112,109 @@ class OpenAICompatibleEngine(
         @Suppress("UNCHECKED_CAST")
         fullResponse.toString() as T
     }
+
+    override suspend fun predictWithTools(
+        history: List<AgentMessage>,
+        tools: List<ToolDefinition>
+    ): NativeInferenceResult = withContext(Dispatchers.IO) {
+
+        require(apiKey.isNotBlank()) {
+            "KOUPPER_LLM_API_KEY is required for OpenAI-compatible inference"
+        }
+
+        val messages = history.map { msg ->
+            when {
+                // Tool result message (one per tool call)
+                msg.role == "tool" -> mapOf(
+                    "role"         to "tool",
+                    "content"      to msg.content,
+                    "tool_call_id" to (msg.toolCall?.action ?: "")
+                )
+                // Assistant message with native batch tool calls
+                msg.role == "assistant" && !msg.nativeToolCalls.isNullOrEmpty() -> mapOf(
+                    "role"       to "assistant",
+                    "content"    to (msg.content.ifEmpty { null }),
+                    "tool_calls" to msg.nativeToolCalls.map { tc ->
+                        mapOf(
+                            "id"       to tc.id,
+                            "type"     to "function",
+                            "function" to mapOf(
+                                "name"      to tc.name,
+                                "arguments" to mapper.writeValueAsString(tc.arguments)
+                            )
+                        )
+                    }
+                )
+                // Legacy single tool call (Koupper orchestrator)
+                msg.role == "assistant" && msg.toolCall != null -> mapOf(
+                    "role"       to "assistant",
+                    "content"    to (msg.content.ifEmpty { null }),
+                    "tool_calls" to listOf(mapOf(
+                        "id"       to msg.toolCall.action,
+                        "type"     to "function",
+                        "function" to mapOf(
+                            "name"      to msg.toolCall.toolName,
+                            "arguments" to mapper.writeValueAsString(msg.toolCall.arguments)
+                        )
+                    ))
+                )
+                else -> mapOf("role" to msg.role, "content" to msg.content)
+            }
+        }
+
+        val toolDefs = tools.map { t ->
+            mapOf(
+                "type"     to "function",
+                "function" to mapOf(
+                    "name"        to t.name,
+                    "description" to t.description,
+                    "parameters"  to t.parameters
+                )
+            )
+        }
+
+        val payload = mapper.writeValueAsString(mapOf(
+            "model"       to model,
+            "messages"    to messages,
+            "tools"       to toolDefs,
+            "tool_choice" to "auto",
+            "max_tokens"  to maxTokens,
+            "temperature" to temperature
+        ))
+
+        val request = Request.Builder()
+            .url("${baseUrl.trimEnd('/')}/chat/completions")
+            .header("Authorization", "Bearer $apiKey")
+            .header("Content-Type", "application/json")
+            .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
+            .build()
+
+        val response = client.newCall(request).execute()
+
+        if (!response.isSuccessful) {
+            val body = response.body?.string() ?: "(no body)"
+            throw IllegalStateException("${response.code} from $baseUrl: $body")
+        }
+
+        val body = response.body?.string() ?: ""
+        val root = mapper.readTree(body)
+        val message = root?.get("choices")?.get(0)?.get("message")
+
+        val text = message?.get("content")?.asText("") ?: ""
+
+        val nativeToolCalls = message?.get("tool_calls")?.mapNotNull { tc ->
+            runCatching {
+                val id   = tc.get("id").asText()
+                val name = tc.get("function").get("name").asText()
+                @Suppress("UNCHECKED_CAST")
+                val args = mapper.readValue(
+                    tc.get("function").get("arguments").asText("{}"),
+                    Map::class.java
+                ) as Map<String, Any?>
+                NativeToolCall(id, name, args)
+            }.getOrNull()
+        } ?: emptyList()
+
+        NativeInferenceResult(text = text, toolCalls = nativeToolCalls)
+    }
 }
