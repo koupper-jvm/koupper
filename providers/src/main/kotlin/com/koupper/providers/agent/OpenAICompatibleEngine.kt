@@ -31,14 +31,13 @@ class OpenAICompatibleEngine(
     private val apiKey:      String = System.getenv("KOUPPER_LLM_API_KEY")  ?: "",
     private val model:       String = System.getenv("KOUPPER_LLM_MODEL")    ?: "gpt-4o-mini",
     private val maxTokens:   Int    = System.getenv("KOUPPER_LLM_MAX_TOKENS")?.toIntOrNull() ?: 2048,
-    private val temperature: Double = System.getenv("KOUPPER_LLM_TEMPERATURE")?.toDoubleOrNull() ?: 0.7
-) : InferenceEngine {
-
-    private val client = OkHttpClient.Builder()
+    private val temperature: Double = System.getenv("KOUPPER_LLM_TEMPERATURE")?.toDoubleOrNull() ?: 0.7,
+    internal val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
+) : InferenceEngine {
 
     private val mapper = jacksonObjectMapper()
 
