@@ -47,13 +47,20 @@ class AgentServiceProvider : ServiceProvider() {
         })
 
         // 4. Register the Inference Engine
-        app.bind(InferenceEngine::class, {
-            LlamaCppEngine(
-                processSupervisor = app.getInstance(ProcessSupervisor::class),
-                jsonHandler = app.getInstance(JSONFileHandler::class),
-                budget = app.getInstance(AgentBudget::class)
-            )
-        })
+        // Switch via KOUPPER_LLM_PROVIDER env var:
+        //   openai → OpenAICompatibleEngine (NVIDIA, OpenAI, Groq, Together, Ollama…)
+        //   (default) → LlamaCppEngine (local llama-server)
+        val engine: InferenceEngine = when (System.getenv("KOUPPER_LLM_PROVIDER")?.lowercase()) {
+            "openai", "openai-compatible", "nvidia", "groq", "together" ->
+                OpenAICompatibleEngine()
+            else ->
+                LlamaCppEngine(
+                    processSupervisor = app.getInstance(ProcessSupervisor::class),
+                    jsonHandler = app.getInstance(JSONFileHandler::class),
+                    budget = app.getInstance(AgentBudget::class)
+                )
+        }
+        app.bind(InferenceEngine::class, { engine })
 
         // 5. Register the Orchestrator as a singleton instance
         val orchestrator = DefaultAgentOrchestrator(
