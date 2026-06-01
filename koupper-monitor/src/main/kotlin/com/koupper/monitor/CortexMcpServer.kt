@@ -434,4 +434,103 @@ log("  SWARM COMPLETE")
         )
         mapOf("ok" to true, "swarmId" to swarmId, "agents" to agentList.size, "queue" to queue)
     }
+
+    val home = System.getProperty("user.home")!!
+    fun expandPath(raw: String) = File(raw.replaceFirst("~", home))
+
+    // 11 ─ write_file
+    mcp.registerTool(
+        "write_file",
+        "Write content to a file, creating parent directories as needed. Overwrites if exists. Supports ~ for home dir.",
+        obj("type" to "object",
+            "properties" to mapOf(
+                "path"    to strP("Absolute or relative file path (~ supported)"),
+                "content" to strP("Content to write")
+            ),
+            "required" to listOf("path", "content"))
+    ) { args ->
+        val path    = args["path"]?.toString()    ?: return@registerTool err("path is required")
+        val content = args["content"]?.toString() ?: return@registerTool err("content is required")
+        runCatching {
+            val file = expandPath(path).also { it.parentFile?.mkdirs() }
+            file.writeText(content)
+            mapOf("ok" to true, "path" to file.absolutePath, "bytes" to content.length)
+        }.getOrElse { e -> err("write_file failed: ${e.message}") }
+    }
+
+    // 12 ─ read_file
+    mcp.registerTool(
+        "read_file",
+        "Read the content of a file. Returns the text content. Supports ~ for home dir.",
+        obj("type" to "object",
+            "properties" to mapOf(
+                "path"  to strP("File path to read (~ supported)"),
+                "lines" to intP("Max lines to read (default: all)")
+            ),
+            "required" to listOf("path"))
+    ) { args ->
+        val path  = args["path"]?.toString() ?: return@registerTool err("path is required")
+        val limit = (args["lines"] as? Number)?.toInt()
+        runCatching {
+            val file = expandPath(path)
+            if (!file.exists()) return@registerTool err("file not found: ${file.absolutePath}")
+            val text = if (limit != null) file.readLines().take(limit).joinToString("\n") else file.readText()
+            mapOf("ok" to true, "path" to file.absolutePath, "content" to text, "size" to file.length())
+        }.getOrElse { e -> err("read_file failed: ${e.message}") }
+    }
+
+    // 13 ─ list_dir
+    mcp.registerTool(
+        "list_dir",
+        "List files and directories at a given path. Supports ~ for home dir.",
+        obj("type" to "object",
+            "properties" to mapOf(
+                "path"      to strP("Directory path to list (~ supported)"),
+                "recursive" to mapOf("type" to "boolean", "description" to "List recursively (default: false)")
+            ),
+            "required" to listOf("path"))
+    ) { args ->
+        val path      = args["path"]?.toString() ?: return@registerTool err("path is required")
+        val recursive = args["recursive"] as? Boolean ?: false
+        runCatching {
+            val dir = expandPath(path)
+            if (!dir.exists()) return@registerTool err("path not found: ${dir.absolutePath}")
+            val entries = if (recursive) {
+                dir.walk().drop(1).map { f ->
+                    mapOf("path" to f.relativeTo(dir).path, "type" to if (f.isDirectory) "dir" else "file", "size" to f.length())
+                }.toList()
+            } else {
+                dir.listFiles()?.map { f ->
+                    mapOf("path" to f.name, "type" to if (f.isDirectory) "dir" else "file", "size" to f.length())
+                } ?: emptyList()
+            }
+            mapOf("ok" to true, "path" to dir.absolutePath, "entries" to entries, "count" to entries.size)
+        }.getOrElse { e -> err("list_dir failed: ${e.message}") }
+    }
+
+    // 14 ─ bash
+    mcp.registerTool(
+        "bash",
+        "Execute a shell command and return stdout, stderr, and exit code. Timeout: 120s. ~ is expanded.",
+        obj("type" to "object",
+            "properties" to mapOf(
+                "command" to strP("Shell command to execute"),
+                "cwd"     to strP("Working directory (default: user home, ~ supported)")
+            ),
+            "required" to listOf("command"))
+    ) { args ->
+        val command = args["command"]?.toString() ?: return@registerTool err("command is required")
+        val cwd     = args["cwd"]?.toString()?.let { expandPath(it) } ?: File(home)
+        runCatching {
+            val proc = ProcessBuilder("bash", "-c", command)
+                .directory(cwd)
+                .redirectErrorStream(false)
+                .start()
+            val finished = proc.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)
+            if (!finished) { proc.destroyForcibly(); return@registerTool err("command timed out after 120s") }
+            val stdout = proc.inputStream.bufferedReader().readText().trim()
+            val stderr = proc.errorStream.bufferedReader().readText().trim()
+            mapOf("ok" to (proc.exitValue() == 0), "exitCode" to proc.exitValue(), "stdout" to stdout, "stderr" to stderr)
+        }.getOrElse { e -> err("bash failed: ${e.message}") }
+    }
 }
