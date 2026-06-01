@@ -732,6 +732,36 @@
       "docs": "https://koupper.com/docs/providers/command-bridge"
     },
     {
+      "id": "web-reader",
+      "serviceProvider": "WebReaderServiceProvider",
+      "description": "Web page reader provider with JavaScript rendering, text extraction and screenshot via Playwright.",
+      "bindings": [
+        {
+          "contract": "WebReaderProvider",
+          "implementations": [
+            { "class": "PlaywrightWebReaderProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/web-reader"
+    },
+    {
+      "id": "pdf-reader",
+      "serviceProvider": "PDFReaderServiceProvider",
+      "description": "PDF document reader provider for text extraction, page splitting and metadata via Apache PDFBox.",
+      "bindings": [
+        {
+          "contract": "PDFReaderProvider",
+          "implementations": [
+            { "class": "PDFBoxReaderProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/pdf-reader"
+    },
+    {
       "id": "telegram",
       "serviceProvider": "TelegramServiceProvider",
       "description": "Bidirectional Telegram channel for agent communication. Long-polls the Bot API for incoming messages and sends responses back to the user.",
