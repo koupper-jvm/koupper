@@ -20,20 +20,33 @@ interface TokenListener {
  * Representa un mensaje en la conversación del agente.
  */
 data class AgentMessage(
-    val role: String, // "system", "user", "assistant", "tool"
+    val role: String,                              // "system", "user", "assistant", "tool"
     val content: String,
-    val toolCall: ToolCall? = null
+    val toolCall: ToolCall? = null,                // legacy single tool call (Koupper orchestrator)
+    val nativeToolCalls: List<NativeToolCall>? = null  // OpenAI-style batch tool calls
 )
 
 interface InferenceEngine {
     /**
-     * Executes a local inference with full conversation history. 
+     * Executes a local inference with full conversation history.
      */
     suspend fun <T : Any> predict(
-        history: List<AgentMessage>, 
-        outputSchema: Class<T>? = null, 
+        history: List<AgentMessage>,
+        outputSchema: Class<T>? = null,
         listener: TokenListener? = null
     ): T
+
+    /**
+     * Native function calling — sends tools to the API and returns structured tool calls.
+     * Default implementation falls back to text-based parsing for local models.
+     */
+    suspend fun predictWithTools(
+        history: List<AgentMessage>,
+        tools: List<ToolDefinition>
+    ): NativeInferenceResult = NativeInferenceResult(
+        text = predict(history),
+        toolCalls = emptyList()
+    )
 }
 
 class LlamaCppEngine(
