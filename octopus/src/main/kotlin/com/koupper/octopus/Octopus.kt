@@ -828,9 +828,32 @@ class Octopus(private var container: Container) : ScriptExecutor {
     }
 
     fun registerBuildInServicesProvidersInContainer(): Map<KClass<*>, Any> {
-        this.registeredServiceProviders.forEach { provider ->
-            ((provider).constructors.elementAt(0).call() as ServiceProvider).up()
+        val providers = mutableListOf<ServiceProvider>()
+        this.registeredServiceProviders.forEach { providerClass ->
+            val provider = (providerClass.constructors.elementAt(0).call() as ServiceProvider)
+            provider.up()
+            providers.add(provider)
         }
+
+        val allFunctions = providers.flatMap { it.topLevelFunctions().values }
+            .filter { it.isNotBlank() }
+
+        val imports = mutableSetOf<String>()
+        val bodies = mutableListOf<String>()
+
+        allFunctions.forEach { block ->
+            block.lines().forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.startsWith("import ")) {
+                    imports.add(trimmed)
+                } else if (trimmed.isNotEmpty()) {
+                    bodies.add(line)
+                }
+            }
+            bodies.add("") // Spacing between functions
+        }
+
+        providerPreamble = (imports.sorted() + "" + bodies).joinToString("\n")
 
         val typedBindings = mutableMapOf<KClass<*>, Any>()
         this.container.getBindings().forEach { (key, value) ->
@@ -840,6 +863,10 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
 
         return typedBindings
+    }
+
+    companion object {
+        var providerPreamble: String = ""
     }
 }
 
