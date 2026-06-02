@@ -32,4 +32,19 @@ class FileServiceProvider : ServiceProvider() {
             YmlFileHandlerImpl()
         })
     }
+
+    override fun topLevelFunctions(): Map<String, String> = mapOf(
+        "files" to """
+            import com.koupper.providers.files.FileHandler
+            fun files(): FileHandler = com.koupper.container.app.getInstance(FileHandler::class)
+        """.trimIndent(),
+        "json" to """
+            import com.koupper.providers.files.JSONFileHandler
+            fun json(): JSONFileHandler<Any> = com.koupper.container.app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any>
+        """.trimIndent(),
+        "yml" to """
+            import com.koupper.providers.files.YmlFileHandler
+            fun yml(): YmlFileHandler = com.koupper.container.app.getInstance(YmlFileHandler::class)
+        """.trimIndent()
+    )
 }

@@ -152,7 +152,33 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         var backend: ScriptingHostBackend? = null
         if (diParams.callable == null) {
             backend = ScriptingHostBackend(extraClasspath = resolveGradleBuildClasspath(File(diParams.scriptContext)))
-            backend.eval(diParams.sentence)
+            
+            val preamble = Octopus.providerPreamble
+            val (finalPreamble, cleanSentence) = if (preamble.isNotBlank()) {
+                val scriptImports = mutableSetOf<String>()
+                val scriptLines = mutableListOf<String>()
+                diParams.sentence.lines().forEach { line ->
+                    if (line.trim().startsWith("import ")) {
+                        scriptImports.add(line.trim())
+                    } else {
+                        scriptLines.add(line)
+                    }
+                }
+                val allImports = (scriptImports + preamble.lines().filter { it.trim().startsWith("import ") }).sorted().joinToString("\n")
+                val preambleBodies = preamble.lines().filter { !it.trim().startsWith("import ") }.joinToString("\n")
+                
+                allImports + "\n\n" + preambleBodies + "\n\n" to scriptLines.joinToString("\n")
+            } else {
+                "" to diParams.sentence
+            }
+
+            val augmentedScript = if (finalPreamble.isNotBlank()) {
+                finalPreamble + "\n" + cleanSentence
+            } else {
+                diParams.sentence
+            }
+            
+            backend.eval(augmentedScript)
         }
 
         if (finalSpec == null) {

@@ -3,9 +3,34 @@ package com.koupper.providers.agent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 interface EnvironmentProfiler {
     suspend fun audit(): AgentBudget
+}
+
+class GenericEnvironmentProfiler : EnvironmentProfiler {
+    override suspend fun audit(): AgentBudget = withContext(Dispatchers.IO) {
+        val logicalProcessors = Runtime.getRuntime().availableProcessors()
+        val physicalCores = (logicalProcessors / 2).coerceAtLeast(1)
+        
+        // Basic JVM telemetry as fallback
+        val totalRamGb = (Runtime.getRuntime().totalMemory() / 1024.0 / 1024.0 / 1024.0).coerceAtLeast(4.0)
+        val freeRamGb = (Runtime.getRuntime().freeMemory() / 1024.0 / 1024.0 / 1024.0).coerceAtLeast(1.0)
+
+        val telemetry = HardwareTelemetry(
+            physicalCores = physicalCores,
+            logicalProcessors = logicalProcessors,
+            totalRamGb = totalRamGb,
+            freeRamGb = freeRamGb,
+            hasAvx512Vnni = false,
+            hasAvx2 = true, // Heuristic default for modern generic envs
+            isNvme = true,
+            hasGpu = false
+        )
+
+        AgentBudget(HardwareTier.CPU_OPTIMIZED, 1, telemetry)
+    }
 }
 
 class LinuxEnvironmentProfiler : EnvironmentProfiler {
@@ -39,7 +64,10 @@ class LinuxEnvironmentProfiler : EnvironmentProfiler {
 
         // 4. Heuristic GPU Detection (Linux-specific basics)
         val hasNvidia = File("/proc/driver/nvidia/version").exists() || 
-                        runCatching { Runtime.getRuntime().exec("nvidia-smi").waitFor() == 0 }.getOrDefault(false)
+                        runCatching { 
+                            val process = Runtime.getRuntime().exec("nvidia-smi")
+                            process.waitFor(2, TimeUnit.SECONDS) && process.exitValue() == 0 
+                        }.getOrDefault(false)
         
         val telemetry = HardwareTelemetry(
             physicalCores = physicalCores,

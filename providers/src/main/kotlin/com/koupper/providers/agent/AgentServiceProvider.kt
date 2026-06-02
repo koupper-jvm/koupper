@@ -12,23 +12,26 @@ class AgentServiceProvider : ServiceProvider() {
 
     override fun up() {
         println("🐙 [AGENTIC_CORE] Booting AgentServiceProvider...")
+        
+        val isLinux = System.getProperty("os.name").lowercase().contains("linux")
+
         // 1. Register the profiler
         app.bind(EnvironmentProfiler::class, {
-            LinuxEnvironmentProfiler()
+            if (isLinux) LinuxEnvironmentProfiler() else GenericEnvironmentProfiler()
         })
 
         // 2. Pre-compute the budget and register it as a singleton immediately.
         // This is required for other components.
         val budget = try {
-            val profiler = LinuxEnvironmentProfiler()
+            val profiler = if (isLinux) LinuxEnvironmentProfiler() else GenericEnvironmentProfiler()
             runBlocking { profiler.audit() }
         } catch (e: Exception) {
             AgentBudget(
                 tier = HardwareTier.LOW_END,
                 maxConcurrentAgents = 1,
                 telemetry = HardwareTelemetry(
-                    physicalCores = 1,
-                    logicalProcessors = 1,
+                    physicalCores = Runtime.getRuntime().availableProcessors() / 2,
+                    logicalProcessors = Runtime.getRuntime().availableProcessors(),
                     totalRamGb = 4.0,
                     freeRamGb = 1.0,
                     hasAvx512Vnni = false,
