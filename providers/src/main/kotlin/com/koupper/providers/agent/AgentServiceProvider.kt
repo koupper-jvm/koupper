@@ -53,15 +53,24 @@ class AgentServiceProvider : ServiceProvider() {
         // Switch via KOUPPER_LLM_PROVIDER env var:
         //   openai → OpenAICompatibleEngine (NVIDIA, OpenAI, Groq, Together, Ollama…)
         //   (default) → LlamaCppEngine (local llama-server)
+        val localEngineFn: () -> LlamaCppEngine = {
+            LlamaCppEngine(
+                processSupervisor = app.getInstance(ProcessSupervisor::class),
+                jsonHandler = app.getInstance(JSONFileHandler::class),
+                budget = app.getInstance(AgentBudget::class)
+            )
+        }
+
         val engine: InferenceEngine = when (System.getenv("KOUPPER_LLM_PROVIDER")?.lowercase()) {
             "openai", "openai-compatible", "nvidia", "groq", "together" ->
                 OpenAICompatibleEngine()
-            else ->
-                LlamaCppEngine(
-                    processSupervisor = app.getInstance(ProcessSupervisor::class),
-                    jsonHandler = app.getInstance(JSONFileHandler::class),
-                    budget = app.getInstance(AgentBudget::class)
+            "federated" ->
+                FederatedInferenceEngine(
+                    localEngine = if (!System.getenv("KOUPPER_LLM_MODEL_PATH").isNullOrBlank())
+                        localEngineFn() else null
                 )
+            else ->
+                localEngineFn()
         }
         app.bind(InferenceEngine::class, { engine })
 
