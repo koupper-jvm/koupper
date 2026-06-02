@@ -92,4 +92,30 @@ class AgentServiceProvider : ServiceProvider() {
             DefaultSwarmCoordinator(app.getInstance(AgentOrchestrator::class))
         })
     }
+
+    override fun topLevelFunctions(): Map<String, String> = mapOf(
+        "llm" to """
+            import com.koupper.providers.agent.InferenceEngine
+            import com.koupper.providers.agent.AgentMessage
+            import kotlinx.coroutines.runBlocking
+
+            fun llm(prompt: String): String = runBlocking {
+                com.koupper.container.app.getInstance(InferenceEngine::class)
+                    .predict(listOf(AgentMessage("user", prompt)))
+            }
+
+            fun llm(system: String, prompt: String): String = runBlocking {
+                com.koupper.container.app.getInstance(InferenceEngine::class)
+                    .predict(listOf(
+                        AgentMessage("system", system),
+                        AgentMessage("user", prompt)
+                    ))
+            }
+
+            fun llm(history: List<AgentMessage>): String = runBlocking {
+                com.koupper.container.app.getInstance(InferenceEngine::class)
+                    .predict(history)
+            }
+        """.trimIndent()
+    )
 }
