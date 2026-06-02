@@ -762,6 +762,21 @@
       "docs": "https://koupper.com/docs/providers/pdf-reader"
     },
     {
+      "id": "web-search",
+      "serviceProvider": "WebSearchServiceProvider",
+      "description": "Web search provider using DuckDuckGo. Returns titles, URLs and snippets for a query. No API key required.",
+      "bindings": [
+        {
+          "contract": "WebSearchProvider",
+          "implementations": [
+            { "class": "DuckDuckGoSearchProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/web-search"
+    },
+    {
       "id": "telegram",
       "serviceProvider": "TelegramServiceProvider",
       "description": "Bidirectional Telegram channel for agent communication. Long-polls the Bot API for incoming messages and sends responses back to the user.",
