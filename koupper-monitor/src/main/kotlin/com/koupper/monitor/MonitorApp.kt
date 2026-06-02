@@ -436,14 +436,6 @@ class MonitorApp(private val jobsDir: File) {
             jobs["cortex-session"]?.status = Status.DONE; dirty = true
         }
 
-        val webAgent = File(agentsDir, "CortexWebUiAgent.kts")
-        if (webAgent.exists()) thread(name = "web-ui", isDaemon = true) {
-            runCatching {
-                ProcessBuilder(koupperBin, "run", webAgent.absolutePath)
-                    .also { it.environment()["CORTEX_JOBS_DIR"] = jobsDir.absolutePath }
-                    .redirectErrorStream(true).start()
-            }
-        }
         dirty = true
     }
 
