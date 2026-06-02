@@ -4,6 +4,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.koupper.container.app
 import com.koupper.providers.mcp.MCPServerProvider
+import com.koupper.providers.search.WebSearchProvider
 import com.koupper.providers.web.WebReaderProvider
 import java.io.File
 import java.time.LocalDateTime
@@ -207,6 +208,28 @@ log("  SWARM COMPLETE")
     }
 
     // ── Tool registrations ────────────────────────────────────────────────────
+
+    // 0 ─ web_search
+    mcp.registerTool(
+        "web_search",
+        "Search the web using DuckDuckGo and return titles, URLs and snippets. Use this to find up-to-date information before answering questions about versions, releases, news, or anything that may have changed.",
+        obj("type" to "object",
+            "properties" to mapOf(
+                "query"      to strP("Search query"),
+                "maxResults" to intP("Maximum number of results to return (default: 5)")
+            ),
+            "required" to listOf("query"))
+    ) { args ->
+        val query      = args["query"]?.toString()              ?: return@registerTool err("query is required")
+        val maxResults = (args["maxResults"] as? Number)?.toInt() ?: 5
+        runCatching {
+            val searcher = app.getInstance(WebSearchProvider::class)
+            val results  = searcher.search(query, maxResults)
+            mapOf("query" to query, "count" to results.size, "results" to results.map {
+                mapOf("title" to it.title, "url" to it.url, "snippet" to it.snippet)
+            })
+        }.getOrElse { e -> err("web_search failed: ${e.message?.take(80)}") }
+    }
 
     // 10 ─ fetch_url
     mcp.registerTool(

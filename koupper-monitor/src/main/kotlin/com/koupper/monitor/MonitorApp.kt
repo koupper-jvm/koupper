@@ -414,6 +414,7 @@ class MonitorApp(private val jobsDir: File) {
 
         MCPServiceProvider().up()
         WebReaderServiceProvider().up()
+        com.koupper.providers.search.WebSearchServiceProvider().up()
         val mcp = app.getInstance(MCPServerProvider::class)
         registerCortexTools(mcp, jobsDir, agentsDir)
         mcp.startHttp(port = 18082); mcpServer = mcp
