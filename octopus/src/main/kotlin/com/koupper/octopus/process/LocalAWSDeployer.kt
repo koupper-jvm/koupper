@@ -1,6 +1,7 @@
 package com.koupper.octopus.process
 
 import com.koupper.container.interfaces.Container
+import com.koupper.logging.GlobalLogger
 import java.io.*
 
 
@@ -57,15 +58,15 @@ class LocalAWSDeployer/*(private val container: Container) : Process {
             val bufferedReader = BufferedReader(inputStreamReader)
             var line: String?
             while (bufferedReader.readLine().also { line = it } != null) {
-                println(line)
+                GlobalLogger.log.info { line }
             }
 
             val exitCode = process.waitFor()
-            println("Process exited with code: $exitCode")
+            GlobalLogger.log.info { "Process exited with code: $exitCode" }
         } catch (e: IOException) {
-            e.printStackTrace()
+            GlobalLogger.log.error(e) { "Unhandled error during process execution" }
         } catch (e: InterruptedException) {
-            e.printStackTrace()
+            GlobalLogger.log.error(e) { "Unhandled error during process execution" }
         }
     }
 }*/

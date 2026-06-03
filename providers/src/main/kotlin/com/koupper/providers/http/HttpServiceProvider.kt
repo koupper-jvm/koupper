@@ -8,6 +8,8 @@ class HttpServiceProvider : ServiceProvider() {
         this.registerHttpClient()
     }
 
+    override fun externalDependencies() = listOf("com.squareup.okhttp3:okhttp:4.12.0")
+
     private fun registerHttpClient() {
         app.bind(HtppClient::class, {
             HttpInvoker()

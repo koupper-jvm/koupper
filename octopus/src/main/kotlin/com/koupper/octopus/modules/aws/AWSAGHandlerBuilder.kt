@@ -2,6 +2,7 @@ package com.koupper.octopus.modules.aws
 
 import com.koupper.configurations.utilities.ANSIColors
 import com.koupper.container.app
+import com.koupper.logging.GlobalLogger
 import com.koupper.octopus.exceptions.UndefinedHandlerException
 import com.koupper.octopus.modifiers.*
 import com.koupper.octopus.modules.Module
@@ -97,7 +98,7 @@ class AWSAGHandlerBuilder(
     }
 
     override fun build() {
-        print("Building module...")
+        GlobalLogger.log.info { "Building module..." }
 
         this.modelProject = prepareTemplateProject(context, projectName, this.fileHandler)
 
@@ -107,18 +108,14 @@ class AWSAGHandlerBuilder(
             this.projectRootPath = modelProject.absolutePath
         }
 
-        print("\nRequesting an optimized process manager...")
+        GlobalLogger.log.info { "Requesting an optimized process manager..." }
 
         val libsDir = File(this.modelProject, "libs")
         libsDir.mkdirs()
         val octopusVersion = env("OCTOPUS_VERSION", context, required = false, allowEmpty = true, default = "latest")
         resolveAndCopyProcessManagerJar(context, libsDir, "octopus-$octopusVersion.jar")
 
-        println("${ANSIColors.ANSI_GREEN_155}[\u2713]${ANSIColors.ANSI_RESET}")
-
-        print("optimized process manager located successfully...")
-
-        println("${ANSIColors.ANSI_GREEN_155}[\u2713]${ANSIColors.ANSI_RESET}")
+        GlobalLogger.log.info { "Optimized process manager located successfully." }
 
         locateScriptsInPackage(context, deployableScripts, modelProject.path, this.packageName)
 

@@ -7,6 +7,7 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.container.app
 import com.koupper.container.interfaces.Container
 import com.koupper.logging.*
+import com.koupper.logging.GlobalLogger
 import com.koupper.octopus.process.Process
 import com.koupper.orchestrator.KouTask
 import com.koupper.orchestrator.ScriptRunner
@@ -600,7 +601,9 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 result(castTo<T>("Script interrupted by cancellation request"))
                 return
             }
-            e.printStackTrace(System.out)
+            
+            GlobalLogger.log.error(e) { "Unhandled error during script execution" }
+            
             var rootCause = e
             while (rootCause.cause != null) {
                 rootCause = rootCause.cause!!
@@ -609,7 +612,6 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 result(castTo<T>("Script interrupted by cancellation request"))
                 return
             }
-            rootCause.printStackTrace(System.out)
 
             result(castTo<T>("Script error: ${e.message}"))
         }
@@ -801,7 +803,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
         scripts.forEach { (scriptPath, params) ->
             if (scriptPath.isNotEmpty()) {
                 if (".kts" !in scriptPath) {
-                    println("\n\u001B[31m The file should be an [kts] extension.\n")
+                    GlobalLogger.log.error { "The file should be an [kts] extension." }
 
                     exitProcess(7)
                 }
@@ -1562,7 +1564,7 @@ private fun processCallback(context: ScriptExecutor, scriptName: String, result:
             }
         )
     } else if (result is Process) {
-        println("\n\rModule ${ANSI_GREEN_155}${result.processName()}$ANSI_RESET created.\u001B[0m\n")
+        GlobalLogger.log.info { "Module ${result.processName()} created." }
     }
 }
 

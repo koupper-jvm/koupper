@@ -52,7 +52,7 @@ class OctopusSentinel(private val projectDir: File) {
 
         if (!buildFile.exists()) return
 
-        println("🛡️ Octopus Sentinel: Syncing ${requiredDependencies.size} dependencies for project ${projectDir.name}")
+        com.koupper.logging.GlobalLogger.log.info { "🛡️ Octopus Sentinel: Syncing ${requiredDependencies.size} dependencies for project ${projectDir.name}" }
         
         injectDependencies(buildFile, requiredDependencies)
     }
@@ -67,7 +67,7 @@ class OctopusSentinel(private val projectDir: File) {
             val depLine = "    implementation(\"$dep\")"
             if (lines.none { it.contains(dep) }) {
                 lines.add(dependenciesIndex + 1, depLine)
-                println("➕ Added dependency: $dep")
+                com.koupper.logging.GlobalLogger.log.info { "➕ Added dependency: $dep" }
             }
         }
 
