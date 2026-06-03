@@ -8,7 +8,6 @@
 //   CORTEX_JOBS_DIR          — jobs dir (default: ~/.koupper/jobs)
 
 import com.koupper.container.app
-import com.koupper.shared.annotations.Export
 import com.koupper.providers.agent.AgentMessage
 import com.koupper.providers.agent.InferenceEngine
 import com.koupper.providers.agent.TokenListener
@@ -33,8 +32,7 @@ import java.util.concurrent.TimeUnit
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
-val home      = System.getProperty("user.home")!!
-val jobsDir   = File(System.getenv("CORTEX_JOBS_DIR") ?: "$home/.koupper/jobs")
+val jobsDir   = File(env("CORTEX_JOBS_DIR", "$home/.koupper/jobs"))
 val agentsDir = File(home, ".koupper/agents").also { it.mkdirs() }
 val mapper    = jacksonObjectMapper()
 val http      = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build()
@@ -48,8 +46,11 @@ val logFile    = File(logDir,   "$SESSION_ID.log")
 
 logFile.writeText("")
 
-fun ts()             = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-fun log(msg: String) = logFile.appendText("[${ts()}] $msg\n")
+fun ts() = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+
+// emit() writes to the session log file watched by the TUI monitor.
+// Named 'emit' to avoid collision with the preamble's 'val log: KLogger'.
+fun emit(msg: String) = logFile.appendText("[${ts()}] $msg\n")
 
 // Register job so monitor table shows CORTEX
 procFile.writeText("""{"id":"$SESSION_ID","fileName":"CortexAgent","functionName":"cortex","scriptPath":"agents/CortexAgent.kts","sourceType":"script"}""")
@@ -83,9 +84,9 @@ fun loadExternalMcpServers(): List<ExternalMcpServer> {
             )
             runCatching {
                 val connected = client.connect(serverConfig)
-                log("  External MCP: $name (${connected.tools.size} tools) [$transport]")
+                emit("  External MCP: $name (${connected.tools.size} tools) [$transport]")
                 ExternalMcpServer(connected, name)
-            }.onFailure { e -> log("  ⚠ Could not connect to MCP '$name': ${e.message?.take(60)}") }
+            }.onFailure { e -> emit("  ⚠ Could not connect to MCP '$name': ${e.message?.take(60)}") }
             .getOrNull()
         }
     }.getOrDefault(emptyList())
@@ -162,7 +163,7 @@ fun buildSystemPrompt(
 
 fun infer(history: List<AgentMessage>, engine: InferenceEngine): String {
     val sb = StringBuilder()
-    // TokenListener writes each token directly to log file — real-time streaming
+    // TokenListener writes each token directly to logFile — real-time streaming to TUI
     val listener = object : TokenListener {
         override fun onToken(token: String, agentId: String) {
             sb.append(token)
@@ -200,7 +201,6 @@ fun inferWithTools(
             @Suppress("UNCHECKED_CAST")
             val toolArgs = parsed["args"] as? Map<String, Any?> ?: emptyMap()
 
-            // Route: "playwright.screenshot" → playwright server, "list_agents" → local MCP
             val dotIdx = fullName.indexOf('.')
             if (dotIdx > 0) {
                 val serverName = fullName.substring(0, dotIdx)
@@ -214,8 +214,8 @@ fun inferWithTools(
             }
         }.getOrElse { e -> "error: ${e.message?.take(80)}" }
 
-        log("  ↳ ${result.take(200)}")
-        log("")
+        emit("  ↳ ${result.take(200)}")
+        emit("")
 
         history.add(AgentMessage("assistant", reply))
         history.add(AgentMessage("user", "TOOL_RESULT: $result"))
@@ -238,8 +238,8 @@ cmdInDir.listFiles { f -> f.name.endsWith(".response") }?.forEach { it.delete() 
 val cortex: () -> Unit = {
 
     val engine = runCatching { app.getInstance(InferenceEngine::class) }.getOrElse { e ->
-        log("⚠ InferenceEngine not available: ${e.message}")
-        log("  Set KOUPPER_LLM_MODEL_PATH and KOUPPER_LLM_EXECUTABLE.")
+        emit("⚠ InferenceEngine not available: ${e.message}")
+        emit("  Set KOUPPER_LLM_MODEL_PATH and KOUPPER_LLM_EXECUTABLE.")
         procFile.delete()
         null
     }
@@ -249,11 +249,11 @@ val cortex: () -> Unit = {
         val externalServers = loadExternalMcpServers()
         val history = mutableListOf(AgentMessage("system", buildSystemPrompt(localTools, externalServers)))
 
-        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        log("  CORTEX ONLINE — Koupper InferenceEngine")
-        log("  Built-in tools : ${localTools.size}")
-        log("  External MCPs  : ${externalServers.size} servers")
-        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        emit("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        emit("  CORTEX ONLINE — Koupper InferenceEngine")
+        emit("  Built-in tools : ${localTools.size}")
+        emit("  External MCPs  : ${externalServers.size} servers")
+        emit("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         val agentCount = agentsDir.listFiles { f -> f.name.endsWith(".kts") && f.name != "CortexAgent.kts" }?.size ?: 0
         val pending    = jobsDir.listFiles()?.flatMap { q ->
@@ -267,9 +267,9 @@ val cortex: () -> Unit = {
 
         val greeting = inferWithTools(history, engine, externalServers)
         history.add(AgentMessage("assistant", greeting))
-        log("")
-        log("  Press Enter on this job to open the command bar.")
-        log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        emit("")
+        emit("  Press Enter on this job to open the command bar.")
+        emit("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         val ws       = FileSystems.getDefault().newWatchService()
         val deadline = System.currentTimeMillis() + 60 * 60 * 1000L
@@ -289,8 +289,8 @@ val cortex: () -> Unit = {
                 responseFile.delete()
                 if (userMsg.isBlank()) continue
 
-                log("▶ $userMsg")
-                log("")
+                emit("▶ $userMsg")
+                emit("")
 
                 history.add(AgentMessage("user", userMsg))
                 val reply = inferWithTools(history, engine, externalServers)
@@ -303,15 +303,15 @@ val cortex: () -> Unit = {
                         ?.groupValues?.get(1)?.trim()?.replace(" ", "")
                         ?: "Agent${System.currentTimeMillis() % 1000}"
                     File(agentsDir, "$agentName.kts").writeText(script)
-                    log("[✓ Saved → ~/.koupper/agents/$agentName.kts]")
-                    log("[  Use run_agent to execute it]")
+                    emit("[✓ Saved → ~/.koupper/agents/$agentName.kts]")
+                    emit("[  Use run_agent to execute it]")
                 }
-                log("")
+                emit("")
             }
             key.reset()
         }
 
-        log("[!] Session expired after 1 hour.")
+        emit("[!] Session expired after 1 hour.")
         ws.close()
     }
     procFile.delete()
