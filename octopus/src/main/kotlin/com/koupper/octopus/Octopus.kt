@@ -868,7 +868,11 @@ class Octopus(private var container: Container) : ScriptExecutor {
         }
 
         val namespace = System.getProperty("koupper.scripting.namespace") ?: "koupper"
-        providerPreamble = (imports.sorted() + "" + "object $namespace {" + bodies + "}").joinToString("\n")
+        
+        // Add a short 'log' shortcut to the preamble for cleaner DX
+        val logShortcut = "val log = com.koupper.logging.GlobalLogger.log"
+        
+        providerPreamble = (imports.sorted() + "" + logShortcut + "" + "object $namespace {" + bodies + "}").joinToString("\n")
 
         val typedBindings = mutableMapOf<KClass<*>, Any>()
         this.container.getBindings().forEach { (key, value) ->
