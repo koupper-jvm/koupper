@@ -45,6 +45,10 @@ class FileServiceProvider : ServiceProvider() {
         "yml" to """
             import com.koupper.providers.files.YmlFileHandler
             fun yml(): YmlFileHandler = com.koupper.container.app.getInstance(YmlFileHandler::class)
+        """.trimIndent(),
+        "txt" to """
+            import com.koupper.providers.files.TextFileHandler
+            fun txt(): TextFileHandler = com.koupper.container.app.getInstance(TextFileHandler::class)
         """.trimIndent()
     )
 }
