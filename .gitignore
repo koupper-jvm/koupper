@@ -14,3 +14,7 @@ out/
 
 bin/
 **/bin/
+
+# Runtime artifacts
+.koupper-observability.jsonl
+.playwright-mcp/
