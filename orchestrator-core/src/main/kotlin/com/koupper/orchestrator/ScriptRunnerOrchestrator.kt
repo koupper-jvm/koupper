@@ -295,22 +295,26 @@ object ScriptRunner {
             .filter { it.name == "invoke" }
             .toList()
 
-        val invoke = allInvokes.asSequence()
-            .filter { it.parameterCount == callArgs.size }
-            .sortedWith(
-                compareBy<java.lang.reflect.Method>(
-                    { m -> m.parameterTypes.count { it == Object::class.java || it == Any::class.java } },
-                    { m -> if (m.isBridge || m.isSynthetic) 1 else 0 }
-                )
-            )
-            .firstOrNull()
-            ?: allInvokes.asSequence()
-                .firstOrNull {
-                    it.parameterCount == callArgs.size + 1 &&
-                            it.parameterTypes.last().name == "kotlin.coroutines.Continuation"
-                }?.also { error("La función '${call.functionName}' es suspend (Continuation no soportado).") }
-            ?: error("No hay 'invoke' con aridad ${callArgs.size} en ${lambdaClass.name}")
+        val isSuspend = allInvokes.asSequence().any { 
+            it.parameterCount == callArgs.size + 1 && it.parameterTypes.last().name == "kotlin.coroutines.Continuation" 
+        }
 
+        val invoke = if (!isSuspend) {
+            allInvokes.asSequence()
+                .filter { it.parameterCount == callArgs.size }
+                .sortedWith(
+                    compareBy<java.lang.reflect.Method>(
+                        { m -> m.parameterTypes.count { it == Object::class.java || it == Any::class.java } },
+                        { m -> if (m.isBridge || m.isSynthetic) 1 else 0 }
+                    )
+                )
+                .firstOrNull()
+                ?: error("No hay 'invoke' con aridad ${callArgs.size} en ${lambdaClass.name}")
+        } else {
+            allInvokes.asSequence()
+                .filter { it.parameterCount == callArgs.size + 1 && it.parameterTypes.last().name == "kotlin.coroutines.Continuation" }
+                .firstOrNull() ?: error("Error resolviendo firma suspend para ${call.functionName}")
+        }
         for (i in callArgs.indices) {
             val v = callArgs[i]
             if (v is PendingJson) {
@@ -356,7 +360,17 @@ object ScriptRunner {
 
         return monitor.track(meta) {
             try {
-                invoke.invoke(target, *callArgs.toTypedArray())
+                if (!isSuspend) {
+                    invoke.invoke(target, *callArgs.toTypedArray())
+                } else {
+                    // For suspend functions, we use runBlocking to bridge the gap.
+                    // This is a temporary solution until the entire executor is natively suspend.
+                    kotlinx.coroutines.runBlocking {
+                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn { cont: kotlin.coroutines.Continuation<Any?> ->
+                            invoke.invoke(target, *callArgs.toTypedArray(), cont)
+                        }
+                    }
+                }
             } finally {
                 Thread.currentThread().contextClassLoader = oldCl
             }
