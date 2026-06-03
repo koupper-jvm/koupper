@@ -8,6 +8,7 @@ import kotlin.script.experimental.api.*
 import kotlin.script.experimental.host.toScriptSource
 import kotlin.script.experimental.jvm.*
 import kotlin.script.experimental.jvmhost.BasicJvmScriptingHost
+import kotlinx.coroutines.runBlocking
 
 private const val SCRIPT_WARNINGS_PROPERTY = "koupper.scripting.showWarnings"
 private const val SCRIPT_WARNINGS_ENV = "KOUPPER_SCRIPT_WARNINGS"
@@ -37,9 +38,36 @@ private fun shouldDisplayWarning(diagnostic: ScriptDiagnostic): Boolean {
     return true
 }
 
+private fun ByteArray.md5hex(): String =
+    java.security.MessageDigest.getInstance("MD5")
+        .digest(this).joinToString("") { "%02x".format(it) }
+
+// Process-level compiled script cache — survives within a single daemon session.
+// Key: MD5 of script content. Scripts are never mutated after first load in production.
+private val compiledScriptCache = ConcurrentHashMap<String, CompiledScript>()
+
+private val diskCacheDir = File(System.getProperty("user.home"), ".koupper/cache/compiled-scripts")
+    .also { it.mkdirs() }
+
+private fun loadFromDisk(hash: String): CompiledScript? = runCatching {
+    val f = File(diskCacheDir, "$hash.bin")
+    if (!f.exists()) return null
+    java.io.ObjectInputStream(java.io.BufferedInputStream(f.inputStream())).use {
+        it.readObject() as CompiledScript
+    }
+}.getOrNull()
+
+private fun saveToDisk(hash: String, compiled: CompiledScript) = runCatching {
+    val f = File(diskCacheDir, "$hash.bin")
+    java.io.ObjectOutputStream(java.io.BufferedOutputStream(f.outputStream())).use {
+        it.writeObject(compiled)
+    }
+}.getOrNull()
+
 /**
  * Production-grade scripting host with support for external classpaths,
- * lazy classloader caching, diagnostics, and safe resource cleanup.
+ * lazy classloader caching, diagnostics, safe resource cleanup, and
+ * in-process compiled script caching (eliminates re-compilation of unchanged scripts).
  *
  * @param extraClasspath JARs o directorios adicionales a incluir en el classpath
  *                       (e.g. build/libs/app.jar, build/classes/kotlin/main)
@@ -90,9 +118,7 @@ class ScriptingHostBackend(
             jvm {
                 dependenciesFromCurrentContext(wholeClasspath = true)
                 jvmTarget("17")
-                
-                // Si estamos en un FatJar, a veces dependenciesFromCurrentContext no es suficiente
-                // Intentamos encontrar el JAR actual y añadirlo explícitamente
+
                 val selfJar = this::class.java.protectionDomain.codeSource?.location?.toURI()?.let { File(it) }
                 if (selfJar != null && selfJar.exists() && selfJar.extension == "jar") {
                     updateClasspath(listOf(selfJar))
@@ -135,23 +161,48 @@ class ScriptingHostBackend(
 
         val scriptSourceName = sourceName?.takeIf { it.isNotBlank() }
             ?: "KoupperScript_${java.util.UUID.randomUUID().toString().replace("-", "")}.kts"
-        
-        println("[DEBUG] Compiling $scriptSourceName with JVM target 17")
-        val result = host.eval(code.toScriptSource(scriptSourceName), compilationConfig, evalConfig)
 
-        // Reportar diagnósticos antes de lanzar
-        result.reports
+        val cacheKey   = code.toByteArray(Charsets.UTF_8).md5hex()
+        val source     = code.toScriptSource(scriptSourceName)
+
+        // Try to retrieve a previously compiled script (same content = same bytecode).
+        // Check: 1) in-process cache, 2) disk cache, 3) compile fresh.
+        val compiled: CompiledScript = compiledScriptCache[cacheKey]?.also {
+            println("[DEBUG] Loading $scriptSourceName from in-process cache")
+        } ?: loadFromDisk(cacheKey)?.also {
+            compiledScriptCache[cacheKey] = it
+            println("[DEBUG] Loading $scriptSourceName from disk cache")
+        } ?: run {
+            println("[DEBUG] Compiling $scriptSourceName with JVM target 17")
+            val compileResult = runBlocking { host.compiler(source, compilationConfig) }
+
+            compileResult.reports
+                .filter { it.severity >= ScriptDiagnostic.Severity.WARNING }
+                .filter { shouldDisplayWarning(it) }
+                .forEach { diagnostic ->
+                    val location = diagnostic.location?.let { loc ->
+                        " (line ${loc.start.line}, col ${loc.start.col})"
+                    } ?: ""
+                    val src = sourceName?.takeIf { it.isNotBlank() }?.let { " [$it]" } ?: ""
+                    System.err.println("[ScriptingHost][${diagnostic.severity}]$src$location ${diagnostic.message}")
+                }
+
+            val cs = compileResult.valueOrThrow()
+            compiledScriptCache[cacheKey] = cs
+            saveToDisk(cacheKey, cs)  // persist for next restart (graceful no-op if not serializable)
+            cs
+        }
+
+        val evalResult = runBlocking { host.evaluator(compiled, evalConfig) }
+
+        evalResult.reports
             .filter { it.severity >= ScriptDiagnostic.Severity.WARNING }
             .filter { shouldDisplayWarning(it) }
             .forEach { diagnostic ->
-                val location = diagnostic.location?.let { loc ->
-                    " (line ${loc.start.line}, col ${loc.start.col})"
-                } ?: ""
-                val source = sourceName?.takeIf { it.isNotBlank() }?.let { " [$it]" } ?: ""
-                System.err.println("[ScriptingHost][${diagnostic.severity}]$source$location ${diagnostic.message}")
+                System.err.println("[ScriptingHost][${diagnostic.severity}] ${diagnostic.message}")
             }
 
-        val evalRes = result.valueOrThrow()
+        val evalRes = evalResult.valueOrThrow()
 
         lastInstance  = evalRes.returnValue.scriptInstance
         lastScriptClass = lastInstance?.javaClass
@@ -175,7 +226,6 @@ class ScriptingHostBackend(
         val field = fieldCache[key] ?: resolveField(clazz, symbol)?.also { fieldCache[key] = it }
         if (field != null) return field.get(instance)
 
-        // K2 compiles top-level @Export fun declarations as JVM methods, not fields
         val method = resolveMethod(clazz, symbol)
             ?: error("Symbol '$symbol' not found as field or method in ${clazz.name} or any of its superclasses")
 
@@ -226,15 +276,12 @@ class ScriptingHostBackend(
     // Estado / introspección
     // ──────────────────────────────────────────────
 
-    /** True si ya se evaluó al menos un script exitosamente. */
     val hasEvaluated: Boolean
         get() = lastInstance != null
 
-    /** Clase del último script evaluado, útil para diagnóstico. */
     val lastScriptClassName: String?
         get() = lastScriptClass?.name
 
-    /** Lista de campos disponibles en el último script evaluado. */
     val availableSymbols: List<String>
         get() = lastScriptClass
             ?.declaredFields
