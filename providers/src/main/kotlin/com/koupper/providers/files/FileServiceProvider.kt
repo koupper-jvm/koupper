@@ -22,9 +22,7 @@ class FileServiceProvider : ServiceProvider() {
     }
 
     private fun registerJsonFileHandler() {
-        app.bind(JSONFileHandler::class, {
-            JSONFileHandlerImpl<Any>()
-        })
+        app.bind(JSONFileHandler::class, { JSONFileHandlerImpl() })
     }
 
     private fun registerYmlFileHandler() {
@@ -40,7 +38,7 @@ class FileServiceProvider : ServiceProvider() {
         """.trimIndent(),
         "json" to """
             import com.koupper.providers.files.JSONFileHandler
-            fun json(): JSONFileHandler<Any> = com.koupper.container.app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any>
+            fun json(): JSONFileHandler = com.koupper.container.app.getInstance(JSONFileHandler::class)
         """.trimIndent(),
         "yml" to """
             import com.koupper.providers.files.YmlFileHandler

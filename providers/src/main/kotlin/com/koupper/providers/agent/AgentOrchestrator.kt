@@ -69,7 +69,7 @@ class DefaultAgentOrchestrator(
     private val engine: InferenceEngine,
     private val toolExecutor: ToolExecutor,
     private val mcpProvider: MCPServerProvider,
-    private val jsonHandler: JSONFileHandler<*>,
+    private val jsonHandler: JSONFileHandler,
     private val budget: AgentBudget
 ) : AgentOrchestrator {
 

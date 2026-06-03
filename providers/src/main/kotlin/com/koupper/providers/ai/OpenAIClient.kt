@@ -18,7 +18,7 @@ class OpenAIClient(
     private val apiKey: String
 ) : AI {
 
-    private val jsonHandler = JSONFileHandlerImpl<Map<String, Any>>()
+    private val jsonHandler = JSONFileHandlerImpl()
 
     /**
      * Sends a chat prompt to the configured OpenAI model and retrieves the generated text.
@@ -43,7 +43,7 @@ class OpenAIClient(
             )
         )
 
-        val bodyJson = jsonHandler.mapToJsonString(bodyMap)
+        val bodyJson = jsonHandler.toJson(bodyMap)
 
         // Execute the HTTP request
         val response: HttpResponse = httpClient.post {
@@ -59,7 +59,7 @@ class OpenAIClient(
         val responseBody = response.asString() ?: ""
         require(responseBody.isNotBlank()) { "Empty response from OpenAI API" }
 
-        val data = JSONFileHandlerImpl<Map<String, Any>>().read(responseBody).toType<Map<String, Any>>()
+        val data = JSONFileHandlerImpl().read(responseBody).toType<Map<String, Any>>()
 
         // Extract model output
         val content = ((data["choices"] as? List<*>)?.firstOrNull() as? Map<*, *>)?.let { choice ->

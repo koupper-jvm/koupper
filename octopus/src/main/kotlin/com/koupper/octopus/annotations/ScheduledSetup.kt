@@ -8,8 +8,7 @@ import com.koupper.logging.withScriptLogger
 import com.koupper.orchestrator.*
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.providers.files.JSONFileHandler
-import com.koupper.providers.files.readTo
-import com.koupper.providers.files.toJsonAny
+import com.koupper.providers.files.readAs
 import com.koupper.shared.isSimpleType
 import com.koupper.shared.normalizeType
 import com.koupper.shared.octopus.ExportFunctionSignature
@@ -28,8 +27,7 @@ object ScheduledSetup {
     private lateinit var jlc: JobsListenerCall
     private lateinit var scheduledParams: Map<*, *>
     private var workerConfigId: String? = null
-    @Suppress("UNCHECKED_CAST")
-    private val jsonHandler = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any?>
+    private val jsonHandler = app.getInstance(JSONFileHandler::class)
     private lateinit var backend: ScriptingHostBackend
     private lateinit var injector: (String) -> Any?
     private val scheduler = Executors.newScheduledThreadPool(2)
@@ -209,7 +207,7 @@ object ScheduledSetup {
             val unwrapped = if (token.length >= 2 && token[0] == '"' &&
                 (token.getOrNull(1) == '{' || token.getOrNull(1) == '[')
             ) {
-                jsonHandler.readTo<String>(token)
+                jsonHandler.readAs<String>(token)
             } else token
 
             val value: Any? =
@@ -219,20 +217,20 @@ object ScheduledSetup {
                             if (unwrapped != null && unwrapped.length >= 2 &&
                                 unwrapped.first() == '"' && unwrapped.last() == '"'
                             ) {
-                                jsonHandler.readTo<String>(unwrapped)
+                                jsonHandler.readAs<String>(unwrapped)
                             } else {
                                 unwrapped
                             }
                         }
-                        "Int"     -> jsonHandler.readTo<Int>(unwrapped)
-                        "Long"    -> jsonHandler.readTo<Long>(unwrapped)
-                        "Double"  -> jsonHandler.readTo<Double>(unwrapped)
-                        "Boolean" -> jsonHandler.readTo<Boolean>(unwrapped)
-                        "Float"   -> jsonHandler.readTo<Float>(unwrapped)
-                        "Short"   -> jsonHandler.readTo<Short>(unwrapped)
-                        "Byte"    -> jsonHandler.readTo<Byte>(unwrapped)
-                        "Char"    -> jsonHandler.readTo<String>(unwrapped)?.single()
-                        else      -> jsonHandler.readTo<Any>(unwrapped)
+                        "Int"     -> jsonHandler.readAs<Int>(unwrapped)
+                        "Long"    -> jsonHandler.readAs<Long>(unwrapped)
+                        "Double"  -> jsonHandler.readAs<Double>(unwrapped)
+                        "Boolean" -> jsonHandler.readAs<Boolean>(unwrapped)
+                        "Float"   -> jsonHandler.readAs<Float>(unwrapped)
+                        "Short"   -> jsonHandler.readAs<Short>(unwrapped)
+                        "Byte"    -> jsonHandler.readAs<Byte>(unwrapped)
+                        "Char"    -> jsonHandler.readAs<String>(unwrapped)?.single()
+                        else      -> jsonHandler.readAs<Any>(unwrapped)
                     }
                 } else if (looksLikeObjectLiteral(unwrapped!!)) {
                     normalizeObjectLiteralToJson(unwrapped)
@@ -245,10 +243,9 @@ object ScheduledSetup {
             posIdx += 1
         }
 
-        @Suppress("UNCHECKED_CAST")
-        val jsonAny = app.getInstance(JSONFileHandler::class) as JSONFileHandler<Any?>
+        val jsonAny = app.getInstance(JSONFileHandler::class)
         val paramValues = finalParams.mapIndexed { i, arg ->
-            val serialized = if (arg is String) arg else jsonAny.toJsonAny(arg)
+            val serialized = if (arg is String) arg else jsonAny.toJson(arg)
             "arg$i" to serialized
         }.toMap()
 
