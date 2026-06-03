@@ -413,6 +413,15 @@ internal fun parseIncomingCommand(command: String): IncomingCommand? {
             )
         }
 
+        if (type == "WATCH") {
+            return IncomingCommand(
+                mode = ResponseMode.JSON,
+                requestId = req.requestId,
+                commandType = "WATCH",
+                context = req.context?.trim().orEmpty()
+            )
+        }
+
         return IncomingCommand(
             mode = ResponseMode.JSON,
             requestId = req.requestId,
