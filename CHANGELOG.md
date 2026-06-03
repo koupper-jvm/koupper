@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Scripting DX**: Native namespaced shortcuts for Service Providers (`koupper.json()`, `koupper.dynamo()`, etc.).
+- **Octopus Sentinel**: Background project watcher for automatic dependency management (`koupper watch`).
+- **Dependency Contracts**: Service Providers now declare `externalDependencies()` for autonomous resolution.
+- `KHandler.execute()` is now a `suspend fun`, enabling native Structured Concurrency support.
 - `MCPClientProvider` / `MCPClientServiceProvider` — connects to external MCP servers via HTTP or stdio transport. Handles initialize handshake, tool discovery, and tool calls. Enables agents to use Playwright, GitHub, filesystem, and any MCP-compliant server as tools (prefix: `serverName.toolName`). Registered in container and catalog.
 - `LocalMCPServerProvider` rewritten to JSON-RPC 2.0 (MCP spec `2024-11-05`). Primary endpoint `POST /` handles `initialize`, `tools/list`, `tools/call`, `ping`, and notifications. Legacy `/mcp/tools` and `/mcp/call` preserved for backward compatibility.
 - `InferenceConfig` data class — configurable `maxTokens`, `temperature`, `topP`, `stream` for `LlamaServerSidecar` and `LlamaCppEngine`.
@@ -17,7 +21,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `examples/agents/CortexAgent.kts` — reference agent using `InferenceEngine` SP with `TokenListener` streaming, MCP tool loop, and external MCP server discovery via `~/.koupper/mcp/servers.json`.
 - `examples/mcp/servers.json` — example configuration for external MCP servers (Playwright, GitHub, filesystem, Postgres).
 
+### Changed
+- **Logging Standardization**: Replaced all internal `println` and `printStackTrace` with structured `GlobalLogger` calls for professional JSONL observability.
+- **Auto-Import**: The `@Export` annotation import is now automatically injected into script preambles.
+- **Namespace Configurable**: The Scripting DX namespace is now configurable via `koupper.scripting.namespace` system property (defaults to `koupper`).
+
 ### Fixed
+- **Windows Support**: Fixed `AgentServiceProvider` hang during startup on Windows machines by making environment profiling OS-aware.
 - `EnvironmentProfiler.calculateBudget()` — replaced hard `IllegalStateException` kill switch with graceful `LOW_END` tier degradation and a warning log. Machines without AVX2 or GPU no longer crash Octopus on startup.
 - `LlamaServerSidecar` — lazy initialization via `by lazy {}`. `KOUPPER_LLM_MODEL_PATH` is now validated only on first `predict()` call, not at container boot time.
 - `LlamaServerSidecar` SSE parser — skips events where the `content` node is `null` or the literal string `"null"`. Eliminates the spurious `null` token emitted at the start of every streaming response.
