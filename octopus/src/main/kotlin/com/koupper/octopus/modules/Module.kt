@@ -1,6 +1,6 @@
 package com.koupper.octopus.modules;
 
-import com.koupper.configurations.utilities.ANSIColors
+import com.koupper.logging.GlobalLogger
 import com.koupper.octopus.process.getRealScriptNameFrom
 import com.koupper.shared.octopus.ExportFunctionSignature
 import com.koupper.shared.octopus.extractExportFunctionName
@@ -42,8 +42,7 @@ fun validateScript(scriptPath: String): Result<File> {
         Result.success(scriptFile)
     } catch (e: Exception) {
         val absolutePath = File(scriptPath).absolutePath
-        System.err.println("[ScriptingHost][ERROR] Script failed: $absolutePath")
-        System.err.println()
+        GlobalLogger.log.error { "[ScriptingHost][ERROR] Script failed: $absolutePath" }
         Result.failure(e)
     }
 }
@@ -118,9 +117,7 @@ abstract class Module {
         if (Files.notExists(Paths.get(finalScriptPath))) {
             commitScriptInPackage(handlerToScript, finalScriptPath, packageName.replace("""(?<!\\)[/\\](?!\\)""", "."))
 
-            print("${handlerToScript.second}...")
-
-            println("${ANSIColors.ANSI_GREEN_155}[\u2713]${ANSIColors.ANSI_RESET}")
+            GlobalLogger.log.info { "${handlerToScript.second}... [OK]" }
         }
     }
 
@@ -138,7 +135,7 @@ abstract class Module {
 
     private fun commitScriptInPackage(handler: Pair<String, String>, finalScriptPath: String, packageName: String) {
         if (this.createdScripts[handler.first] != null) {
-            println("\u001B[33m${this.buildScriptName(handler.second)} script exist. Ignoring relocation.\u001B[0m")
+            GlobalLogger.log.warn { "${this.buildScriptName(handler.second)} script exist. Ignoring relocation." }
             return
         }
 
@@ -205,7 +202,7 @@ abstract class Module {
 
 fun Module.locateScriptsInPackage(context: String, scripts: Map<String, String>, targetPath: String, packageName: String) {
     if (scripts.isEmpty()) {
-        println("\u001B[38;5;229mNo scripts configured...\u001B[0m")
+        GlobalLogger.log.info { "No scripts configured..." }
 
         return
     }
@@ -224,5 +221,5 @@ fun Module.locateScriptsInPackage(context: String, scripts: Map<String, String>,
         processScript(context, handlerToScript, targetPath, packageName)
     }
 
-    println("${ANSIColors.ANSI_YELLOW_229}\nThe scripts were located.${ANSIColors.ANSI_RESET}")
+    GlobalLogger.log.info { "The scripts were located." }
 }
