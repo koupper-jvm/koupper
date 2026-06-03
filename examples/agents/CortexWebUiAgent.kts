@@ -9,7 +9,6 @@
 import com.koupper.container.app
 import com.koupper.providers.runtime.router.GrizzlyRuntimeRouterProvider
 import com.koupper.providers.runtime.router.StreamResponse
-import com.koupper.shared.annotations.Export
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.File
@@ -18,9 +17,8 @@ import java.nio.file.StandardWatchEventKinds.*
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
-val home    = System.getProperty("user.home")!!
-val jobsDir = File(System.getenv("CORTEX_JOBS_DIR") ?: "$home/.koupper/jobs")
-val uiPort  = System.getenv("CORTEX_WEB_PORT")?.toIntOrNull() ?: 18083
+val jobsDir = File(env("CORTEX_JOBS_DIR", "$home/.koupper/jobs"))
+val uiPort  = env("CORTEX_WEB_PORT", "18083").toIntOrNull() ?: 18083
 val mapper  = jacksonObjectMapper()
 
 val excluded = setOf("logs", "commands")
