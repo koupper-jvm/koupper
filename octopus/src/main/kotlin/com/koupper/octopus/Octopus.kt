@@ -841,19 +841,23 @@ class Octopus(private var container: Container) : ScriptExecutor {
         val imports = mutableSetOf<String>()
         val bodies = mutableListOf<String>()
 
+        // Always include the correct @Export import to simplify script authoring
+        imports.add("import com.koupper.shared.annotations.Export")
+
         allFunctions.forEach { block ->
             block.lines().forEach { line ->
                 val trimmed = line.trim()
                 if (trimmed.startsWith("import ")) {
                     imports.add(trimmed)
                 } else if (trimmed.isNotEmpty()) {
-                    bodies.add(line)
+                    bodies.add("    " + line) 
                 }
             }
-            bodies.add("") // Spacing between functions
+            bodies.add("") 
         }
 
-        providerPreamble = (imports.sorted() + "" + bodies).joinToString("\n")
+        val namespace = System.getProperty("koupper.scripting.namespace") ?: "koupper"
+        providerPreamble = (imports.sorted() + "" + "object $namespace {" + bodies + "}").joinToString("\n")
 
         val typedBindings = mutableMapOf<KClass<*>, Any>()
         this.container.getBindings().forEach { (key, value) ->
