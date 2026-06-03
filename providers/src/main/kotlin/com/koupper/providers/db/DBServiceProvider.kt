@@ -17,4 +17,9 @@ class DBServiceProvider : ServiceProvider() {
     private fun registerSQLite() {
         app.bind(DBConnector::class, { DBSQLiteConnector() }, "DBSQLiteConnector")
     }
+
+    override fun externalDependencies() = listOf(
+        "org.postgresql:postgresql:42.7.2",
+        "org.xerial:sqlite-jdbc:3.45.1.0"
+    )
 }
