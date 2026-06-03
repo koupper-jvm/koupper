@@ -9,4 +9,11 @@ class GitHubServiceProvider : ServiceProvider() {
             GitHubClientImpl()
         })
     }
+
+    override fun topLevelFunctions(): Map<String, String> = mapOf(
+        "github" to """
+            import com.koupper.providers.github.GitHubClient
+            fun github(): GitHubClient = com.koupper.container.app.getInstance(GitHubClient::class)
+        """.trimIndent()
+    )
 }
