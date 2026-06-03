@@ -15,7 +15,8 @@ repositories {
 }
 
 tasks.named('jar', Jar) {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE // Cambia de INCLUDE a EXCLUDE
+    zip64 = true
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
         attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
         attributes 'Implementation-Title': 'Koupper Octopus'
@@ -24,11 +25,9 @@ tasks.named('jar', Jar) {
 
     from sourceSets.main.output
     from({
-        // Usar un Set para evitar duplicados
-        def files = configurations.runtimeClasspath.getFiles().findAll { it?.exists() }
-        def uniqueFiles = files.toSet() // Elimina duplicados
-        uniqueFiles.each { println "Unique JAR dependency: ${it.name}" }
-        uniqueFiles.collect { it.isDirectory() ? it : zipTree(it) }
+        configurations.runtimeClasspath.getFiles()
+            .findAll { it?.exists() }
+            .collect { it.isDirectory() ? it : zipTree(it) }
     })
 
     preserveFileTimestamps = false
@@ -89,6 +88,9 @@ tasks.register('fatJar', Jar) {
     archiveBaseName = 'octopus'
     archiveVersion = project.version.toString()
     zip64 = true
+
+    // zip64 incremental patching corrupts LOC headers — always build from scratch
+    doFirst { delete(archiveFile) }
 
     manifest {
         attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'

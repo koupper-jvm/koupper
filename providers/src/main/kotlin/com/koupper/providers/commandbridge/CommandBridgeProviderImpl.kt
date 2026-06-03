@@ -13,6 +13,8 @@ class CommandBridgeProviderImpl : CommandBridgeProvider {
 
     private var watchDir: File? = null
     private var watchService: WatchService? = null
+    private val recentlyProcessed = mutableMapOf<String, Long>()
+    private val dedupWindowMs = 2_000L
 
     override fun watch(directory: File): CommandBridgeProvider {
         directory.mkdirs()
@@ -34,18 +36,25 @@ class CommandBridgeProviderImpl : CommandBridgeProvider {
 
         val key = ws.poll(pollTimeoutMs, TimeUnit.MILLISECONDS) ?: return null
 
+        val now = System.currentTimeMillis()
+        recentlyProcessed.entries.removeIf { now - it.value > dedupWindowMs }
+
         var result: String? = null
         for (ev in key.pollEvents()) {
             if (ev.kind() == OVERFLOW) continue
             @Suppress("UNCHECKED_CAST")
             val fname = (ev as WatchEvent<Path>).context().fileName.toString()
             if (!fname.endsWith(".response")) continue
+            if (fname in recentlyProcessed) continue
 
             val file    = File(dir, fname)
             val content = runCatching { file.readText().trim() }.getOrDefault("")
             file.delete()
 
-            if (content.isNotBlank() && result == null) result = content
+            if (content.isNotBlank() && result == null) {
+                result = content
+                recentlyProcessed[fname] = now
+            }
         }
         key.reset()
         return result
