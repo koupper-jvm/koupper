@@ -873,7 +873,8 @@ class Octopus(private var container: Container) : ScriptExecutor {
         val topLevelShortcuts = listOf(
             "val log  = com.koupper.logging.GlobalLogger.log",
             "val home = System.getProperty(\"user.home\") ?: \"\"",
-            "fun env(name: String, default: String = \"\") = com.koupper.os.envOptional(name, default)"
+            "fun env(name: String, default: String = \"\") = com.koupper.os.envOptional(name, default)",
+            "fun emit(text: String) = println(text)"
         )
 
         providerPreamble = (imports.sorted() + "" + topLevelShortcuts + "" + "object $namespace {" + bodies + "}").joinToString("\n")
