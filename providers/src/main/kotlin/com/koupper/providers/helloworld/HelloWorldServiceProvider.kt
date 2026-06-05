@@ -1,13 +1,13 @@
 package com.koupper.providers.helloworld
 
-import com.koupper.container.interfaces.Container
+import com.koupper.container.app
 import com.koupper.providers.ServiceProvider
 
-class HelloWorldServiceProvider(private val container: Container) : ServiceProvider {
+class HelloWorldServiceProvider() : ServiceProvider() {
     override fun up() {
-        this.container.bind(HelloWorldProvider::class) {
+        app.bind(HelloWorldProvider::class, {
             HelloWorldImpl()
-        }
+        })
     }
 }
 
