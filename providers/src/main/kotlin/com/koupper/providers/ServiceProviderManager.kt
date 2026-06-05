@@ -1,5 +1,6 @@
 package com.koupper.providers
 
+import com.koupper.providers.helloworld.HelloWorldServiceProvider
 import com.koupper.providers.agent.AgentServiceProvider
 import com.koupper.providers.commandbridge.CommandBridgeServiceProvider
 import com.koupper.providers.telegram.TelegramServiceProvider
@@ -75,6 +76,7 @@ class ServiceProviderManager {
     fun listProviders(): List<KClass<*>> {
         return listOf(
             DBServiceProvider::class,
+            HelloWorldServiceProvider::class,
             DockerServiceProvider::class,
             SenderServiceProvider::class,
             LoggerServiceProvider::class,
