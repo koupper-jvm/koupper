@@ -1,17 +1,22 @@
 package com.koupper.providers.files
 
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.koupper.container.app
 
 // Shared mapper — thread-safe after configuration.
-private val MAPPER = jacksonObjectMapper()
+@PublishedApi
+internal val MAPPER = jacksonObjectMapper()
     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
 // @PublishedApi so public inline functions can call into MAPPER across modules.
 @PublishedApi
 internal fun <T> mapperReadValue(json: String, clazz: Class<T>): T = MAPPER.readValue(json, clazz)
+
+@PublishedApi
+internal fun <T> mapperReadValue(json: String, typeReference: TypeReference<T>): T = MAPPER.readValue(json, typeReference)
 
 @PublishedApi
 internal fun mapperWriteValue(data: Any?): String = MAPPER.writeValueAsString(data)
@@ -41,7 +46,7 @@ class JsonParseException(message: String, cause: Throwable) : Exception(message,
 
 /** Deserialize the loaded JSON to [T]. */
 inline fun <reified T> JSONFileHandler.toType(): T = try {
-    mapperReadValue(text(), T::class.java)
+    mapperReadValue(text(), object : TypeReference<T>() {})
 } catch (e: Exception) {
     throw JsonParseException("Failed to parse JSON to ${T::class.simpleName}: ${e.message}", e)
 }
@@ -71,10 +76,20 @@ inline fun <reified T> JSONFileHandler.tryReadAs(json: String?): JsonParseResult
     catch (_: Exception) { JsonParseResult.Err("invalid_json") }
 }
 
-// ── Convenience extensions on Any / String ────────────────────────────────────
+// ── Convenience extensions on Any / String / Map ─────────────────────────────
 
 /** Serialize this object to a JSON string. */
 fun Any?.toJson(): String = mapperWriteValue(this)
 
 /** Deserialize this JSON string to [T]. */
-inline fun <reified T> String.fromJson(): T = mapperReadValue(this, T::class.java)
+inline fun <reified T> String.fromJson(): T = mapperReadValue(this, object : TypeReference<T>() {})
+
+/** 
+ * Converts a Map (typically raw input) to a structured Data Class [T].
+ * This enables "Deep-Type Resolution" for script inputs.
+ */
+inline fun <reified T> Map<String, Any?>.toType(): T = try {
+    MAPPER.convertValue(this, object : TypeReference<T>() {})
+} catch (e: Exception) {
+    throw JsonParseException("Failed to convert Map to ${T::class.simpleName}: ${e.message}", e)
+}
