@@ -1,5 +1,6 @@
 package com.koupper.providers
 
+import com.koupper.providers.helloworld.HelloWorldServiceProvider
 import com.koupper.providers.agent.AgentServiceProvider
 import com.koupper.providers.commandbridge.CommandBridgeServiceProvider
 import com.koupper.providers.telegram.TelegramServiceProvider
@@ -76,7 +77,7 @@ class ServiceProviderManager {
         return listOf(
             DBServiceProvider::class,
             DockerServiceProvider::class,
-            SenderServiceProvider::class,
+
             LoggerServiceProvider::class,
             MCPServiceProvider::class,
             MCPClientServiceProvider::class,
@@ -115,6 +116,7 @@ class ServiceProviderManager {
             WebReaderServiceProvider::class,
             PDFReaderServiceProvider::class,
             WebSearchServiceProvider::class,
+            HelloWorldServiceProvider::class,
         )
     }
 }

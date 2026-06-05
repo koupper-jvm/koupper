@@ -16,12 +16,17 @@ fun env(
     val sysEnv = System.getenv()
     var value: String? = if (sysEnv.containsKey(variableName)) sysEnv[variableName] else null
 
-    val globalEnvFile = System.getProperty("GLOBAL_ENV_FILE")
+    val globalEnvFileRaw = System.getProperty("GLOBAL_ENV_FILE")
         ?: System.getenv("GLOBAL_ENV_FILE")
 
+    val globalEnvFile = globalEnvFileRaw?.trim()?.removeSurrounding("\"")?.removeSurrounding("'")
+
     if (value == null && !globalEnvFile.isNullOrBlank()) {
-        val fromGlobal = File(globalEnvFile).getProperty(variableName)
-        value = if (fromGlobal != "undefined") fromGlobal else null
+        val file = File(globalEnvFile)
+        if (file.exists()) {
+            val fromGlobal = file.getProperty(variableName)
+            value = if (fromGlobal != "undefined") fromGlobal else null
+        }
     }
 
     if (value == null) {
