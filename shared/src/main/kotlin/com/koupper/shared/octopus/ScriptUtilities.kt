@@ -121,7 +121,10 @@ fun extractExportFunctionSignature(
         "Boolean" to Boolean::class.javaObjectType,
         "Short" to Short::class.javaObjectType,
         "Byte" to Byte::class.javaObjectType,
-        "Char" to Char::class.javaObjectType
+        "Char" to Char::class.javaObjectType,
+        "Map" to Map::class.java,
+        "List" to List::class.java,
+        "Set" to Set::class.java
     )
 
     builtIns[cleanType]?.let { return it }
@@ -212,7 +215,10 @@ fun resolveClassFromArgName(
         "Boolean" to Boolean::class.javaObjectType,
         "Short" to Short::class.javaObjectType,
         "Byte" to Byte::class.javaObjectType,
-        "Char" to Char::class.javaObjectType
+        "Char" to Char::class.javaObjectType,
+        "Map" to Map::class.java,
+        "List" to List::class.java,
+        "Set" to Set::class.java
     )
 
     builtIns[cleanType]?.let { return it }

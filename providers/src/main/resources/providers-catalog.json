@@ -2,6 +2,23 @@
   "version": "1.0",
   "providers": [
     {
+      "id": "helloworld",
+      "serviceProvider": "HelloWorldServiceProvider",
+      "description": "Example Hello World provider for scaffolding demonstration.",
+      "bindings": [
+        {
+          "contract": "HelloWorldProvider",
+          "implementations": [
+            { "class": "HelloWorldImpl" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "HELLOWORLD_API_KEY", "required": false, "description": "Optional API key for demonstration." }
+      ],
+      "docs": "https://koupper.com/docs/providers/helloworld"
+    },
+    {
       "id": "db",
       "serviceProvider": "DBServiceProvider",
       "description": "Database connectors for PostgreSQL and SQLite sessions.",

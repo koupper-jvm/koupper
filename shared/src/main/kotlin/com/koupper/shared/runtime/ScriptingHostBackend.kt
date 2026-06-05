@@ -128,6 +128,7 @@ class ScriptingHostBackend(
                     updateClasspath(extraClasspath)
                 }
             }
+            defaultImports("com.koupper.shared.*")
             compilerOptions("-jvm-target", "17")
         }
     }
