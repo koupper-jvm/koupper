@@ -169,4 +169,17 @@ class FileHandlerImpl : FileHandler {
     override fun signFile(filePath: String, metadata: Map<String, String>): File {
         return File("")
     }
+
+    override fun listFiles(dirPath: String, recursive: Boolean, extensions: List<String>): List<String> {
+        val target = this.load(dirPath)
+        if (!target.isDirectory) return if (target.isFile) listOf(target.absolutePath) else emptyList()
+        val extSet = extensions.map { it.lowercase().trimStart('.') }.toSet()
+        val walk = if (recursive) target.walkTopDown() else target.walk().maxDepth(1)
+        return walk
+            .filter { it.isFile }
+            .filter { extSet.isEmpty() || extSet.contains(it.extension.lowercase()) }
+            .map { it.absolutePath }
+            .sorted()
+            .toList()
+    }
 }
