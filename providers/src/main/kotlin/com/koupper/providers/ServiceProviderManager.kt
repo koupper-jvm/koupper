@@ -112,6 +112,7 @@ class ServiceProviderManager {
             SSHServiceProvider::class,
             AgentServiceProvider::class,
             CommandBridgeServiceProvider::class,
+            SenderServiceProvider::class,
             TelegramServiceProvider::class,
             WebReaderServiceProvider::class,
             PDFReaderServiceProvider::class,

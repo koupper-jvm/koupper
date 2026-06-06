@@ -22,6 +22,7 @@ interface VectorDbProvider {
     fun upsert(collection: String, vectors: List<VectorRecord>): Int
     fun query(collection: String, vector: List<Double>, topK: Int = 5, filter: Map<String, Any?> = emptyMap()): List<VectorMatch>
     fun delete(collection: String, ids: List<String>): Int
+    fun clear(collection: String): Int
 }
 
 class LocalVectorDbProvider(private val dataDir: File? = null) : VectorDbProvider {
@@ -63,6 +64,13 @@ class LocalVectorDbProvider(private val dataDir: File? = null) : VectorDbProvide
         ids.forEach { id -> if (col.remove(id) != null) deleted++ }
         if (deleted > 0) persistCollection(collection)
         return deleted
+    }
+
+    override fun clear(collection: String): Int {
+        val col = collections.remove(collection) ?: return 0
+        val count = col.size
+        dataDir?.let { File(it, "$collection.json").delete() }
+        return count
     }
 
     private fun persistCollection(collection: String) {
