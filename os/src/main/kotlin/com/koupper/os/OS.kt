@@ -1,9 +1,11 @@
 package com.koupper.os
 
 import com.koupper.shared.getProperty
+import com.koupper.logging.LoggerFactory
 import java.io.File
 
 val envs = mutableListOf<String>()
+private val logger = LoggerFactory.get("Koupper-OS")
 
 fun env(
     variableName: String,
@@ -22,8 +24,8 @@ fun env(
     val globalEnvFile = globalEnvFileRaw?.trim()?.removeSurrounding("\"")?.removeSurrounding("'")
 
     if (globalEnvFileRaw != null) {
-        println("[KOUPPER-DEBUG] Found GLOBAL_ENV_FILE variable: '$globalEnvFileRaw'")
-        println("[KOUPPER-DEBUG] Cleaned path: '$globalEnvFile'")
+        logger.debug { "Found GLOBAL_ENV_FILE variable: '$globalEnvFileRaw'" }
+        logger.debug { "Cleaned path: '$globalEnvFile'" }
     }
 
     if (value == null && !globalEnvFile.isNullOrBlank()) {
@@ -32,10 +34,10 @@ fun env(
             val fromGlobal = file.getProperty(variableName)
             value = if (fromGlobal != "undefined") fromGlobal else null
             if (value != null) {
-                println("[KOUPPER-DEBUG] Variable '$variableName' found in GLOBAL_ENV_FILE.")
+                logger.debug { "Variable '$variableName' found in GLOBAL_ENV_FILE." }
             }
         } else {
-            println("[KOUPPER-DEBUG] GLOBAL_ENV_FILE at '$globalEnvFile' DOES NOT EXIST.")
+            logger.warn { "GLOBAL_ENV_FILE at '$globalEnvFile' DOES NOT EXIST." }
         }
     }
 

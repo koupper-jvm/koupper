@@ -169,6 +169,7 @@ project(':orchestrator-core') {
 project(':os') {
     dependencies {
         implementation project(':shared')
+        implementation project(':logging')
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
     }
 }
