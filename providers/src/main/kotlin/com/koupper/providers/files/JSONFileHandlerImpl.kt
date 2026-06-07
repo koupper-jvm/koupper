@@ -84,7 +84,50 @@ fun Any?.toJson(): String = mapperWriteValue(this)
 /** Deserialize this JSON string to [T]. */
 inline fun <reified T> String.fromJson(): T = mapperReadValue(this, object : TypeReference<T>() {})
 
-/** 
+/**
+ * Parse this JSON string into a schema-less [Map] for dynamic key access.
+ * Replaces `mapper.readTree(str)` for agents that navigate unknown JSON shapes.
+ *
+ * Usage:
+ *   val ctx = response.jsonObject()["context_window"]?.toInt()
+ */
+fun String.jsonObject(): Map<String, Any?> =
+    if (isBlank()) emptyMap()
+    else mapperReadValue(this, object : TypeReference<Map<String, Any?>>() {})
+
+/**
+ * Parse this JSON string into a schema-less [List] for dynamic array access.
+ *
+ * Usage:
+ *   val items = payload.jsonArray().filterIsInstance<Map<String, Any?>>()
+ */
+fun String.jsonArray(): List<Any?> =
+    if (isBlank()) emptyList()
+    else mapperReadValue(this, object : TypeReference<List<Any?>>() {})
+
+// ── Typed accessors on dynamic maps ──────────────────────────────────────────
+
+/** Read [key] as Int, coercing Number if needed. */
+fun Map<String, Any?>.getInt(key: String): Int? = (this[key] as? Number)?.toInt()
+
+/** Read [key] as Long, coercing Number if needed. */
+fun Map<String, Any?>.getLong(key: String): Long? = (this[key] as? Number)?.toLong()
+
+/** Read [key] as String (calls toString on non-null values). */
+fun Map<String, Any?>.getString(key: String): String? = this[key]?.toString()
+
+/** Read [key] as Boolean. */
+fun Map<String, Any?>.getBool(key: String): Boolean? = this[key] as? Boolean
+
+/** Read [key] as a nested object map. */
+@Suppress("UNCHECKED_CAST")
+fun Map<String, Any?>.getObject(key: String): Map<String, Any?>? = this[key] as? Map<String, Any?>
+
+/** Read [key] as a list. */
+@Suppress("UNCHECKED_CAST")
+fun Map<String, Any?>.getList(key: String): List<Any?>? = this[key] as? List<Any?>
+
+/**
  * Converts a Map (typically raw input) to a structured Data Class [T].
  * This enables "Deep-Type Resolution" for script inputs.
  */

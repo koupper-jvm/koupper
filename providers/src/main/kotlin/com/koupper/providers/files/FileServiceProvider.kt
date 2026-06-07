@@ -9,6 +9,7 @@ class FileServiceProvider : ServiceProvider() {
         this.registerTextFileHandler()
         this.registerJsonFileHandler()
         this.registerYmlFileHandler()
+        this.registerFileWatcherHandler()
     }
 
     private fun registerFileHandler() {
@@ -31,6 +32,10 @@ class FileServiceProvider : ServiceProvider() {
         })
     }
 
+    private fun registerFileWatcherHandler() {
+        app.bind(FileWatcherProvider::class, { FileWatcherProviderImpl() })
+    }
+
     override fun topLevelFunctions(): Map<String, String> = mapOf(
         "files" to """
             import com.koupper.providers.files.FileHandler
@@ -47,6 +52,10 @@ class FileServiceProvider : ServiceProvider() {
         "txt" to """
             import com.koupper.providers.files.TextFileHandler
             fun txt(): TextFileHandler = com.koupper.container.app.getInstance(TextFileHandler::class)
+        """.trimIndent(),
+        "watcher" to """
+            import com.koupper.providers.files.FileWatcherProvider
+            fun watcher(): FileWatcherProvider = com.koupper.container.app.getInstance(FileWatcherProvider::class)
         """.trimIndent()
     )
 }
