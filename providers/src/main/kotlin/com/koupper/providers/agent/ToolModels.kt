@@ -49,11 +49,19 @@ data class NativeToolCall(
     val arguments: Map<String, Any?>   // parsed JSON arguments
 )
 
+data class TokenUsage(
+    val inputTokens: Int,
+    val outputTokens: Int
+) {
+    val totalTokens: Int get() = inputTokens + outputTokens
+}
+
 /**
  * The full response from a native function calling inference.
  */
 data class NativeInferenceResult(
     val text: String,                        // assistant text (may be empty)
-    val toolCalls: List<NativeToolCall>      // tool calls requested (may be empty)
+    val toolCalls: List<NativeToolCall>,     // tool calls requested (may be empty)
+    val usage: TokenUsage? = null            // token counts from the API (null if not reported)
 )
 

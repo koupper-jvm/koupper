@@ -215,6 +215,12 @@ class OpenAICompatibleEngine(
             }.getOrNull()
         } ?: emptyList()
 
-        NativeInferenceResult(text = text, toolCalls = nativeToolCalls)
+        val usageNode = root?.get("usage")
+        val usage = if (usageNode != null && !usageNode.isNull) TokenUsage(
+            inputTokens  = usageNode.get("prompt_tokens")?.asInt(0)     ?: 0,
+            outputTokens = usageNode.get("completion_tokens")?.asInt(0) ?: 0
+        ) else null
+
+        NativeInferenceResult(text = text, toolCalls = nativeToolCalls, usage = usage)
     }
 }
