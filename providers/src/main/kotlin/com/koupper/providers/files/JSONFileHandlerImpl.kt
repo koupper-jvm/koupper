@@ -84,27 +84,6 @@ fun Any?.toJson(): String = mapperWriteValue(this)
 /** Deserialize this JSON string to [T]. */
 inline fun <reified T> String.fromJson(): T = mapperReadValue(this, object : TypeReference<T>() {})
 
-/**
- * Parse this JSON string into a schema-less [Map] for dynamic key access.
- * Replaces `mapper.readTree(str)` for agents that navigate unknown JSON shapes.
- *
- * Usage:
- *   val ctx = response.jsonObject()["context_window"]?.toInt()
- */
-fun String.jsonObject(): Map<String, Any?> =
-    if (isBlank()) emptyMap()
-    else mapperReadValue(this, object : TypeReference<Map<String, Any?>>() {})
-
-/**
- * Parse this JSON string into a schema-less [List] for dynamic array access.
- *
- * Usage:
- *   val items = payload.jsonArray().filterIsInstance<Map<String, Any?>>()
- */
-fun String.jsonArray(): List<Any?> =
-    if (isBlank()) emptyList()
-    else mapperReadValue(this, object : TypeReference<List<Any?>>() {})
-
 // ── Typed accessors on dynamic maps ──────────────────────────────────────────
 
 /** Read [key] as Int, coercing Number if needed. */
