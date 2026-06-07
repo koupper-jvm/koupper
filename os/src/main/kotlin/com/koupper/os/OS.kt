@@ -21,11 +21,21 @@ fun env(
 
     val globalEnvFile = globalEnvFileRaw?.trim()?.removeSurrounding("\"")?.removeSurrounding("'")
 
+    if (globalEnvFileRaw != null) {
+        println("[KOUPPER-DEBUG] Found GLOBAL_ENV_FILE variable: '$globalEnvFileRaw'")
+        println("[KOUPPER-DEBUG] Cleaned path: '$globalEnvFile'")
+    }
+
     if (value == null && !globalEnvFile.isNullOrBlank()) {
         val file = File(globalEnvFile)
         if (file.exists()) {
             val fromGlobal = file.getProperty(variableName)
             value = if (fromGlobal != "undefined") fromGlobal else null
+            if (value != null) {
+                println("[KOUPPER-DEBUG] Variable '$variableName' found in GLOBAL_ENV_FILE.")
+            }
+        } else {
+            println("[KOUPPER-DEBUG] GLOBAL_ENV_FILE at '$globalEnvFile' DOES NOT EXIST.")
         }
     }
 
