@@ -808,6 +808,19 @@
         { "name": "KOUPPER_TELEGRAM_CHAT_IDS", "required": false, "description": "Comma-separated list of allowed chat IDs. Empty = accept all." }
       ],
       "docs": "https://koupper.com/docs/providers/telegram"
+    },
+    {
+      "id": "build",
+      "serviceProvider": "BuildServiceProvider",
+      "description": "Runs Gradle/npm builds and parses compiler output into structured errors for agent compile→fix→compile feedback loops.",
+      "bindings": [
+        {
+          "contract": "BuildProvider",
+          "implementations": [{ "class": "BuildProviderImpl" }]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/build"
     }
   ]
 }
