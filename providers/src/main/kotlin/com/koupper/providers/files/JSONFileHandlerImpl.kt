@@ -81,6 +81,9 @@ inline fun <reified T> JSONFileHandler.tryReadAs(json: String?): JsonParseResult
 /** Serialize this object to a JSON string. */
 fun Any?.toJson(): String = mapperWriteValue(this)
 
+/** Serialize this object to a pretty-printed JSON string. */
+fun Any?.toJsonPretty(): String = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(this)
+
 /** Deserialize this JSON string to [T]. */
 inline fun <reified T> String.fromJson(): T = mapperReadValue(this, object : TypeReference<T>() {})
 
