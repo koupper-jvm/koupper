@@ -1,5 +1,6 @@
 package com.koupper.providers
 
+import com.koupper.providers.buildops.BuildServiceProvider
 import com.koupper.providers.helloworld.HelloWorldServiceProvider
 import com.koupper.providers.agent.AgentServiceProvider
 import com.koupper.providers.commandbridge.CommandBridgeServiceProvider
@@ -118,6 +119,7 @@ class ServiceProviderManager {
             PDFReaderServiceProvider::class,
             WebSearchServiceProvider::class,
             HelloWorldServiceProvider::class,
+            BuildServiceProvider::class,
         )
     }
 }
