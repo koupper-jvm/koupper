@@ -75,6 +75,91 @@ class GitCliClient(
         return run(args, request.repoPath)
     }
 
+    override fun add(request: GitAddRequest): GitCommandResult {
+        val args = mutableListOf(command, "add")
+        if (request.files.isEmpty()) {
+            args += "-A"
+        } else {
+            args += "--"
+            args += request.files
+        }
+        return run(args, request.repoPath)
+    }
+
+    override fun blame(request: GitBlameRequest): GitCommandResult {
+        val args = mutableListOf(command, "blame")
+        val start = request.lineStart
+        val end = request.lineEnd
+        if (start != null) {
+            args += "-L"
+            args += "${start},${end ?: start}"
+        }
+        args += request.file
+        return run(args, request.repoPath)
+    }
+
+    override fun currentBranch(repoPath: String): GitCommandResult {
+        return run(listOf(command, "rev-parse", "--abbrev-ref", "HEAD"), repoPath)
+    }
+
+    override fun listBranches(repoPath: String, all: Boolean): GitCommandResult {
+        val args = mutableListOf(command, "branch")
+        if (all) args += "--all"
+        return run(args, repoPath)
+    }
+
+    override fun deleteBranch(repoPath: String, name: String, force: Boolean): GitCommandResult {
+        val flag = if (force) "-D" else "-d"
+        return run(listOf(command, "branch", flag, name), repoPath)
+    }
+
+    override fun push(request: GitPushRequest): GitCommandResult {
+        val args = mutableListOf(command, "push")
+        if (request.setUpstream) args += "-u"
+        if (request.force) args += "--force"
+        args += request.remote
+        if (request.branch != null) args += request.branch
+        return run(args, request.repoPath)
+    }
+
+    override fun pull(request: GitPullRequest): GitCommandResult {
+        val args = mutableListOf(command, "pull")
+        if (request.rebase) args += "--rebase"
+        args += request.remote
+        if (request.branch != null) args += request.branch
+        return run(args, request.repoPath)
+    }
+
+    override fun fetch(request: GitFetchRequest): GitCommandResult {
+        val args = mutableListOf(command, "fetch")
+        if (request.prune) args += "--prune"
+        args += request.remote
+        return run(args, request.repoPath)
+    }
+
+    override fun reset(request: GitResetRequest): GitCommandResult {
+        val modeFlag = when (request.mode) {
+            ResetMode.SOFT -> "--soft"
+            ResetMode.MIXED -> "--mixed"
+            ResetMode.HARD -> "--hard"
+        }
+        return run(listOf(command, "reset", modeFlag, request.ref), request.repoPath)
+    }
+
+    override fun stash(request: GitStashRequest): GitCommandResult {
+        val args = mutableListOf(command, "stash", "push")
+        if (request.includeUntracked) args += "-u"
+        if (request.message != null) {
+            args += "-m"
+            args += request.message
+        }
+        return run(args, request.repoPath)
+    }
+
+    override fun stashPop(repoPath: String): GitCommandResult {
+        return run(listOf(command, "stash", "pop"), repoPath)
+    }
+
     private fun ensureOk(result: GitCommandResult, step: String) {
         if (result.exitCode != 0) {
             error("$step failed: ${result.stderr.ifBlank { result.stdout }}")
