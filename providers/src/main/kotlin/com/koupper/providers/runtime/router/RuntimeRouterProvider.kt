@@ -42,12 +42,19 @@ interface RuntimeRouterProvider {
     fun stop()
 }
 
+data class StaticMapping(val prefix: String, val dir: java.io.File)
+
 class RuntimeRouterDsl {
     private val routes = mutableListOf<RegisteredRuntimeRoute>()
+    private val statics = mutableListOf<StaticMapping>()
     private var currentPathPrefix = ""
 
     fun path(prefix: () -> String) {
         currentPathPrefix += prefix()
+    }
+
+    fun staticFiles(prefix: String, dir: String) {
+        statics.add(StaticMapping(prefix.trimEnd('/'), java.io.File(dir)))
     }
 
     inline fun <reified I> get(noinline block: RouteBuilder<I>.() -> Unit) {
@@ -73,6 +80,7 @@ class RuntimeRouterDsl {
     }
 
     internal fun build(): List<RegisteredRuntimeRoute> = routes.toList()
+    internal fun buildStatics(): List<StaticMapping> = statics.toList()
 }
 
 class RouteBuilder<I> {
@@ -96,6 +104,29 @@ data class RuntimeServerInfo(val host: String, val port: Int, val routes: List<S
 class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
     private val mapper = jacksonObjectMapper()
 
+    companion object {
+        val staticMappings = CopyOnWriteArrayList<StaticMapping>()
+
+        private fun mimeFor(name: String) = when (name.substringAfterLast('.').lowercase()) {
+            "html"        -> "text/html; charset=UTF-8"
+            "js", "mjs"   -> "application/javascript"
+            "css"         -> "text/css"
+            "png"         -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "gif"         -> "image/gif"
+            "svg"         -> "image/svg+xml"
+            "ico"         -> "image/x-icon"
+            "mp3"         -> "audio/mpeg"
+            "wav"         -> "audio/wav"
+            "json"        -> "application/json"
+            "woff"        -> "font/woff"
+            "woff2"       -> "font/woff2"
+            "ttf"         -> "font/ttf"
+            "map"         -> "application/json"
+            else          -> "application/octet-stream"
+        }
+    }
+
     override fun registerMiddleware(name: String, middleware: (RequestContext) -> MiddlewareResult) {
         GlobalRouteRegistry.middlewares[name] = { ctx -> middleware(ctx as RequestContext) }
     }
@@ -105,6 +136,7 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         dsl.block()
         val newRoutes = dsl.build()
         GlobalRouteRegistry.routes.addAll(newRoutes)
+        staticMappings.addAll(dsl.buildStatics())
         return RuntimeServerInfo("0.0.0.0", 8080, newRoutes.map { "${it.method} ${it.fullPath}" })
     }
 
@@ -129,9 +161,25 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         return RuntimeServerInfo(host, port, GlobalRouteRegistry.routes.map { it.fullPath })
     }
 
+    private fun serveStatic(request: Request, response: Response): Boolean {
+        if (request.method.methodString.uppercase() != "GET") return false
+        val path = request.requestURI
+        val mapping = staticMappings.firstOrNull { path.startsWith(it.prefix + "/") || path == it.prefix } ?: return false
+        val relative = path.removePrefix(mapping.prefix).trimStart('/')
+        val file = java.io.File(mapping.dir, relative).canonicalFile
+        if (!file.absolutePath.startsWith(mapping.dir.canonicalPath)) return false  // path traversal guard
+        if (!file.exists() || !file.isFile) return false
+        response.status = 200
+        response.setContentType(mimeFor(file.name))
+        response.outputStream.write(file.readBytes())
+        return true
+    }
+
     private fun handleInternal(request: Request, response: Response) {
         val method = request.method.methodString.uppercase()
         val path = request.requestURI
+
+        if (serveStatic(request, response)) return
 
         val routes = GlobalRouteRegistry.routes
         val route = routes.firstOrNull { it.method.name == method && matches(it.fullPath, path) }
