@@ -1,6 +1,7 @@
 package com.koupper.providers
 
 import com.koupper.providers.buildops.BuildServiceProvider
+import com.koupper.providers.lsp.LspServiceProvider
 import com.koupper.providers.helloworld.HelloWorldServiceProvider
 import com.koupper.providers.agent.AgentServiceProvider
 import com.koupper.providers.commandbridge.CommandBridgeServiceProvider
@@ -120,6 +121,7 @@ class ServiceProviderManager {
             WebSearchServiceProvider::class,
             HelloWorldServiceProvider::class,
             BuildServiceProvider::class,
+            LspServiceProvider::class,
         )
     }
 }
