@@ -821,6 +821,19 @@
       ],
       "env": [],
       "docs": "https://koupper.com/docs/providers/build"
+    },
+    {
+      "id": "lsp",
+      "serviceProvider": "LspServiceProvider",
+      "description": "Language Server Protocol bridge — hover, go-to-definition, and diagnostics via any LSP server (Kotlin Language Server, typescript-language-server, etc.).",
+      "bindings": [
+        {
+          "contract": "LspBridgeProvider",
+          "implementations": [{ "class": "LspBridgeProviderImpl" }]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/lsp"
     }
   ]
 }
