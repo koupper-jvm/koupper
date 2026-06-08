@@ -89,8 +89,9 @@ class KoupperContainer() : Container {
     }
 
     override fun <T : Any> getInstance(kClass: KClass<T>, tagName: String): T {
-        this.bindings[kClass]
-            ?: throw BindingException("Type[$kClass] is not bound in the container")
+        if (this.bindings[kClass] == null && this.singletons[kClass] == null) {
+            throw BindingException("Type[$kClass] is not bound in the container")
+        }
 
         val filteredBinding = mutableMapOf<Any, Any>()
 
@@ -98,7 +99,7 @@ class KoupperContainer() : Container {
             if (binding.value is Map<*, *>) {
                 val implementations = binding.value as Map<String, Any>
 
-                implementations.forEach { (k, v) ->
+                implementations.forEach { (k, _) ->
                     if (kClass.toString() == binding.key.toString() && k == tagName) {
                         filteredBinding[binding.key] = implementations[tagName]!!
                     }
@@ -110,11 +111,23 @@ class KoupperContainer() : Container {
             }
         }
 
+        this.singletons.forEach { singleton ->
+            if (singleton.value is Map<*, *>) {
+                val implementations = singleton.value as Map<String, Any>
+
+                implementations.forEach { (k, v) ->
+                    if (kClass.toString() == singleton.key.toString() && k == tagName) {
+                        filteredBinding[singleton.key] = v
+                    }
+                }
+            }
+        }
+
         val container = this
 
-        val instance = when {
-            filteredBinding[kClass] is Function<*> -> {
-                val binding = filteredBinding[kClass] as () -> Any?
+        val instance = when (val bindingValue = filteredBinding[kClass]) {
+            is Function<*> -> {
+                val binding = bindingValue as () -> Any?
                 when (val result = binding.invoke()) {
                     is KClass<*> -> {
                         injector.resolveDependenciesFor(container, result as KClass<T>)
@@ -124,23 +137,19 @@ class KoupperContainer() : Container {
                     }
                 }
             }
-            filteredBinding[kClass] is List<*> -> {
-                if (filteredBinding[kClass] != null && (filteredBinding[kClass] as List<*>).size > 1) {
+            is List<*> -> {
+                if (bindingValue.size > 1) {
                     throw MultipleAbstractImplementationsException("Type[${kClass.simpleName}] has multiple instances")
                 }
-
-                injector.resolveDependenciesFor(container, (filteredBinding[kClass] as List<*>)[0] as KClass<*>) as T
-            }
-            filteredBinding[kClass] is List<*> -> {
-                if (filteredBinding[kClass.java] != null && (filteredBinding[kClass.java] as List<*>).size > 1) {
-                    throw MultipleAbstractImplementationsException("Type[${kClass.simpleName}] has multiple instances")
+                val first = bindingValue[0]
+                if (first is KClass<*>) {
+                    injector.resolveDependenciesFor(container, first as KClass<*>) as T
+                } else {
+                    first as T
                 }
-
-                injector.resolveDependenciesFor(container, (filteredBinding[kClass.java] as List<*>)[0] as KClass<*>) as T
             }
-            filteredBinding[kClass] is Map<*, *> -> {
-                val instances = filteredBinding[kClass] as Map<String, () -> T>
-
+            is Map<*, *> -> {
+                val instances = bindingValue as Map<String, () -> T>
                 if (instances[tagName] != null) {
                     val instance = instances[tagName]
                     injector.resolveDependenciesFor(container, instance?.invoke() as KClass<T>)
@@ -148,8 +157,14 @@ class KoupperContainer() : Container {
                     throw BindingException("Type[$tagName] is not bound in the container")
                 }
             }
+            is KClass<*> -> {
+                injector.resolveDependenciesFor(container, bindingValue as KClass<T>)
+            }
+            null -> {
+                throw BindingException("Type[$kClass] is null in the container")
+            }
             else -> {
-                injector.resolveDependenciesFor(container, filteredBinding[kClass] as KClass<T>)
+                bindingValue as T
             }
         }
 
@@ -373,9 +388,9 @@ class KoupperContainer() : Container {
 
         val container = this
 
-        val instance = when {
-            filteredBinding[kClass] is Function<*> -> {
-                val binding = filteredBinding[kClass] as () -> Any?
+        val instance = when (val bindingValue = filteredBinding[kClass]) {
+            is Function<*> -> {
+                val binding = bindingValue as () -> Any?
                 when (val result = binding.invoke()) {
                     is KClass<*> -> {
                         injector.resolveDependenciesFor(container, result as KClass<T>)
@@ -385,23 +400,19 @@ class KoupperContainer() : Container {
                     }
                 }
             }
-            filteredBinding[kClass] is List<*> -> {
-                if (filteredBinding[kClass] != null && (filteredBinding[kClass] as List<*>).size > 1) {
+            is List<*> -> {
+                if (bindingValue.size > 1) {
                     throw MultipleAbstractImplementationsException("Type[${kClass.simpleName}] has multiple instances")
                 }
-
-                injector.resolveDependenciesFor(container, (filteredBinding[kClass] as List<*>)[0] as KClass<*>) as T
-            }
-            filteredBinding[kClass] is List<*> -> {
-                if (filteredBinding[kClass.java] != null && (filteredBinding[kClass.java] as List<*>).size > 1) {
-                    throw MultipleAbstractImplementationsException("Type[${kClass.simpleName}] has multiple instances")
+                val first = bindingValue[0]
+                if (first is KClass<*>) {
+                    injector.resolveDependenciesFor(container, first as KClass<*>) as T
+                } else {
+                    first as T
                 }
-
-                injector.resolveDependenciesFor(container, (filteredBinding[kClass.java] as List<*>)[0] as KClass<*>) as T
             }
-            filteredBinding[kClass] is Map<*, *> -> {
-                val instances = filteredBinding[kClass] as Map<String, () -> T>
-
+            is Map<*, *> -> {
+                val instances = bindingValue as Map<String, () -> T>
                 if (instances[tagName] != null) {
                     val instance = instances[tagName]
                     injector.resolveDependenciesFor(container, instance?.invoke() as KClass<T>)
@@ -409,8 +420,14 @@ class KoupperContainer() : Container {
                     throw BindingException("Type[$tagName] is not bound in the container")
                 }
             }
+            is KClass<*> -> {
+                injector.resolveDependenciesFor(container, bindingValue as KClass<T>)
+            }
+            null -> {
+                throw BindingException("Type[$kClass] is null in the container")
+            }
             else -> {
-                injector.resolveDependenciesFor(container, filteredBinding[kClass] as KClass<T>)
+                bindingValue as T
             }
         }
 

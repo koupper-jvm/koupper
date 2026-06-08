@@ -13,6 +13,7 @@ import org.glassfish.grizzly.http.server.HttpHandler
 import org.glassfish.grizzly.http.server.HttpServer
 import org.glassfish.grizzly.http.server.Request
 import org.glassfish.grizzly.http.server.Response
+import java.io.File
 import java.net.JarURLConnection
 import java.net.URLDecoder
 import java.util.concurrent.ConcurrentHashMap
@@ -141,7 +142,110 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
     }
 
     override fun autoDiscover(packageName: String): RuntimeServerInfo {
-        return RuntimeServerInfo("0.0.0.0", 3000, emptyList())
+        val discoveredRoutes = mutableListOf<String>()
+        val container = app as com.koupper.container.KoupperContainer
+        
+        try {
+            val classes = container.getClasses(Thread.currentThread().contextClassLoader, packageName)
+            classes?.forEach { kClass ->
+                processClass(kClass.java.name, discoveredRoutes)
+            }
+        } catch (e: Exception) {
+            // Fallback to manual scanning if getClasses fails (e.g. in some environments)
+            val path = packageName.replace('.', '/')
+            val resources = Thread.currentThread().contextClassLoader.getResources(path)
+            while (resources.hasMoreElements()) {
+                val resource = resources.nextElement()
+                if (resource.protocol == "file") {
+                    scanDirectory(File(resource.toURI()), packageName, discoveredRoutes)
+                }
+            }
+        }
+
+        return RuntimeServerInfo("0.0.0.0", 3000, discoveredRoutes)
+    }
+
+    private fun scanDirectory(directory: File, packageName: String, discoveredRoutes: MutableList<String>) {
+        directory.listFiles()?.forEach { file ->
+            if (file.isDirectory) {
+                scanDirectory(file, packageName + "." + file.name, discoveredRoutes)
+            } else if (file.name.endsWith(".class")) {
+                val className = packageName + "." + file.name.removeSuffix(".class")
+                processClass(className, discoveredRoutes)
+            }
+        }
+    }
+
+    private fun scanJar(resource: java.net.URL, path: String, discoveredRoutes: MutableList<String>) {
+        val connection = resource.openConnection() as java.net.JarURLConnection
+        val jarFile = connection.jarFile
+        val entries = jarFile.entries()
+        while (entries.hasMoreElements()) {
+            val entry = entries.nextElement()
+            val name = entry.name
+            if (name.startsWith(path) && name.endsWith("Kt.class")) {
+                val className = name.replace('/', '.').removeSuffix(".class")
+                processClass(className, discoveredRoutes)
+            }
+        }
+    }
+
+    private fun processClass(className: String, discoveredRoutes: MutableList<String>) {
+        try {
+            val clazz = Class.forName(className)
+            
+            // Check fields (properties)
+            clazz.declaredFields.forEach { field ->
+                val webRoute = field.getAnnotation(WebRoute::class.java)
+                val export = field.getAnnotation(Export::class.java)
+                if (webRoute != null && export != null) {
+                    field.isAccessible = true
+                    val handler = field.get(null)
+                    if (handler != null) {
+                        registerDiscoveredRoute(webRoute, handler, discoveredRoutes)
+                    }
+                }
+            }
+
+            // Check methods (including getters)
+            clazz.declaredMethods.forEach { method ->
+                val webRoute = method.getAnnotation(WebRoute::class.java)
+                val export = method.getAnnotation(Export::class.java)
+                if (webRoute != null && export != null) {
+                    method.isAccessible = true
+                    if (method.parameterCount == 0) { // Likely a getter for a top-level property
+                        val handler = method.invoke(null)
+                        if (handler != null) {
+                            registerDiscoveredRoute(webRoute, handler, discoveredRoutes)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) { }
+    }
+
+    private fun registerDiscoveredRoute(webRoute: WebRoute, handler: Any, discoveredRoutes: MutableList<String>) {
+        val method = when (webRoute.method) {
+            com.koupper.shared.annotations.RouteMethod.GET -> com.koupper.shared.runtime.RouteMethod.GET
+            com.koupper.shared.annotations.RouteMethod.POST -> com.koupper.shared.runtime.RouteMethod.POST
+            com.koupper.shared.annotations.RouteMethod.PUT -> com.koupper.shared.runtime.RouteMethod.PUT
+            com.koupper.shared.annotations.RouteMethod.DELETE -> com.koupper.shared.runtime.RouteMethod.DELETE
+        }
+
+        // Detect input type from the handler's invoke method
+        val inputType = handler.javaClass.methods
+            .filter { it.name == "invoke" && !it.isBridge && it.parameterCount == 1 }
+            .firstOrNull()?.genericParameterTypes?.firstOrNull()
+
+        val route = RegisteredRuntimeRoute(
+            method = method,
+            fullPath = webRoute.path,
+            middlewares = emptyList(), // Can be improved to scan @Auth
+            handler = handler,
+            inputType = inputType
+        )
+        GlobalRouteRegistry.routes.add(route)
+        discoveredRoutes.add("${route.method} ${route.fullPath}")
     }
 
     override fun start(port: Int, host: String): RuntimeServerInfo {
