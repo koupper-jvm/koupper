@@ -330,7 +330,24 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
                 return
             }
 
-            respond(response, 200, output ?: mapOf("ok" to true))
+            var status = 200
+            var finalOutput = output ?: mapOf("ok" to true)
+
+            if (output != null) {
+                val clazz = output.javaClass
+                try {
+                    val statusCodeGetter = clazz.methods.find { it.name == "getStatusCode" && it.parameterCount == 0 }
+                    val bodyGetter = clazz.methods.find { it.name == "getBody" && it.parameterCount == 0 }
+                    if (statusCodeGetter != null && bodyGetter != null) {
+                        status = statusCodeGetter.invoke(output) as? Int ?: 200
+                        finalOutput = bodyGetter.invoke(output) ?: mapOf("ok" to true)
+                    }
+                } catch (e: Exception) {
+                    // Ignore reflection errors and treat as normal payload
+                }
+            }
+
+            respond(response, status, finalOutput)
         } catch (e: IllegalArgumentException) {
             respond(response, 400, mapOf("error" to "Invalid input format", "detail" to (e.message ?: "")))
         } catch (e: Throwable) {
