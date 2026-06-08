@@ -9,12 +9,14 @@ import java.nio.file.WatchEvent
 import java.nio.file.WatchService
 import java.util.concurrent.TimeUnit
 
-class CommandBridgeProviderImpl : CommandBridgeProvider {
+class CommandBridgeProviderImpl(
+    private val dedupWindowMs: Long = 30_000L
+) : CommandBridgeProvider {
 
     private var watchDir: File? = null
     private var watchService: WatchService? = null
+    // Keyed by content (not filename) so same-text commands from different files are deduplicated.
     private val recentlyProcessed = mutableMapOf<String, Long>()
-    private val dedupWindowMs = 2_000L
 
     override fun watch(directory: File): CommandBridgeProvider {
         directory.mkdirs()
@@ -45,15 +47,17 @@ class CommandBridgeProviderImpl : CommandBridgeProvider {
             @Suppress("UNCHECKED_CAST")
             val fname = (ev as WatchEvent<Path>).context().fileName.toString()
             if (!fname.endsWith(".response")) continue
-            if (fname in recentlyProcessed) continue
 
             val file    = File(dir, fname)
             val content = runCatching { file.readText().trim() }.getOrDefault("")
             file.delete()
 
-            if (content.isNotBlank() && result == null) {
+            // Dedup by content so same-text commands from different files are deduplicated.
+            if (content.isBlank() || content in recentlyProcessed) continue
+
+            if (result == null) {
                 result = content
-                recentlyProcessed[fname] = now
+                recentlyProcessed[content] = now
             }
         }
         key.reset()
