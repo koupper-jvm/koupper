@@ -25,12 +25,14 @@ interface TelegramChannelProvider {
      * @param token        Telegram Bot API token from BotFather.
      * @param allowedChats Optional set of chat IDs to accept. Empty = accept all.
      * @param running      Checked on each poll cycle — set to false to stop.
+     * @param offsetFile   Optional file for persisting the update offset across restarts.
      * @param onMessage    Called for each accepted message with (chatId, text).
      */
     fun startPolling(
         token: String,
         allowedChats: Set<Long> = emptySet(),
         running: () -> Boolean = { true },
+        offsetFile: java.io.File? = null,
         onMessage: (chatId: Long, text: String) -> Unit
     )
 
@@ -44,6 +46,16 @@ interface TelegramChannelProvider {
     fun sendMessage(token: String, chatId: Long, text: String)
 
     /**
+     * Sends a photo to a Telegram chat via multipart upload.
+     *
+     * @param token   Telegram Bot API token.
+     * @param chatId  Target chat ID.
+     * @param file    Image file to send (JPEG/PNG/etc.).
+     * @param caption Optional caption text (max 1024 chars).
+     */
+    fun sendPhoto(token: String, chatId: Long, file: java.io.File, caption: String = "")
+
+    /**
      * Sends a long text split into chunks of [chunkSize] characters.
      * Telegram messages are limited to 4096 characters.
      */
@@ -51,9 +63,9 @@ interface TelegramChannelProvider {
         if (text.length <= chunkSize) {
             sendMessage(token, chatId, text)
         } else {
-            text.chunked(chunkSize).forEach { chunk ->
+            text.chunked(chunkSize).forEachIndexed { i, chunk ->
+                if (i > 0) Thread.sleep(300)
                 sendMessage(token, chatId, chunk)
-                Thread.sleep(300) // avoid flood limits
             }
         }
     }
