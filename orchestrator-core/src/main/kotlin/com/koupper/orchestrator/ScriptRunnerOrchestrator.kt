@@ -83,6 +83,7 @@ object ScriptRunner {
 
         if (t.startsWith("{") || t.startsWith("[")) {
             if (t.contains("\\\"") || t.contains("\\\\")) {
+                if (runCatching { mapper.readTree(t); true }.getOrDefault(false)) return t
                 return t
                     .replace("\\\"", "\"")
                     .replace("\\\\", "\\")

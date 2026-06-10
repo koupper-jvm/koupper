@@ -1063,8 +1063,8 @@ private object SessionStdoutBridge {
     fun installOnce() {
         if (!installed.compareAndSet(false, true)) return
 
-        val routingOut = PrintStream(RoutingOutputStream(OutputStreamType.STDOUT), true, Charsets.UTF_8.name())
-        val routingErr = PrintStream(RoutingOutputStream(OutputStreamType.STDERR), true, Charsets.UTF_8.name())
+        val routingOut = PrintStream(RoutingOutputStream(OutputStreamType.STDOUT), false, Charsets.UTF_8.name())
+        val routingErr = PrintStream(RoutingOutputStream(OutputStreamType.STDERR), false, Charsets.UTF_8.name())
         System.setOut(routingOut)
         System.setErr(routingErr)
     }
