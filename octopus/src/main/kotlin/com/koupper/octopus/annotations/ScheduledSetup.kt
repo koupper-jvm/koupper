@@ -28,10 +28,16 @@ object ScheduledSetup {
     private lateinit var injector: (String) -> Any?
     private val scheduler = Executors.newScheduledThreadPool(2)
     private var replaySpec: LogSpec? = null
+    private val registeredScripts = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
     fun attachLogSpec(spec: LogSpec) { replaySpec = spec }
 
     fun run(jlc: JobsListenerCall, injector: (String) -> Any? = { null }): Any {
+        val scriptKey = jlc.scriptPath ?: jlc.functionName
+        if (registeredScripts.containsKey(scriptKey)) {
+            return "⏭️ Already scheduled: $scriptKey — skipping re-registration"
+        }
+        registeredScripts[scriptKey] = true
         this.jlc = jlc
         this.injector = injector
         this.scheduledParams = jlc.annotationParams as? Map<*, *> ?: emptyMap<Any?, Any?>()
