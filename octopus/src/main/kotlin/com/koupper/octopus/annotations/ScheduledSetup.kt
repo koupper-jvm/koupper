@@ -2,9 +2,6 @@ package com.koupper.octopus.annotations
 
 import com.koupper.container.app
 import com.koupper.logging.LogSpec
-import com.koupper.logging.captureLogs
-import com.koupper.logging.toStreamRoutingConfig
-import com.koupper.logging.withScriptLogger
 import com.koupper.orchestrator.*
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.providers.files.JSONFileHandler
@@ -16,10 +13,10 @@ import com.koupper.shared.octopus.extractExportFunctionSignature
 import com.koupper.shared.octopus.looksLikeObjectLiteral
 import com.koupper.shared.octopus.normalizeObjectLiteralToJson
 import com.koupper.shared.octopus.readTextOrNull
-import com.koupper.shared.runtime.ScriptingHostBackend
 import java.io.File
 import java.nio.file.Paths
 import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -28,7 +25,6 @@ object ScheduledSetup {
     private lateinit var scheduledParams: Map<*, *>
     private var workerConfigId: String? = null
     private val jsonHandler = app.getInstance(JSONFileHandler::class)
-    private lateinit var backend: ScriptingHostBackend
     private lateinit var injector: (String) -> Any?
     private val scheduler = Executors.newScheduledThreadPool(2)
     private var replaySpec: LogSpec? = null
@@ -38,11 +34,54 @@ object ScheduledSetup {
     fun run(jlc: JobsListenerCall, injector: (String) -> Any? = { null }): Any {
         this.jlc = jlc
         this.injector = injector
-        this.backend = ScriptingHostBackend()
-        this.backend.eval(jlc.code)
         this.scheduledParams = jlc.annotationParams as? Map<*, *> ?: emptyMap<Any?, Any?>()
         this.workerConfigId = scheduledParams["configId"] as? String
         return createScheduledJob()
+    }
+
+    private fun toJsonValue(raw: String): String = when {
+        raw.startsWith("{") || raw.startsWith("[") -> raw        // object / array
+        raw.startsWith("\"") -> raw                              // already quoted string
+        raw == "true" || raw == "false" -> raw                   // boolean
+        raw.toDoubleOrNull() != null -> raw                      // number
+        raw == "null" -> raw                                     // null
+        else -> "\"${raw.replace("\\", "\\\\").replace("\"", "\\\"")}\""  // bare string → quote it
+    }
+
+    private fun enqueueJob(workerTask: KouTask, triggeredBy: String) {
+        val scriptPath = workerTask.scriptPath ?: return
+        val home = System.getProperty("user.home")
+        val jobsDir = System.getenv("CORTEX_JOBS_DIR")?.let { File(it) }
+            ?: File(home, ".koupper/jobs")
+        // Use the annotation's configId as queue name if it looks like a simple name,
+        // otherwise fall back to "default"
+        val queue = workerConfigId
+            ?.takeIf { it.isNotBlank() && !it.contains('/') && !it.contains('\\') }
+            ?: "default"
+        val queueDir = File(jobsDir, queue).also { it.mkdirs() }
+
+        val agentName = File(scriptPath).name.removeSuffix(".kts")
+        val jobId = "$agentName-scheduled-${System.currentTimeMillis()}"
+        val submittedAt = java.time.LocalTime.now()
+            .format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+
+        val inputFragment = when {
+            workerTask.params.isEmpty() -> ""
+            workerTask.params.size == 1 -> {
+                val v = toJsonValue(workerTask.params["arg0"] ?: workerTask.params.values.first())
+                ""","input":$v"""
+            }
+            else -> {
+                val arr = workerTask.params.entries
+                    .sortedBy { it.key.removePrefix("arg").toIntOrNull() ?: Int.MAX_VALUE }
+                    .joinToString(",") { toJsonValue(it.value) }
+                ""","input":[$arr]"""
+            }
+        }
+
+        File(queueDir, "$jobId.json").writeText(
+            """{"id":"$jobId","fileName":"$agentName","functionName":"${workerTask.functionName}","scriptPath":"$scriptPath","sourceType":"script","triggeredBy":"$triggeredBy","submittedAt":"$submittedAt"$inputFragment}"""
+        )
     }
 
     private fun asMap(value: Any?): Map<*, *> = value as? Map<*, *> ?: emptyMap<Any?, Any?>()
@@ -251,7 +290,6 @@ object ScheduledSetup {
 
         val cron = schedulePlan.cron
         val rate = schedulePlan.rate
-        val debug = schedulePlan.debug
 
         val workerTask = KouTask(
             id = java.util.UUID.randomUUID().toString(),
@@ -290,12 +328,7 @@ object ScheduledSetup {
                         val next = executionTime.nextExecution(now).orElse(null) ?: break
                         val delay = java.time.Duration.between(now, next).toMillis()
                         Thread.sleep(delay)
-                        captureLogs<Any?>("Scheduled.Cron", replaySpec!!) { logger ->
-                            withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
-                                val result = ScriptRunner.runScript(workerTask, backend.getSymbol(workerTask.functionName))
-                                if (debug) logger.info { "🟢 [CRON] Result: $result" }
-                            }
-                        }
+                        enqueueJob(workerTask, "scheduled/cron:$cron")
                     }
                 }
                 return "🕒 Scheduled job '${jlc.functionName}' running with CRON: $cron"
@@ -303,24 +336,14 @@ object ScheduledSetup {
 
             rate > 0 -> {
                 scheduler.scheduleAtFixedRate({
-                    captureLogs<Any?>("Scheduled.Rate", replaySpec!!) { logger ->
-                        withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
-                            val result = ScriptRunner.runScript(workerTask, backend.getSymbol(workerTask.functionName))
-                            if (debug) logger.info { "🟢 [RATE] Result: $result" }
-                        }
-                    }
+                    enqueueJob(workerTask, "scheduled/rate:${rate}ms")
                 }, 0, rate, TimeUnit.MILLISECONDS)
                 return "🔁 Scheduled job '${jlc.functionName}' repeating every ${rate}ms"
             }
 
             delay > 0 -> {
                 scheduler.schedule({
-                    captureLogs<Any?>("Scheduled.Delay", replaySpec!!) { logger ->
-                        withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
-                            val result = ScriptRunner.runScript(workerTask, backend.getSymbol(workerTask.functionName))
-                            if (debug) logger.info { "🟢 [DELAY] Result: $result" }
-                        }
-                    }
+                    enqueueJob(workerTask, "scheduled/delay:${delay}ms")
                 }, delay, TimeUnit.MILLISECONDS)
                 return "⏳ Scheduled job '${jlc.functionName}' delayed for ${delay}ms"
             }
@@ -330,24 +353,14 @@ object ScheduledSetup {
                 val now = ZonedDateTime.now()
                 val diff = java.time.Duration.between(now, runAt).toMillis().coerceAtLeast(0)
                 scheduler.schedule({
-                    captureLogs<Any?>("Scheduled.At", replaySpec!!) { logger ->
-                        withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
-                            val result = ScriptRunner.runScript(workerTask, backend.getSymbol(workerTask.functionName))
-                            if (debug) logger.info { "🟢 [AT] Result: $result" }
-                        }
-                    }
+                    enqueueJob(workerTask, "scheduled/at:$at")
                 }, diff, TimeUnit.MILLISECONDS)
                 return "⏰ Scheduled job '${jlc.functionName}' scheduled for $runAt"
             }
 
             else -> {
-                captureLogs<Any?>("Scheduled.Immediate", replaySpec!!) { logger ->
-                    withScriptLogger(logger, replaySpec?.mdc!!, replaySpec?.toStreamRoutingConfig()) {
-                        val result = ScriptRunner.runScript(workerTask, backend.getSymbol(workerTask.functionName))
-                        if (debug) logger.info { "🟢 [IMMEDIATE] Result: $result" }
-                    }
-                }
-                return "🚀 Scheduled job executed immediately"
+                enqueueJob(workerTask, "scheduled/immediate")
+                return "🚀 Scheduled job enqueued immediately"
             }
         }
     }
