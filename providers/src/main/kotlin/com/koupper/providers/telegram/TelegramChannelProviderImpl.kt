@@ -76,19 +76,23 @@ class TelegramChannelProviderImpl : TelegramChannelProvider {
 
     override fun sendMessage(token: String, chatId: Long, text: String) {
         if (text.isBlank()) return
-        runCatching {
-            val payload = mapper.writeValueAsString(mapOf(
-                "chat_id"    to chatId,
-                "text"       to text.take(4096),
-                "parse_mode" to "HTML"
-            ))
-            val req = HttpRequest.newBuilder()
-                .uri(URI.create("${baseUrl(token)}/sendMessage"))
-                .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(15))
-                .POST(HttpRequest.BodyPublishers.ofString(payload))
-                .build()
-            http.send(req, HttpResponse.BodyHandlers.ofString())
+        val payload = mapper.writeValueAsString(mapOf(
+            "chat_id"    to chatId,
+            "text"       to text.take(4096),
+            "parse_mode" to "HTML"
+        ))
+        val req = HttpRequest.newBuilder()
+            .uri(URI.create("${baseUrl(token)}/sendMessage"))
+            .header("Content-Type", "application/json")
+            .timeout(Duration.ofSeconds(15))
+            .POST(HttpRequest.BodyPublishers.ofString(payload))
+            .build()
+        val resp = http.send(req, HttpResponse.BodyHandlers.ofString())
+        if (resp.statusCode() != 200) {
+            val desc = runCatching {
+                mapper.readValue<Map<String, Any>>(resp.body())["description"] as? String
+            }.getOrNull() ?: resp.body()
+            error("Telegram sendMessage failed (${resp.statusCode()}): $desc")
         }
     }
 
@@ -121,7 +125,13 @@ class TelegramChannelProviderImpl : TelegramChannelProvider {
                 .timeout(Duration.ofSeconds(60))
                 .POST(HttpRequest.BodyPublishers.ofByteArray(baos.toByteArray()))
                 .build()
-            http.send(req, HttpResponse.BodyHandlers.ofString())
+            val resp = http.send(req, HttpResponse.BodyHandlers.ofString())
+            if (resp.statusCode() != 200) {
+                val desc = runCatching {
+                    mapper.readValue<Map<String, Any>>(resp.body())["description"] as? String
+                }.getOrNull() ?: resp.body()
+                error("Telegram sendPhoto failed (${resp.statusCode()}): $desc")
+            }
         }
     }
 }
