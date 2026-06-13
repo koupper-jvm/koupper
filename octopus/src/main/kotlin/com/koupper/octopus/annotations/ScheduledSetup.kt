@@ -30,6 +30,9 @@ object ScheduledSetup {
     private var replaySpec: LogSpec? = null
     private val registeredScripts = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
+    /** Public registry: scriptKey → effective schedule entry. Read by CortexWebUiAgent for the Calendar. */
+    val scheduleRegistry = java.util.concurrent.ConcurrentHashMap<String, Map<String, Any?>>()
+
     fun attachLogSpec(spec: LogSpec) { replaySpec = spec }
 
     fun run(jlc: JobsListenerCall, injector: (String) -> Any? = { null }): Any {
@@ -316,6 +319,9 @@ object ScheduledSetup {
         val delay = schedulePlan.delay
         val at = schedulePlan.at
 
+        val scriptKey = jlc.scriptPath ?: jlc.functionName
+        val agentFileName = jlc.scriptPath?.let { File(it).name } ?: jlc.functionName
+
         when {
             // 🕒 CRON MODE
             !cron.isNullOrBlank() -> {
@@ -337,6 +343,7 @@ object ScheduledSetup {
                         enqueueJob(workerTask, "scheduled/cron:$cron")
                     }
                 }
+                scheduleRegistry[scriptKey] = mapOf("id" to scriptKey, "agent" to agentFileName, "type" to "cron", "cron" to cron, "enabled" to schedulePlan.enabled)
                 return "🕒 Scheduled job '${jlc.functionName}' running with CRON: $cron"
             }
 
@@ -344,6 +351,7 @@ object ScheduledSetup {
                 scheduler.scheduleAtFixedRate({
                     enqueueJob(workerTask, "scheduled/rate:${rate}ms")
                 }, 0, rate, TimeUnit.MILLISECONDS)
+                scheduleRegistry[scriptKey] = mapOf("id" to scriptKey, "agent" to agentFileName, "type" to "rate", "rateMs" to rate, "enabled" to schedulePlan.enabled)
                 return "🔁 Scheduled job '${jlc.functionName}' repeating every ${rate}ms"
             }
 
@@ -351,6 +359,7 @@ object ScheduledSetup {
                 scheduler.schedule({
                     enqueueJob(workerTask, "scheduled/delay:${delay}ms")
                 }, delay, TimeUnit.MILLISECONDS)
+                scheduleRegistry[scriptKey] = mapOf("id" to scriptKey, "agent" to agentFileName, "type" to "rate", "rateMs" to delay, "enabled" to schedulePlan.enabled)
                 return "⏳ Scheduled job '${jlc.functionName}' delayed for ${delay}ms"
             }
 
@@ -361,11 +370,13 @@ object ScheduledSetup {
                 scheduler.schedule({
                     enqueueJob(workerTask, "scheduled/at:$at")
                 }, diff, TimeUnit.MILLISECONDS)
+                scheduleRegistry[scriptKey] = mapOf("id" to scriptKey, "agent" to agentFileName, "type" to "once", "runAt" to at, "enabled" to schedulePlan.enabled)
                 return "⏰ Scheduled job '${jlc.functionName}' scheduled for $runAt"
             }
 
             else -> {
                 enqueueJob(workerTask, "scheduled/immediate")
+                scheduleRegistry[scriptKey] = mapOf("id" to scriptKey, "agent" to agentFileName, "type" to "once", "enabled" to schedulePlan.enabled)
                 return "🚀 Scheduled job enqueued immediately"
             }
         }
