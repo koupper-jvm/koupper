@@ -22,9 +22,6 @@ object ReactiveSetup {
     private val lastFired  = ConcurrentHashMap<String, Long>()
     private var replaySpec: LogSpec? = null
 
-    /** Public registry for Calendar: scriptKey → trigger entry */
-    val triggerRegistry = ConcurrentHashMap<String, Map<String, Any?>>()
-
     fun attachLogSpec(spec: LogSpec) { replaySpec = spec }
 
     // ── Entry points per annotation ────────────────────────────────────────────
@@ -38,7 +35,7 @@ object ReactiveSetup {
         val cooldown = parseCooldownMs(jlc.annotationParams["cooldown"]?.toString() ?: "60m")
         val agentFile = jlc.scriptPath?.let { File(it).name } ?: jlc.functionName
 
-        triggerRegistry[key] = mapOf("id" to key, "agent" to agentFile, "type" to "trigger",
+        TriggerRegistry.entries[key] = mapOf("id" to key, "agent" to agentFile, "type" to "trigger",
             "trigger" to "queue_empty", "queue" to queue, "cooldown" to cooldown, "enabled" to true)
 
         executor.submit {
@@ -66,7 +63,7 @@ object ReactiveSetup {
         val cooldown = parseCooldownMs(jlc.annotationParams["cooldown"]?.toString() ?: "30m")
         val agentFile = jlc.scriptPath?.let { File(it).name } ?: jlc.functionName
 
-        triggerRegistry[key] = mapOf("id" to key, "agent" to agentFile, "type" to "trigger",
+        TriggerRegistry.entries[key] = mapOf("id" to key, "agent" to agentFile, "type" to "trigger",
             "trigger" to "job_failed", "queue" to queue, "cooldown" to cooldown, "enabled" to true)
 
         executor.submit {
@@ -93,7 +90,7 @@ object ReactiveSetup {
         val watchPath = File(rawPath.replace("~", System.getProperty("user.home"))).also { it.mkdirs() }
         val agentFile = jlc.scriptPath?.let { File(it).name } ?: jlc.functionName
 
-        triggerRegistry[key] = mapOf("id" to key, "agent" to agentFile, "type" to "trigger",
+        TriggerRegistry.entries[key] = mapOf("id" to key, "agent" to agentFile, "type" to "trigger",
             "trigger" to "file_created", "path" to rawPath, "cooldown" to cooldown, "enabled" to true)
 
         executor.submit {
@@ -122,7 +119,7 @@ object ReactiveSetup {
         val cooldown = parseCooldownMs(jlc.annotationParams["cooldown"]?.toString() ?: "5m")
         val agentFile = jlc.scriptPath?.let { File(it).name } ?: jlc.functionName
 
-        triggerRegistry[key] = mapOf("id" to key, "agent" to agentFile, "type" to "trigger",
+        TriggerRegistry.entries[key] = mapOf("id" to key, "agent" to agentFile, "type" to "trigger",
             "trigger" to "agent_down", "watchedAgent" to agent, "cooldown" to cooldown, "enabled" to true)
 
         executor.submit {

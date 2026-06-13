@@ -116,12 +116,16 @@ class ScriptingHostBackend(
     private val compilationConfig: ScriptCompilationConfiguration by lazy {
         ScriptCompilationConfiguration {
             jvm {
-                dependenciesFromCurrentContext(wholeClasspath = true)
                 jvmTarget("17")
 
+                // Use the runtime JAR (octopus.jar) as the explicit compilation classpath.
+                // Avoids scanning the full classloader hierarchy which can hit JARs with bad LOC headers.
                 val selfJar = this::class.java.protectionDomain.codeSource?.location?.toURI()?.let { File(it) }
                 if (selfJar != null && selfJar.exists() && selfJar.extension == "jar") {
                     updateClasspath(listOf(selfJar))
+                } else {
+                    // Fallback: scan whole classpath (may fail in some JVM configurations)
+                    dependenciesFromCurrentContext(wholeClasspath = true)
                 }
 
                 if (extraClasspath.isNotEmpty()) {
