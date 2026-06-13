@@ -6,11 +6,15 @@ private enum class Kind { TERMINAL, SIDE_EFFECT }
 private data class FamilyMeta(val kind: Kind, val priority: Int)
 
 private val annotationsPriority: Map<String, FamilyMeta> = mapOf(
-    "Logger"       to FamilyMeta(Kind.SIDE_EFFECT, 30),
-    "JobsListener" to FamilyMeta(Kind.TERMINAL,    20),
-    "Scheduled"    to FamilyMeta(Kind.TERMINAL,    20),
-    "Timer"        to FamilyMeta(Kind.TERMINAL,    20),
-    "Export"       to FamilyMeta(Kind.TERMINAL,    10)
+    "Logger"        to FamilyMeta(Kind.SIDE_EFFECT, 30),
+    "JobsListener"  to FamilyMeta(Kind.TERMINAL,    20),
+    "Scheduled"     to FamilyMeta(Kind.TERMINAL,    20),
+    "Timer"         to FamilyMeta(Kind.TERMINAL,    20),
+    "OnQueueEmpty"  to FamilyMeta(Kind.TERMINAL,    20),
+    "OnJobFailed"   to FamilyMeta(Kind.TERMINAL,    20),
+    "OnFileCreated" to FamilyMeta(Kind.TERMINAL,    20),
+    "OnAgentDown"   to FamilyMeta(Kind.TERMINAL,    20),
+    "Export"        to FamilyMeta(Kind.TERMINAL,    10)
 )
 
 data class DispatcherInputParams(

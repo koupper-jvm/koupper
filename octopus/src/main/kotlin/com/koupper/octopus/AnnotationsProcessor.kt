@@ -7,6 +7,7 @@ import com.koupper.logging.toStreamRoutingConfig
 import com.koupper.logging.withScriptLogger
 import com.koupper.octopus.annotations.JobsListenerCall
 import com.koupper.octopus.annotations.JobsListenerSetup
+import com.koupper.octopus.annotations.ReactiveSetup
 import com.koupper.octopus.annotations.ScheduledSetup
 import com.koupper.octopus.annotations.TimerSetup
 import com.koupper.octopus.process.JobEvent
@@ -147,6 +148,54 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         }
         @Suppress("UNCHECKED_CAST")
         res(result as T)
+    }
+
+    put("OnQueueEmpty") { diParams, res ->
+        if (finalSpec == null) finalSpec = LogSpec(context = diParams.scriptContext, level = "DEBUG", destination = "console")
+        ReactiveSetup.attachLogSpec(finalSpec!!)
+        val result = ReactiveSetup.runOnQueueEmpty(JobsListenerCall(
+            scriptContext = diParams.scriptContext, scriptPath = diParams.scriptPath,
+            code = diParams.sentence, functionName = diParams.functionName,
+            paramsJson = emptyMap(), argTypes = emptyList(),
+            annotationParams = diParams.annotations["OnQueueEmpty"].orEmpty()
+        ))
+        @Suppress("UNCHECKED_CAST") res(result as T)
+    }
+
+    put("OnJobFailed") { diParams, res ->
+        if (finalSpec == null) finalSpec = LogSpec(context = diParams.scriptContext, level = "DEBUG", destination = "console")
+        ReactiveSetup.attachLogSpec(finalSpec!!)
+        val result = ReactiveSetup.runOnJobFailed(JobsListenerCall(
+            scriptContext = diParams.scriptContext, scriptPath = diParams.scriptPath,
+            code = diParams.sentence, functionName = diParams.functionName,
+            paramsJson = emptyMap(), argTypes = emptyList(),
+            annotationParams = diParams.annotations["OnJobFailed"].orEmpty()
+        ))
+        @Suppress("UNCHECKED_CAST") res(result as T)
+    }
+
+    put("OnFileCreated") { diParams, res ->
+        if (finalSpec == null) finalSpec = LogSpec(context = diParams.scriptContext, level = "DEBUG", destination = "console")
+        ReactiveSetup.attachLogSpec(finalSpec!!)
+        val result = ReactiveSetup.runOnFileCreated(JobsListenerCall(
+            scriptContext = diParams.scriptContext, scriptPath = diParams.scriptPath,
+            code = diParams.sentence, functionName = diParams.functionName,
+            paramsJson = emptyMap(), argTypes = emptyList(),
+            annotationParams = diParams.annotations["OnFileCreated"].orEmpty()
+        ))
+        @Suppress("UNCHECKED_CAST") res(result as T)
+    }
+
+    put("OnAgentDown") { diParams, res ->
+        if (finalSpec == null) finalSpec = LogSpec(context = diParams.scriptContext, level = "DEBUG", destination = "console")
+        ReactiveSetup.attachLogSpec(finalSpec!!)
+        val result = ReactiveSetup.runOnAgentDown(JobsListenerCall(
+            scriptContext = diParams.scriptContext, scriptPath = diParams.scriptPath,
+            code = diParams.sentence, functionName = diParams.functionName,
+            paramsJson = emptyMap(), argTypes = emptyList(),
+            annotationParams = diParams.annotations["OnAgentDown"].orEmpty()
+        ))
+        @Suppress("UNCHECKED_CAST") res(result as T)
     }
 
     put("Timer") { diParams, res ->
