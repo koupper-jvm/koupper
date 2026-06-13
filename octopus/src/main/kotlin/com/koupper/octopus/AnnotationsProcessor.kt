@@ -8,6 +8,7 @@ import com.koupper.logging.withScriptLogger
 import com.koupper.octopus.annotations.JobsListenerCall
 import com.koupper.octopus.annotations.JobsListenerSetup
 import com.koupper.octopus.annotations.ScheduledSetup
+import com.koupper.octopus.annotations.TimerSetup
 import com.koupper.octopus.process.JobEvent
 import com.koupper.octopus.process.ModuleAnalyzer
 import com.koupper.octopus.process.ModuleProcessor
@@ -142,6 +143,31 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                         else -> null
                     }
                 }
+            }
+        }
+        @Suppress("UNCHECKED_CAST")
+        res(result as T)
+    }
+
+    put("Timer") { diParams, res ->
+        if (finalSpec == null) {
+            finalSpec = LogSpec(context = diParams.scriptContext, level = "DEBUG", destination = "console")
+        }
+        TimerSetup.attachLogSpec(finalSpec!!)
+
+        val result = TimerSetup.run(
+            JobsListenerCall(
+                scriptContext = diParams.scriptContext,
+                scriptPath = diParams.scriptPath,
+                code = diParams.sentence,
+                functionName = diParams.functionName,
+                paramsJson = emptyMap(),
+                argTypes = emptyList(),
+                annotationParams = diParams.annotations["Timer"].orEmpty()
+            )
+        ) { typeName ->
+            when (typeName) {
+                else -> null
             }
         }
         @Suppress("UNCHECKED_CAST")
