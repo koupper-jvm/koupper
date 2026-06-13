@@ -9,5 +9,5 @@ object ScheduleRegistries {
     fun all(): List<Map<String, Any?>> =
         ScheduledSetup.scheduleRegistry.values.toList() +
         TimerSetup.timerRegistry.values.toList() +
-        ReactiveSetup.triggerRegistry.values.toList()
+        TriggerRegistry.entries.values.toList()
 }
