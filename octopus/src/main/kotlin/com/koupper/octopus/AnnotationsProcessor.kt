@@ -150,6 +150,32 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         res(result as T)
     }
 
+    put("Pipeline") { diParams, res ->
+        if (finalSpec == null) {
+            finalSpec = LogSpec(context = diParams.scriptContext, level = "DEBUG", destination = "console")
+        }
+        val spec = finalSpec!!
+        ScheduledSetup.attachLogSpec(spec)
+
+        val (result, _) = captureLogs<Any?>("Scripts.Dispatcher", spec) { logger ->
+            withScriptLogger(logger, spec.mdc, spec.toStreamRoutingConfig()) {
+                ScheduledSetup.run(
+                    JobsListenerCall(
+                        scriptContext = diParams.scriptContext,
+                        scriptPath = diParams.scriptPath,
+                        code = diParams.sentence,
+                        functionName = diParams.functionName,
+                        paramsJson = emptyMap(),
+                        argTypes = emptyList(),
+                        annotationParams = diParams.annotations["Pipeline"].orEmpty()
+                    )
+                ) { null }
+            }
+        }
+        @Suppress("UNCHECKED_CAST")
+        res(result as T)
+    }
+
     put("OnQueueEmpty") { diParams, res ->
         if (finalSpec == null) finalSpec = LogSpec(context = diParams.scriptContext, level = "DEBUG", destination = "console")
         ReactiveSetup.attachLogSpec(finalSpec!!)
@@ -229,7 +255,19 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
             backend = ScriptingHostBackend(extraClasspath = resolveGradleBuildClasspath(File(diParams.scriptContext)))
             
             val preamble = Octopus.providerPreamble
-            val (finalPreamble, cleanSentence) = if (preamble.isNotBlank()) {
+            // Injecting the preamble into scripts that don't use provider shortcuts triggers a
+            // K2/FIR NPE (source must not be null) in FirJvmModuleAccessibilityTypeChecker.
+            // Only inject when the script actually references provider symbols.
+            // Only inject preamble when the script uses provider shortcuts.
+            // Precise check: "koupper.<identifier>" but NOT inside import/package lines
+            // or path strings (e.g. import com.koupper.*, "/path/.koupper/...").
+            val usesProviders = diParams.sentence.let { src ->
+                Regex("""(?:^|[^./\w])koupper\.\w""").containsMatchIn(src) ||
+                Regex("""\blog\.""").containsMatchIn(src) ||
+                Regex("""\benv\(""").containsMatchIn(src) ||
+                Regex("""\bemit\(""").containsMatchIn(src)
+            }
+            val (finalPreamble, cleanSentence) = if (preamble.isNotBlank() && usesProviders) {
                 val scriptImports = mutableSetOf<String>()
                 val scriptLines = mutableListOf<String>()
                 diParams.sentence.lines().forEach { line ->
