@@ -823,6 +823,66 @@
       "docs": "https://koupper.com/docs/providers/build"
     },
     {
+      "id": "speech-to-text",
+      "serviceProvider": "SpeechToTextServiceProvider",
+      "description": "Audio transcription provider with two backends: local whisper-cpp CLI (STT_MODE=local) or OpenAI/Groq Whisper API (STT_MODE=api, default).",
+      "bindings": [
+        {
+          "contract": "SpeechToTextProvider",
+          "implementations": [
+            { "class": "WhisperCliSpeechToText", "tag": "local" },
+            { "class": "WhisperApiSpeechToText", "tag": "api" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "STT_MODE", "required": false, "description": "Transcription backend: api (default) or local." },
+        { "name": "WHISPER_API_KEY", "required": false, "description": "API key for OpenAI or Groq. Required when STT_MODE=api." },
+        { "name": "WHISPER_API_URL", "required": false, "description": "Whisper API base URL. Default: https://api.openai.com. Use https://api.groq.com/openai for Groq." },
+        { "name": "WHISPER_MODEL", "required": false, "description": "Model identifier for the API backend (default: whisper-1)." },
+        { "name": "WHISPER_COMMAND", "required": false, "description": "whisper-cpp binary path or command name (default: whisper-cpp). Required when STT_MODE=local." },
+        { "name": "WHISPER_MODEL_PATH", "required": false, "description": "Absolute path to the GGML model file. Required when STT_MODE=local." }
+      ],
+      "docs": "https://koupper.com/docs/providers/speech-to-text"
+    },
+    {
+      "id": "media-downloader",
+      "serviceProvider": "MediaDownloaderServiceProvider",
+      "description": "Media download and audio extraction provider wrapping yt-dlp and ffmpeg for video acquisition and transcription pipelines.",
+      "bindings": [
+        {
+          "contract": "MediaDownloaderProvider",
+          "implementations": [
+            { "class": "YtDlpMediaDownloader" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "YTDLP_COMMAND", "required": false, "description": "yt-dlp binary path or command name (default: yt-dlp). Must be installed on the system." },
+        { "name": "FFMPEG_COMMAND", "required": false, "description": "ffmpeg binary path or command name (default: ffmpeg). Required only for audio extraction." }
+      ],
+      "docs": "https://koupper.com/docs/providers/media-downloader"
+    },
+    {
+      "id": "interactive-browser",
+      "serviceProvider": "InteractiveBrowserServiceProvider",
+      "description": "Interactive browser automation provider with persistent session, stealth anti-detection, human-like scroll/click, and element extraction via Playwright.",
+      "bindings": [
+        {
+          "contract": "InteractiveBrowserProvider",
+          "implementations": [
+            { "class": "PlaywrightInteractiveBrowser" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "BROWSER_USER_AGENT", "required": false, "description": "Custom User-Agent string sent to the browser. Defaults to a standard Chrome 125 Windows UA." },
+        { "name": "BROWSER_CHANNEL", "required": false, "description": "Playwright browser channel: chrome (default) or chromium. Use chromium if Chrome is not installed." },
+        { "name": "BROWSER_SESSION_DIR", "required": false, "description": "Default persistent profile directory. Passed explicitly to openSession() in scripts." }
+      ],
+      "docs": "https://koupper.com/docs/providers/interactive-browser"
+    },
+    {
       "id": "lsp",
       "serviceProvider": "LspServiceProvider",
       "description": "Language Server Protocol bridge — hover, go-to-definition, and diagnostics via any LSP server (Kotlin Language Server, typescript-language-server, etc.).",
