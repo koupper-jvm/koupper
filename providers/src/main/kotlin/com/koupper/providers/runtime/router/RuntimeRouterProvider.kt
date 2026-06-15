@@ -202,7 +202,8 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
                     field.isAccessible = true
                     val handler = field.get(null)
                     if (handler != null) {
-                        registerDiscoveredRoute(webRoute, handler, discoveredRoutes)
+                        val isAuthRequired = field.isAnnotationPresent(Auth::class.java) || clazz.isAnnotationPresent(Auth::class.java)
+                        registerDiscoveredRoute(webRoute, handler, discoveredRoutes, isAuthRequired)
                     }
                 }
             }
@@ -216,7 +217,8 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
                     if (method.parameterCount == 0) { // Likely a getter for a top-level property
                         val handler = method.invoke(null)
                         if (handler != null) {
-                            registerDiscoveredRoute(webRoute, handler, discoveredRoutes)
+                            val isAuthRequired = method.isAnnotationPresent(Auth::class.java) || clazz.isAnnotationPresent(Auth::class.java)
+                            registerDiscoveredRoute(webRoute, handler, discoveredRoutes, isAuthRequired)
                         }
                     }
                 }
@@ -224,7 +226,7 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         } catch (e: Exception) { }
     }
 
-    private fun registerDiscoveredRoute(webRoute: WebRoute, handler: Any, discoveredRoutes: MutableList<String>) {
+    private fun registerDiscoveredRoute(webRoute: WebRoute, handler: Any, discoveredRoutes: MutableList<String>, isAuthRequired: Boolean = false) {
         val method = when (webRoute.method) {
             com.koupper.shared.annotations.RouteMethod.GET -> com.koupper.shared.runtime.RouteMethod.GET
             com.koupper.shared.annotations.RouteMethod.POST -> com.koupper.shared.runtime.RouteMethod.POST
@@ -237,15 +239,20 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
             .filter { it.name == "invoke" && !it.isBridge && it.parameterCount == 1 }
             .firstOrNull()?.genericParameterTypes?.firstOrNull()
 
+        val middlewares = mutableListOf<String>()
+        if (isAuthRequired) {
+            middlewares.add("auth") // Match the name used in Setup.kt templates
+        }
+
         val route = RegisteredRuntimeRoute(
             method = method,
             fullPath = webRoute.path,
-            middlewares = emptyList(), // Can be improved to scan @Auth
+            middlewares = middlewares,
             handler = handler,
             inputType = inputType
         )
         GlobalRouteRegistry.routes.add(route)
-        discoveredRoutes.add("${route.method} ${route.fullPath}")
+        discoveredRoutes.add("${route.method} ${route.fullPath}${if (isAuthRequired) " [AUTH]" else ""}")
     }
 
     override fun start(port: Int, host: String): RuntimeServerInfo {
