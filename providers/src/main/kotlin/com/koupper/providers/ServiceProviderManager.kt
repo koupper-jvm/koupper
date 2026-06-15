@@ -1,5 +1,8 @@
 package com.koupper.providers
 
+import com.koupper.providers.browser.InteractiveBrowserServiceProvider
+import com.koupper.providers.mediadownloader.MediaDownloaderServiceProvider
+import com.koupper.providers.stt.SpeechToTextServiceProvider
 import com.koupper.providers.buildops.BuildServiceProvider
 import com.koupper.providers.lsp.LspServiceProvider
 import com.koupper.providers.helloworld.HelloWorldServiceProvider
@@ -122,6 +125,9 @@ class ServiceProviderManager {
             HelloWorldServiceProvider::class,
             BuildServiceProvider::class,
             LspServiceProvider::class,
+            InteractiveBrowserServiceProvider::class,
+            MediaDownloaderServiceProvider::class,
+            SpeechToTextServiceProvider::class,
         )
     }
 }
