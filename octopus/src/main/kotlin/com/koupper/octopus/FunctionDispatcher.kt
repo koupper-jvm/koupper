@@ -9,6 +9,7 @@ private val annotationsPriority: Map<String, FamilyMeta> = mapOf(
     "Logger"        to FamilyMeta(Kind.SIDE_EFFECT, 30),
     "JobsListener"  to FamilyMeta(Kind.TERMINAL,    20),
     "Scheduled"     to FamilyMeta(Kind.TERMINAL,    20),
+    "Pipeline"      to FamilyMeta(Kind.TERMINAL,    20),
     "Timer"         to FamilyMeta(Kind.TERMINAL,    20),
     "OnQueueEmpty"  to FamilyMeta(Kind.TERMINAL,    20),
     "OnJobFailed"   to FamilyMeta(Kind.TERMINAL,    20),
