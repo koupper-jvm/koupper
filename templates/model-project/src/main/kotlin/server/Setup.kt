@@ -1,53 +1,36 @@
 package server
 
+import com.koupper.container.app
 import com.koupper.octopus.createDefaultConfiguration
-import jakarta.ws.rs.core.UriBuilder
-import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory
-import org.glassfish.jersey.server.ResourceConfig
-import java.net.URI
+import com.koupper.os.env
+import com.koupper.providers.runtime.router.RuntimeRouterProvider
 import java.util.logging.Logger
 
-const val BASE_URL = "http://localhost"
 const val PORT = 8080
-
-val logger: Logger = Logger.getLogger("ServerLogger")
-val executor = createDefaultConfiguration()
-
-class Setup : ResourceConfig() {
-    init {
-        packages("http.controllers")
-    }
-}
+val logger: Logger = Logger.getLogger("KoupperServer")
 
 fun main() {
-    val url: URI = UriBuilder.fromUri(BASE_URL)
-        .port(PORT)
-        .build()
+    val serverPort = env("PORT", required = false, default = PORT.toString()).toInt()
 
-    logger.info("Starting server at $url")
+    // 1. Inicializamos Koupper
+    createDefaultConfiguration()
 
-    try {
-        val httpServer = GrizzlyHttpServerFactory.createHttpServer(url, Setup(), true)
+    val router = app.getInstance(RuntimeRouterProvider::class)
 
-        setupShutdownHook(httpServer)
+    logger.info("🚀 Koupper native server starting...")
 
-        if (System.getenv("SHUTDOWN_TYPE") == "INPUT") {
-            logger.info("Press any key to shutdown the server...")
-            readLine()
-            logger.info("Shutting down the server from input...")
-            httpServer.shutdownNow()
-        } else {
-            logger.info("Server is running. Press Ctrl+C to shutdown.")
-            Thread.currentThread().join()
+    // 2. Registramos rutas base
+    router.registerRouter {
+        get<Any> {
+            path { "/health" }
+            script { { mapOf("status" to "UP") } }
         }
-    } catch (e: Exception) {
-        logger.severe("Error starting server: ${e.message}")
     }
-}
 
-fun setupShutdownHook(httpServer: org.glassfish.grizzly.http.server.HttpServer) {
-    Runtime.getRuntime().addShutdownHook(Thread {
-        logger.info("Shutting down the server from shutdown hook...")
-        httpServer.shutdownNow()
-    })
+    // 3. Arrancamos el motor HTTP
+    logger.info("📡 Starting server at http://0.0.0.0:$serverPort")
+    router.start(port = serverPort)
+
+    println("✅ Koupper Backend is LIVE. Press Ctrl+C to stop.")
+    Thread.currentThread().join()
 }
