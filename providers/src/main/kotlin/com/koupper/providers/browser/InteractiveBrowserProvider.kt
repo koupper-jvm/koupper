@@ -43,6 +43,7 @@ interface BrowserSession {
     fun extractFeedContext(maxChars: Int = 12_000): String
     fun extractFeedPosts(maxPosts: Int = 15): List<FeedPost>
     fun extractComments(maxComments: Int = 20): List<PostComment>
+    fun screenshotElementAt(selector: String, index: Int): ByteArray?
     fun evaluate(script: String): Any?
     fun screenshot(): ByteArray
     fun currentUrl(): String
