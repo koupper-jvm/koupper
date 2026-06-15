@@ -81,7 +81,7 @@ class PlaywrightBrowserSession(
     override fun extractFeedContext(maxChars: Int): String {
         val raw = page.evaluate("""
             (function() {
-                const VIDEO_PATTERNS = ['/reel/', '/videos/', '/watch', '/posts/'];
+                const VIDEO_PATTERNS = ['/reel/', '/videos/', '/watch'];
                 const isVideoLink = href => href && VIDEO_PATTERNS.some(p => href.includes(p));
 
                 const articles = Array.from(document.querySelectorAll('[role="article"]'));
@@ -182,6 +182,10 @@ class PlaywrightBrowserSession(
             )
         }
     }
+
+    override fun screenshotElementAt(selector: String, index: Int): ByteArray? = runCatching {
+        page.querySelectorAll(selector).getOrNull(index)?.screenshot()
+    }.getOrNull()
 
     override fun evaluate(script: String): Any? = page.evaluate(script)
 

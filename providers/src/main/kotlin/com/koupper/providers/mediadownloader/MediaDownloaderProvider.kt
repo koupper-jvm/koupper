@@ -7,7 +7,8 @@ data class DownloadRequest(
     val url: String,
     val outputDir: String = "./temp_videos",
     val format: String = "best[ext=mp4]/best",
-    val timeoutSeconds: Long = 300
+    val timeoutSeconds: Long = 300,
+    val cookiesFromBrowser: String? = null
 )
 
 data class DownloadResult(
@@ -53,14 +54,15 @@ class YtDlpMediaDownloader(
 
     override fun download(request: DownloadRequest): DownloadResult {
         File(request.outputDir).mkdirs()
-        val args = listOf(
-            ytDlpCommand,
-            "--print", "after_move:filepath",
-            "--format", request.format,
-            "--output", "${request.outputDir}/%(id)s.%(ext)s",
-            "--no-playlist",
-            request.url
-        )
+        val args = buildList {
+            add(ytDlpCommand)
+            add("--print"); add("after_move:filepath")
+            add("--format"); add(request.format)
+            add("--output"); add("${request.outputDir}/%(id)s.%(ext)s")
+            add("--no-playlist")
+            request.cookiesFromBrowser?.let { add("--cookies-from-browser"); add(it) }
+            add(request.url)
+        }
 
         val started = System.currentTimeMillis()
         val result = run(args, request.timeoutSeconds)
