@@ -883,6 +883,25 @@
       "docs": "https://koupper.com/docs/providers/interactive-browser"
     },
     {
+      "id": "vision",
+      "serviceProvider": "VisionServiceProvider",
+      "description": "Vision-capable LLM provider for image analysis (content type, summary, sentiment, relevance scoring) via any OpenAI-compatible vision API.",
+      "bindings": [
+        {
+          "contract": "VisionProvider",
+          "implementations": [
+            { "class": "OpenAICompatVisionProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "LLM_API_URL", "required": false, "description": "Base URL of the OpenAI-compatible vision API. Default: http://localhost:1234." },
+        { "name": "LLM_API_KEY", "required": false, "description": "API key for the vision LLM endpoint. Default: local." },
+        { "name": "LLM_MODEL", "required": false, "description": "Vision-capable model identifier. Default: gpt-4o." }
+      ],
+      "docs": "https://koupper.com/docs/providers/vision"
+    },
+    {
       "id": "lsp",
       "serviceProvider": "LspServiceProvider",
       "description": "Language Server Protocol bridge — hover, go-to-definition, and diagnostics via any LSP server (Kotlin Language Server, typescript-language-server, etc.).",
