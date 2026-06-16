@@ -483,6 +483,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
         result: (value: T) -> Unit
     ) {
         com.koupper.container.context = context
+        com.koupper.os.scriptContext = context
 
         val resolvedPath = if (File(scriptPath).isAbsolute) {
             scriptPath
@@ -510,6 +511,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
         result: (value: T) -> Unit
     ) {
         com.koupper.container.context = ""
+        com.koupper.os.scriptContext = koTask.context
 
         val content = app.getInstance(FileHandler::class).load(koTask.scriptPath!!).readText(Charsets.UTF_8)
 
