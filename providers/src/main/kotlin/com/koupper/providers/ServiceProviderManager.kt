@@ -44,6 +44,7 @@ import com.koupper.providers.ssh.SSHServiceProvider
 import com.koupper.providers.templates.TemplateServiceProvider
 import com.koupper.providers.vectordb.VectorDbServiceProvider
 import com.koupper.providers.memory.MemoryServiceProvider
+import com.koupper.providers.vision.VisionServiceProvider
 import com.koupper.providers.web.WebReaderServiceProvider
 import com.koupper.providers.pdf.PDFReaderServiceProvider
 import com.koupper.providers.search.WebSearchServiceProvider
@@ -108,6 +109,7 @@ class ServiceProviderManager {
             GitHubServiceProvider::class,
             AIServiceProvider::class,
             AILlmOpsServiceProvider::class,
+            VisionServiceProvider::class,
             TemplateServiceProvider::class,
             VectorDbServiceProvider::class,
             MemoryServiceProvider::class,

@@ -57,9 +57,10 @@ class DefaultAILlmOpsProvider(
                 model = request.model
             )
         )
-
+        // Greedy extraction handles responses wrapped in ```json...``` fences
+        val jsonStr = Regex("""\{[\s\S]*\}""").find(text)?.value ?: text
         return try {
-            mapper.readValue(text)
+            mapper.readValue(jsonStr)
         } catch (_: Throwable) {
             mapOf("raw" to text, "schemaHint" to request.schemaHint)
         }
