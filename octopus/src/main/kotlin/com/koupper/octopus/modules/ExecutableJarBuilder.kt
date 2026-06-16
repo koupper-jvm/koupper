@@ -44,11 +44,16 @@ class ExecutableJarBuilder(
             GlobalLogger.log.error(e) { "No se pudo eliminar el zip temporal: ${e.message}" }
         }
 
-        // 3. Configurar Gradle con el nombre y versión del proyecto
+        // 3. Configurar Gradle con el nombre, versión y entrypoint del proyecto.
+        // cleanProjectAndCreateBootstrapping() (paso 5) borra server/ y crea
+        // <packageName>.Bootstrapping con fun main(), así que el mainClass
+        // heredado del template ("server.SetupKt") debe apuntar ahí en su lugar.
+        val targetPackageName = this.packageName
         GradleConfigurator.configure {
             this.rootProjectName = projectName
             this.version = moduleVersion
             this.projectRootPath = projectRoot.absolutePath
+            this.mainClassFqcn = "$targetPackageName.BootstrappingKt"
         }
 
         // 4. Resolver process manager en libs/ (local-first, remote fallback)
