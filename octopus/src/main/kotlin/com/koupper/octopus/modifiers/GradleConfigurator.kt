@@ -10,6 +10,7 @@ class GradleConfigurator private constructor(
     private val version: String,
     private val packageName: String,
     private val projectRootPath: String,
+    private val mainClassFqcn: String?,
 ) {
     private var textFileHandler: TextFileHandler = app.getInstance(TextFileHandler::class)
 
@@ -18,6 +19,7 @@ class GradleConfigurator private constructor(
         builder.version,
         builder.packageName,
         builder.projectRootPath,
+        builder.mainClassFqcn,
     )
 
     companion object {
@@ -28,6 +30,7 @@ class GradleConfigurator private constructor(
     fun build() {
         this.setName()
         this.setVersion()
+        if (!mainClassFqcn.isNullOrBlank()) this.setMainClass()
     }
 
     private fun setName() {
@@ -48,6 +51,15 @@ class GradleConfigurator private constructor(
         )
     }
 
+    private fun setMainClass() {
+        this.textFileHandler.using(resolveProjectFilePath("build.gradle"))
+        this.textFileHandler.replaceLine(
+            this.textFileHandler.getNumberLineFor("mainClass.set(\"server.SetupKt\")"),
+            "    mainClass.set(\"${this.mainClassFqcn}\")",
+            overrideOriginal = true
+        )
+    }
+
     private fun resolveProjectFilePath(fileName: String): String {
         if (projectRootPath.isNotBlank()) {
             return File(projectRootPath, fileName).absolutePath
@@ -61,6 +73,7 @@ class GradleConfigurator private constructor(
         var version: String = "0.0.0"
         var packageName: String = ""
         var projectRootPath: String = ""
+        var mainClassFqcn: String? = null
 
         fun build() = GradleConfigurator(this)
     }
