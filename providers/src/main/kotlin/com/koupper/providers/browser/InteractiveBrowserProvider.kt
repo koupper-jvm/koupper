@@ -47,10 +47,18 @@ interface BrowserSession {
     fun evaluate(script: String): Any?
     fun screenshot(): ByteArray
     fun currentUrl(): String
+    /** Types text into the currently focused element, simulating real keypresses. */
+    fun type(text: String): BrowserSession
+    /** Presses a keyboard key on the currently focused element (e.g. "Enter", "Tab", "Escape"). */
+    fun pressKey(key: String): BrowserSession
+    /** Sets files on a file input element (for uploading images/files). */
+    fun uploadFile(selector: String, filePath: String): BrowserSession
     fun close()
 }
 
 interface InteractiveBrowserProvider {
     fun openSession(profileDir: String): BrowserSession
+    /** Attach to an already-running Chrome/Chromium launched with --remote-debugging-port=<port>. */
+    fun connectToExisting(cdpEndpoint: String = "http://localhost:9222"): BrowserSession
     fun close()
 }

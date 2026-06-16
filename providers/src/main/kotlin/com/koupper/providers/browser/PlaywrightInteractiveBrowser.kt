@@ -189,9 +189,24 @@ class PlaywrightBrowserSession(
 
     override fun evaluate(script: String): Any? = page.evaluate(script)
 
-    override fun screenshot(): ByteArray = page.screenshot()
+    override fun screenshot(): ByteArray = page.screenshot(Page.ScreenshotOptions().setTimeout(8_000.0))
 
     override fun currentUrl(): String = page.url()
+
+    override fun type(text: String): BrowserSession {
+        page.keyboard().type(text)
+        return this
+    }
+
+    override fun pressKey(key: String): BrowserSession {
+        page.keyboard().press(key)
+        return this
+    }
+
+    override fun uploadFile(selector: String, filePath: String): BrowserSession {
+        page.locator(selector).first().setInputFiles(Path.of(filePath))
+        return this
+    }
 
     override fun close() {
         runCatching { page.close() }
@@ -225,6 +240,13 @@ class PlaywrightInteractiveBrowser : InteractiveBrowserProvider {
         )
         context.addInitScript(STEALTH_SCRIPT)
         return PlaywrightBrowserSession(context, context.newPage())
+    }
+
+    override fun connectToExisting(cdpEndpoint: String): BrowserSession {
+        val browser  = playwright.chromium().connectOverCDP(cdpEndpoint)
+        val context  = browser.contexts().firstOrNull() ?: browser.newContext()
+        val page     = context.pages().firstOrNull() ?: context.newPage()
+        return PlaywrightBrowserSession(context, page)
     }
 
     override fun close() {
