@@ -7,16 +7,14 @@ import io.vertx.kotlin.core.json.obj
 import io.zeko.db.sql.connections.*
 
 class DBSQLiteConnector : DBConnector, Setup() {
-    private lateinit var pool: HikariDBPool
-    private val databaseName = env("DB_DATABASE")
 
-    override suspend fun session(): DBSession {
-        val config = Json.obj(
-            "url" to "jdbc:sqlite:$databaseName"
-        )
+    private val databaseName: String get() = env("DB_DATABASE")
 
-        pool = HikariDBPool(config)
-
-        return HikariDBSession(pool, pool.createConnection())
+    // Pool created once on first session() call — at that point scriptContext is already set
+    private val pool: HikariDBPool by lazy {
+        Class.forName("org.sqlite.JDBC")
+        HikariDBPool(Json.obj("url" to "jdbc:sqlite:$databaseName"))
     }
+
+    override suspend fun session(): DBSession = HikariDBSession(pool, pool.createConnection())
 }
