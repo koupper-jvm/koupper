@@ -7,6 +7,9 @@ import java.io.File
 val envs = mutableListOf<String>()
 private val logger = LoggerFactory.get("Koupper-OS")
 
+/** Set by the Octopus runtime when executing a script (the script's working directory). */
+var scriptContext: String? = null
+
 fun env(
     variableName: String,
     context: String? = null,
@@ -42,11 +45,18 @@ fun env(
     }
 
     if (value == null) {
-        val fromDotEnv = try {
-            File("${if (context != null) context + File.separator else ""}.env").getProperty(variableName)
-        } catch (_: Exception) { "undefined" }
-
-        value = if (fromDotEnv != "undefined") fromDotEnv else null
+        // explicit context > scriptContext (set by Octopus per script run) > JVM cwd
+        val searchRoot = context?.takeIf { it.isNotBlank() }
+            ?: scriptContext?.takeIf { it.isNotBlank() }
+            ?: "."
+        val startDir = File(searchRoot)
+        val fromDotEnv = generateSequence(startDir.canonicalFile) { it.parentFile }
+            .mapNotNull { dir ->
+                runCatching { File(dir, ".env").getProperty(variableName).takeIf { it != "undefined" } }
+                    .getOrNull()
+            }
+            .firstOrNull()
+        value = fromDotEnv
     }
 
     if (value == null) {
