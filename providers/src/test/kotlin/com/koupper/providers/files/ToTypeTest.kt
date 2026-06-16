@@ -1,4 +1,4 @@
-package com.koupper.shared
+package com.koupper.providers.files
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

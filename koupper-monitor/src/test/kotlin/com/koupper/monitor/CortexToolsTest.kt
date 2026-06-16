@@ -3,7 +3,6 @@ package com.koupper.monitor
 import com.koupper.providers.mcp.LocalMCPServerProvider
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldHaveSize
-import io.kotest.matchers.maps.shouldContainKey
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import java.io.File
@@ -93,7 +92,7 @@ class CortexToolsTest : StringSpec({
                 "content" to "code"
             )) as Map<String, Any?>
 
-            result shouldContainKey "error"
+            result.containsKey("error") shouldBe true
         } finally { agentsDir.deleteRecursively() }
     }
 
@@ -102,7 +101,7 @@ class CortexToolsTest : StringSpec({
         try {
             @Suppress("UNCHECKED_CAST")
             val result = mcp.callTool("create_agent", mapOf("content" to "code")) as Map<String, Any?>
-            result shouldContainKey "error"
+            result.containsKey("error") shouldBe true
         } finally { agentsDir.deleteRecursively() }
     }
 
@@ -114,7 +113,7 @@ class CortexToolsTest : StringSpec({
             @Suppress("UNCHECKED_CAST")
             val result = mcp.callTool("run_agent", mapOf("name" to "GhostAgent")) as Map<String, Any?>
 
-            result shouldContainKey "error"
+            result.containsKey("error") shouldBe true
             (result["error"] as String) shouldContain "not found"
         } finally { agentsDir.deleteRecursively(); jobsDir.deleteRecursively() }
     }
@@ -252,7 +251,7 @@ class CortexToolsTest : StringSpec({
         try {
             @Suppress("UNCHECKED_CAST")
             val result = mcp.callTool("fetch_url", mapOf("url" to "ftp://example.com")) as Map<String, Any?>
-            result shouldContainKey "error"
+            result.containsKey("error") shouldBe true
         } finally { agentsDir.deleteRecursively(); jobsDir.deleteRecursively() }
     }
 
@@ -261,7 +260,7 @@ class CortexToolsTest : StringSpec({
         try {
             @Suppress("UNCHECKED_CAST")
             val result = mcp.callTool("fetch_url", emptyMap<String, Any?>()) as Map<String, Any?>
-            result shouldContainKey "error"
+            result.containsKey("error") shouldBe true
         } finally { agentsDir.deleteRecursively(); jobsDir.deleteRecursively() }
     }
 
@@ -274,7 +273,7 @@ class CortexToolsTest : StringSpec({
             val result = mcp.callTool("pipeline_run", mapOf(
                 "stages" to listOf("GhostStage1", "GhostStage2")
             )) as Map<String, Any?>
-            result shouldContainKey "error"
+            result.containsKey("error") shouldBe true
             (result["error"] as String) shouldContain "not in store"
         } finally { agentsDir.deleteRecursively(); jobsDir.deleteRecursively() }
     }
@@ -306,7 +305,7 @@ class CortexToolsTest : StringSpec({
         try {
             @Suppress("UNCHECKED_CAST")
             val result = mcp.callTool("swarm_run", mapOf("agents" to emptyList<Any>())) as Map<String, Any?>
-            result shouldContainKey "error"
+            result.containsKey("error") shouldBe true
         } finally { agentsDir.deleteRecursively(); jobsDir.deleteRecursively() }
     }
 
