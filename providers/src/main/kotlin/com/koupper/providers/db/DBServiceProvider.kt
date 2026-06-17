@@ -8,6 +8,8 @@ class DBServiceProvider : ServiceProvider() {
         this.registerPostgres()
 
         this.registerSQLite()
+
+        this.registerMysql()
     }
 
     private fun registerPostgres() {
@@ -18,8 +20,13 @@ class DBServiceProvider : ServiceProvider() {
         app.bind(DBConnector::class, { DBSQLiteConnector() }, "DBSQLiteConnector")
     }
 
+    private fun registerMysql() {
+        app.bind(DBConnector::class, { DBMySQLConnector() }, "DBMySQLConnector")
+    }
+
     override fun externalDependencies() = listOf(
         "org.postgresql:postgresql:42.7.2",
-        "org.xerial:sqlite-jdbc:3.45.1.0"
+        "org.xerial:sqlite-jdbc:3.45.1.0",
+        "com.mysql:mysql-connector-j:9.1.0"
     )
 }
