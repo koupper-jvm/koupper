@@ -64,7 +64,7 @@ val launchProcess: (() -> Unit) -> Thread = { callback ->
 
 val waitFor: (Thread) -> Thread = { thread ->
     val loading = Thread {
-        val a = arrayOf("⁘", "⁙", "⁚", "⁛", "⁜")
+        val a = arrayOf("\u2058", "\u2059", "\u205A", "\u205B", "\u205C")
 
         while (thread.isAlive) {
             print("building ${a.random()}")
@@ -80,6 +80,17 @@ val waitFor: (Thread) -> Thread = { thread ->
 
 class ServiceProviderManager {
     fun listProviders(): List<KClass<*>> {
+        val discovered = ServiceProvider.discoverProviderClasses()
+
+        if (discovered.isNotEmpty()) {
+            return discovered
+        }
+
+        // Fallback: hardcoded list for environments without generated SPI file
+        return hardcodedProviderList()
+    }
+
+    private fun hardcodedProviderList(): List<KClass<*>> {
         return listOf(
             DBServiceProvider::class,
             DockerServiceProvider::class,

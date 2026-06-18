@@ -840,12 +840,65 @@ class Octopus(private var container: Container) : ScriptExecutor {
         return this.registeredServiceProviders
     }
 
+    /**
+     * Topologically sorts providers so that providers with declared dependencies
+     * are initialized after the providers they depend on.
+     */
+    private fun topologicalSort(
+        nodes: List<KClass<*>>,
+        dependencyMap: Map<KClass<*>, Set<KClass<*>>>
+    ): List<KClass<*>> {
+        if (nodes.isEmpty()) return nodes
+
+        val result = mutableListOf<KClass<*>>()
+        val visited = mutableSetOf<KClass<*>>()
+        val visiting = mutableSetOf<KClass<*>>()
+
+        fun dfs(node: KClass<*>) {
+            if (node in visited) return
+            if (node in visiting) return
+            visiting.add(node)
+            dependencyMap[node]?.forEach { dep -> if (dep in nodes) dfs(dep) }
+            visiting.remove(node)
+            visited.add(node)
+            result.add(node)
+        }
+
+        for (node in nodes) {
+            if (node !in visited) dfs(node)
+        }
+
+        return result
+    }
+
     fun registerBuildInServicesProvidersInContainer(): Map<KClass<*>, Any> {
+        val providerInstances = mutableMapOf<KClass<*>, ServiceProvider>()
+
+        for (providerClass in this.registeredServiceProviders) {
+            try {
+                providerInstances[providerClass] = providerClass.constructors.elementAt(0).call() as ServiceProvider
+            } catch (e: Exception) {
+                GlobalLogger.log.warn { "[Koupper] Provider ${providerClass.simpleName} instantiation failed: ${e.message}" }
+            }
+        }
+
+        val dependencyMap = mutableMapOf<KClass<*>, MutableSet<KClass<*>>>()
+        for ((providerClass, instance) in providerInstances) {
+            val deps = instance.dependencies().filter { it in providerInstances }.map { it as KClass<*> }.toMutableSet()
+            dependencyMap[providerClass] = deps
+        }
+
+        val sorted = topologicalSort(providerInstances.keys.toList(), dependencyMap)
+
         val providers = mutableListOf<ServiceProvider>()
-        this.registeredServiceProviders.forEach { providerClass ->
-            val provider = (providerClass.constructors.elementAt(0).call() as ServiceProvider)
-            provider.up()
-            providers.add(provider)
+        for (providerClass in sorted) {
+            val provider = providerInstances[providerClass] ?: continue
+            try {
+                provider.up()
+                providers.add(provider)
+            } catch (e: Exception) {
+                GlobalLogger.log.warn { "[Koupper] Provider ${providerClass.simpleName}.up() failed: ${e.message}" }
+            }
         }
 
         val allFunctions = providers.flatMap { it.topLevelFunctions().values }

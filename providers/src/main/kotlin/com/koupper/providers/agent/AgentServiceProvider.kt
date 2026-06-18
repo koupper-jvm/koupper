@@ -6,9 +6,19 @@ import com.koupper.providers.files.JSONFileHandler
 import com.koupper.providers.process.ProcessSupervisor
 import com.koupper.providers.runtime.router.RuntimeRouterProvider
 import com.koupper.providers.mcp.MCPServerProvider
+import com.koupper.providers.mcp.MCPServiceProvider
+import com.koupper.providers.files.FileServiceProvider
+import com.koupper.providers.process.ProcessSupervisorServiceProvider
 import kotlinx.coroutines.runBlocking
+import kotlin.reflect.KClass
 
 class AgentServiceProvider : ServiceProvider() {
+
+    override fun dependencies(): List<KClass<out ServiceProvider>> = listOf(
+        MCPServiceProvider::class,
+        FileServiceProvider::class,
+        ProcessSupervisorServiceProvider::class
+    )
 
     override fun up() {
         println("🐙 [AGENTIC_CORE] Booting AgentServiceProvider...")
