@@ -15,3 +15,37 @@ jar {
     }
 }
 
+def generateServiceProviderSpi = tasks.register('generateServiceProviderSpi') {
+    def outputDir = file("$buildDir/generated/resources/META-INF/services")
+    def outputFile = file("$outputDir/com.koupper.providers.ServiceProvider")
+    def sourceDir = file('src/main/kotlin')
+
+    inputs.dir(sourceDir)
+    outputs.file(outputFile)
+
+    doLast {
+        def providerClasses = []
+        sourceDir.eachFileRecurse { file ->
+            if (file.name.endsWith('ServiceProvider.kt')) {
+                def content = file.text
+                def pkgMatcher = content =~ /package\s+([\w.]+)/
+                def pkg = pkgMatcher ? pkgMatcher[0][1] : null
+                def classMatcher = content =~ /class\s+(\w+ServiceProvider)\s*[:(]/
+                classMatcher.each { match ->
+                    def className = match[1]
+                    if (pkg && className != 'ServiceProvider') {
+                        providerClasses << "${pkg}.${className}"
+                    }
+                }
+            }
+        }
+        providerClasses = providerClasses.unique().sort()
+        outputDir.mkdirs()
+        outputFile.text = providerClasses.join('\n') + '\n'
+        logger.lifecycle("Generated SPI file with ${providerClasses.size()} ServiceProvider implementations")
+    }
+}
+
+sourceSets.main.resources.srcDir("$buildDir/generated/resources")
+processResources.dependsOn(generateServiceProviderSpi)
+
