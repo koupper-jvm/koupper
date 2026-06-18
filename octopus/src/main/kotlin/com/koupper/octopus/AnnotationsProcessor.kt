@@ -303,6 +303,12 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         val functionArgTypeNames = functionSignature?.parameterTypes ?: emptyList()
         val paramsJson = buildParamsJson(functionArgTypeNames, diParams.params?.positionals ?: emptyList(), diParams.params?.params ?: emptyMap(), diParams.params?.flags ?: emptySet())
 
+        val hasSecret = diParams.annotations.containsKey("Secret")
+        if (hasSecret) {
+            val values = paramsJson.values.filter { it.isNotBlank() }.toSet()
+            SecretRedactor.enable(values)
+        }
+
         val (result, _) = captureLogs("Scripts.Dispatcher", spec) { logger ->
             withScriptLogger(logger, spec.mdc, spec.toStreamRoutingConfig()) {
                 if (diParams.callable != null) {
@@ -337,6 +343,10 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                     }
                 }
             }
+        }
+
+        if (hasSecret) {
+            SecretRedactor.disable()
         }
         @Suppress("UNCHECKED_CAST")
         res(result as T)
