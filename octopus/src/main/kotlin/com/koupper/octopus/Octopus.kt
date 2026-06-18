@@ -1165,16 +1165,17 @@ private object SessionStdoutBridge {
     }
 
     private fun emit(text: String, streamType: OutputStreamType) {
+        val redacted = SecretRedactor.redact(text)
         val level = currentLevel(streamType)
         val output = sessionOutput.get()
         if (output != null) {
-            output.printLine(text, level, responseMode.get() ?: ResponseMode.LEGACY, requestId.get())
+            output.printLine(redacted, level, responseMode.get() ?: ResponseMode.LEGACY, requestId.get())
         } else {
             if (reentrantGuard.get()) {
                 if (streamType == OutputStreamType.STDERR) {
-                    originalErr.print(text)
+                    originalErr.print(redacted)
                 } else {
-                    originalOut.print(text)
+                    originalOut.print(redacted)
                 }
                 return
             }
@@ -1182,14 +1183,14 @@ private object SessionStdoutBridge {
             reentrantGuard.set(true)
             try {
                 when (level) {
-                    LogLevel.TRACE -> GlobalLogger.log.trace { text }
-                    LogLevel.DEBUG -> GlobalLogger.log.debug { text }
-                    LogLevel.INFO -> GlobalLogger.log.info { text }
-                    LogLevel.WARN -> GlobalLogger.log.warn { text }
-                    LogLevel.ERROR -> GlobalLogger.log.error { text }
+                    LogLevel.TRACE -> GlobalLogger.log.trace { redacted }
+                    LogLevel.DEBUG -> GlobalLogger.log.debug { redacted }
+                    LogLevel.INFO -> GlobalLogger.log.info { redacted }
+                    LogLevel.WARN -> GlobalLogger.log.warn { redacted }
+                    LogLevel.ERROR -> GlobalLogger.log.error { redacted }
                 }
             } catch (_: Throwable) {
-                fallback.print(text)
+                fallback.print(redacted)
             } finally {
                 reentrantGuard.set(false)
             }

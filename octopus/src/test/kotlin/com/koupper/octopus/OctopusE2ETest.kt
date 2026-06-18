@@ -54,4 +54,18 @@ class OctopusE2ETest : AnnotationSpec() {
 
         assertTrue(result.contains("Multiple @Export"), "should mention Multiple @Export: $result")
     }
+
+    @Test
+    fun `should compile and run script with Secret annotation`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            import com.koupper.shared.annotations.Secret
+
+            @Secret
+            @Export
+            val setup: () -> String = { "secret-op-ok" }
+        """.trimIndent())
+
+        assertEquals("secret-op-ok", result)
+    }
 }
