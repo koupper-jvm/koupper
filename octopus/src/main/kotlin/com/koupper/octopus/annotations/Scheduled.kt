@@ -8,5 +8,6 @@ annotation class Scheduled(
     val configId: String = "",
     val debug: Boolean = false,
     val delay: Long = 0L,
-    val at: String = ""
+    val at: String = "",
+    val chain: String = ""
 )
