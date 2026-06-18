@@ -38,6 +38,7 @@ subprojects {
     tasks.withType(Test) {
         useJUnitPlatform()
         failFast = true
+        forkEvery = 1
     }
 
     dependencies {
