@@ -68,4 +68,44 @@ class OctopusE2ETest : AnnotationSpec() {
 
         assertEquals("secret-op-ok", result)
     }
+
+    @Test
+    fun `should pass version check when declared version matches runtime`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            import com.koupper.shared.annotations.KoupperVersion
+
+            @KoupperVersion("6.5")
+            @Export
+            val setup: () -> String = { "version-ok" }
+        """.trimIndent())
+
+        assertEquals("version-ok", result)
+    }
+
+    @Test
+    fun `should fail when declared version does not match runtime`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            import com.koupper.shared.annotations.KoupperVersion
+
+            @KoupperVersion("99.0")
+            @Export
+            val setup: () -> String = { "never-runs" }
+        """.trimIndent())
+
+        assertTrue(result.contains("version mismatch"), "should fail with version mismatch: $result")
+    }
+
+    @Test
+    fun `should have KOUPPER_VERSION available in script`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+
+            @Export
+            val setup: () -> String = { KOUPPER_VERSION }
+        """.trimIndent())
+
+        assertTrue(result.startsWith("6."), "KOUPPER_VERSION should be 6.x: $result")
+    }
 }

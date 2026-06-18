@@ -40,7 +40,7 @@ fun extractExportedDeclarations(script: String): List<ExportedDeclaration> {
     )
 
     val singleAnn = Regex("""@([\w.]+)\s*(?:\(([^)]*)\))?""")
-    val argRegex = Regex("""(\w+)\s*=\s*("[^"]*"|'[^']*'|[^,\s)]+)""")
+    val posArgRegex = Regex("""(?:(\w+)\s*=\s*)?("[^"]*"|'[^']*'|[^,\s)]+)""")
 
     return declWithAnns.findAll(script).mapNotNull { m ->
         val annsBlock = m.groupValues[1]
@@ -58,10 +58,14 @@ fun extractExportedDeclarations(script: String): List<ExportedDeclaration> {
 
             val args = mutableMapOf<String, String>()
             if (rawArgs.isNotBlank()) {
-                for (a in argRegex.findAll(rawArgs)) {
-                    val key = a.groupValues[1]
+                var posIdx = 0
+                for (a in posArgRegex.findAll(rawArgs)) {
+                    val key = a.groupValues[1].takeIf { it.isNotBlank() } ?: "value"
                     val value = a.groupValues[2].trim('"', '\'')
-                    args[key] = value
+                    // Append positional index to avoid overwriting when key is always "value"
+                    val effectiveKey = if (key == "value" && posIdx > 0) "value$posIdx" else key
+                    args[effectiveKey] = value
+                    posIdx++
                 }
             }
             annMap[simple] = args
