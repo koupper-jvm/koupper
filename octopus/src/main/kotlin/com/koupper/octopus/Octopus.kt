@@ -926,6 +926,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
 
         // Top-level shortcuts available in every script — no import needed
         val topLevelShortcuts = listOf(
+            "val KOUPPER_VERSION = \"$koupperVersion\"",
             "val log  = com.koupper.logging.GlobalLogger.log",
             "val home = System.getProperty(\"user.home\") ?: \"\"",
             "fun env(name: String, default: String = \"\") = com.koupper.os.envOptional(name, default)",
@@ -933,6 +934,8 @@ class Octopus(private var container: Container) : ScriptExecutor {
         )
 
         providerPreamble = (imports.sorted() + "" + topLevelShortcuts + "" + "object $namespace {" + bodies + "}").joinToString("\n")
+
+        providerPreambleVersion = koupperVersion
 
         val typedBindings = mutableMapOf<KClass<*>, Any>()
         this.container.getBindings().forEach { (key, value) ->
@@ -945,7 +948,9 @@ class Octopus(private var container: Container) : ScriptExecutor {
     }
 
     companion object {
+        const val koupperVersion = "6.5.3"
         var providerPreamble: String = ""
+        var providerPreambleVersion: String = koupperVersion
     }
 }
 

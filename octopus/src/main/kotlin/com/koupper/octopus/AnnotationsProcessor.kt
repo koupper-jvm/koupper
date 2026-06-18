@@ -250,6 +250,17 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
     }
 
     put("Export") { diParams, res ->
+        // Check @KoupperVersion before compilation
+        val declaredVersion = diParams.annotations["KoupperVersion"]?.get("value") as? String
+        if (declaredVersion != null && declaredVersion.isNotBlank()) {
+            val current = Octopus.providerPreambleVersion
+            if (!current.startsWith(declaredVersion)) {
+                @Suppress("UNCHECKED_CAST")
+                res("Koupper version mismatch: script expects v$declaredVersion but runtime is v$current. Update the script or downgrade Koupper." as T)
+                return@put
+            }
+        }
+
         var backend: ScriptingHostBackend? = null
         if (diParams.callable == null) {
             backend = ScriptingHostBackend(extraClasspath = resolveGradleBuildClasspath(File(diParams.scriptContext)))
@@ -265,7 +276,8 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                 Regex("""(?:^|[^./\w])koupper\.\w""").containsMatchIn(src) ||
                 Regex("""\blog\.""").containsMatchIn(src) ||
                 Regex("""\benv\(""").containsMatchIn(src) ||
-                Regex("""\bemit\(""").containsMatchIn(src)
+                Regex("""\bemit\(""").containsMatchIn(src) ||
+                Regex("""\bKOUPPER_VERSION\b""").containsMatchIn(src)
             }
             val (finalPreamble, cleanSentence) = if (preamble.isNotBlank() && usesProviders) {
                 val scriptImports = mutableSetOf<String>()
