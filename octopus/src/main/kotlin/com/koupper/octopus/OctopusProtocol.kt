@@ -182,6 +182,7 @@ internal fun daemonResponseJson(
     return "{" + listOf(
         jsonField("type", type),
         jsonField("requestId", requestId),
+        jsonField("traceId", com.koupper.octopus.TraceContext.get().takeIf { it != "unknown" }),
         jsonField("level", level),
         jsonField("message", message),
         jsonField("result", result),

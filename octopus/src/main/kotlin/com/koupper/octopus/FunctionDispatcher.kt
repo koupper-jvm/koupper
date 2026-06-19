@@ -26,6 +26,7 @@ data class DispatcherInputParams(
     val params: ParsedParams?,
     val sentence: String,
     val callable: Callable? = null,
+    val traceId: String? = null,
 )
 
 typealias UnifiedResolver<T> = (DispatcherInputParams, (T) -> Unit) -> Unit

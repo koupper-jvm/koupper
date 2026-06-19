@@ -185,7 +185,8 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 functionName = exportedFunctionName,
                 params = params,
                 sentence = sentence,
-                callable = callable
+                callable = callable,
+                traceId = TraceContext.get()
             )
 
 

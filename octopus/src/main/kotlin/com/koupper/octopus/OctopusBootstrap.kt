@@ -116,6 +116,9 @@ fun listenForExternalCommands(
 
                     SessionStdoutBridge.bind(sessionOutput, parsedCommand.mode, parsedCommand.requestId)
 
+                    val traceId = parsedCommand.requestId?.takeIf { it.isNotBlank() } ?: TraceContext.generate()
+                    TraceContext.set(traceId)
+
                     when {
                         parsedCommand.commandType == "CANCEL" -> {
                             val cancelled = ActiveExecutions.cancel(parsedCommand.requestId)
@@ -368,6 +371,7 @@ fun listenForExternalCommands(
                         SessionOutput(writer).error(traceMessage, ResponseMode.LEGACY, null)
                     } catch (_: Exception) {}
                 } finally {
+                    TraceContext.clear()
                     SessionStdoutBridge.clear()
                     TerminalContext.clear()
                     DaemonMetrics.onConnectionClosed()

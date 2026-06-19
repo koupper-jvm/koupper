@@ -12,14 +12,22 @@ data class ReflectionValidation(
 fun validateAnnotationsViaReflection(compiledClass: Class<*>, regexAnnotations: Map<String, Map<String, Any?>>): ReflectionValidation {
     val warnings = mutableListOf<String>()
 
-    val exportFields = compiledClass.declaredFields.filter { field ->
+    // Search declared fields AND superclass fields for @Export
+    val allFields = mutableListOf<java.lang.reflect.Field>()
+    var cls: Class<*>? = compiledClass
+    while (cls != null && cls != Any::class.java) {
+        allFields.addAll(cls.declaredFields.toList())
+        cls = cls.superclass
+    }
+
+    val exportFields = allFields.filter { field ->
         field.isAnnotationPresent(Export::class.java)
     }
     val exportNames = exportFields.map { it.name }
 
     if (exportNames.size > 1) {
         warnings.add("[REFLECTION] Multiple @Export fields detected: ${exportNames.joinToString(", ")}. Regex reported: ${regexAnnotations.size} annotations.")
-    } else if (exportNames.isEmpty()) {
+    } else if (exportNames.isEmpty() && regexAnnotations.isNotEmpty()) {
         warnings.add("[REFLECTION] No @Export field found in compiled class. Regex may have misidentified the entrypoint.")
     }
 
