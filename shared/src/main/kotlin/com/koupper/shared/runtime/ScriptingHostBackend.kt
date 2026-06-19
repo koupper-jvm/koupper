@@ -292,6 +292,9 @@ class ScriptingHostBackend(
     val lastScriptClassName: String?
         get() = lastScriptClass?.name
 
+    val compiledClass: Class<*>?
+        get() = lastScriptClass
+
     val availableSymbols: List<String>
         get() = lastScriptClass
             ?.declaredFields

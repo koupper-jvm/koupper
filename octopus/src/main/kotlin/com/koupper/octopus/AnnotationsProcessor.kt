@@ -18,6 +18,7 @@ import com.koupper.orchestrator.*
 import com.koupper.providers.io.TerminalContext
 import com.koupper.shared.normalizeType
 import com.koupper.shared.octopus.extractExportFunctionSignature
+import com.koupper.shared.octopus.reflectExportSignature
 import com.koupper.shared.runtime.ScriptingHostBackend
 import java.io.File
 
@@ -316,7 +317,11 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         val spec = finalSpec!!
 
         val functionSignature = extractExportFunctionSignature(diParams.sentence)
-        val functionArgTypeNames = functionSignature?.parameterTypes ?: emptyList()
+        val reflectedSig = backend?.compiledClass?.let { cls ->
+            reflectExportSignature(cls, diParams.functionName)
+        }
+        val effectiveSig = reflectedSig ?: functionSignature
+        val functionArgTypeNames = effectiveSig?.parameterTypes ?: emptyList()
         val paramsJson = buildParamsJson(functionArgTypeNames, diParams.params?.positionals ?: emptyList(), diParams.params?.params ?: emptyMap(), diParams.params?.flags ?: emptySet())
 
         val hasSecret = diParams.annotations.containsKey("Secret")

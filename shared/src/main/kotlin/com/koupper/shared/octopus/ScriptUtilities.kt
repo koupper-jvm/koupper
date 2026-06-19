@@ -106,6 +106,39 @@ data class ExportFunctionSignature(
     val code: String = ""
 )
 
+/**
+ * Extracts the export function signature from a compiled script class using reflection.
+ * This is the preferred method — it reads the actual compiled types, not regex-guessed strings.
+ */
+fun reflectExportSignature(scriptClass: Class<*>, fieldName: String): ExportFunctionSignature? {
+    return try {
+        val field = scriptClass.declaredFields.firstOrNull { it.name == fieldName } ?: return null
+        field.isAccessible = true
+        val value = field.get(null) ?: field.get(scriptClass.getDeclaredConstructor().newInstance())
+        val funcClass = value.javaClass
+
+        // Kotlin function types implement kotlin.jvm.functions.FunctionN
+        val funcIface = funcClass.genericInterfaces.firstOrNull { it.typeName.startsWith("kotlin.jvm.functions.Function") }
+            ?: return null
+
+        val typeArgs = funcIface.typeName
+            .substringAfter('<').substringBeforeLast('>')
+            .split(",").map { it.trim() }
+
+        val paramTypes = if (typeArgs.size > 1) typeArgs.dropLast(1) else emptyList()
+        val returnType = typeArgs.lastOrNull() ?: "kotlin.Unit"
+
+        ExportFunctionSignature(
+            packageName = null,
+            imports = emptyMap(),
+            parameterTypes = paramTypes,
+            returnType = returnType
+        )
+    } catch (e: Exception) {
+        null
+    }
+}
+
 fun extractExportFunctionSignature(
     rawTypeName: String,
     signature: ExportFunctionSignature,
