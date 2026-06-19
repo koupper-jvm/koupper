@@ -7,7 +7,7 @@ plugins {
 group = 'com.koupper'
 
 application {
-    mainClass = 'com.koupper.octopus.OctopusKt'
+    mainClass = 'com.koupper.octopus.OctopusBootstrapKt'
 }
 
 repositories {
@@ -18,7 +18,7 @@ tasks.named('jar', Jar) {
     zip64 = true
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
-        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+        attributes 'Main-Class': 'com.koupper.octopus.OctopusBootstrapKt'
         attributes 'Implementation-Title': 'Koupper Octopus'
         attributes 'Implementation-Version': project.version
     }
@@ -58,7 +58,7 @@ tasks.register('verifyFatJar') {
 tasks.register('optimized', Jar) {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
     manifest {
-        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+        attributes 'Main-Class': 'com.koupper.octopus.OctopusBootstrapKt'
         attributes 'Implementation-Title': 'Koupper Octopus'
         attributes 'Implementation-Version': project.version
     }
@@ -93,7 +93,7 @@ tasks.register('fatJar', Jar) {
     doFirst { delete(archiveFile) }
 
     manifest {
-        attributes 'Main-Class': 'com.koupper.octopus.OctopusKt'
+        attributes 'Main-Class': 'com.koupper.octopus.OctopusBootstrapKt'
         attributes 'Implementation-Title': 'Koupper Octopus'
         attributes 'Implementation-Version': project.version
     }

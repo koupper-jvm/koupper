@@ -108,7 +108,7 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         res(result as T)
     }
 
-    put("Scheduled") { diParams, res ->
+    put("Scheduled") { diParams, _ ->
         if (finalSpec == null) {
             finalSpec = LogSpec(context = diParams.scriptContext, level = "DEBUG", destination = "console")
         }
@@ -119,7 +119,7 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         val functionArgTypeNames = functionSignature?.parameterTypes ?: emptyList()
         val paramsJson = buildParamsJson(functionArgTypeNames, diParams.params?.positionals ?: emptyList(), diParams.params?.params ?: emptyMap(), diParams.params?.flags ?: emptySet())
 
-        val (result, _) = captureLogs<Any?>("Scripts.Dispatcher", spec) { logger ->
+        captureLogs<Any?>("Scripts.Dispatcher", spec) { logger ->
             withScriptLogger(logger, spec.mdc, spec.toStreamRoutingConfig()) {
                 ScheduledSetup.run(
                     JobsListenerCall(
@@ -147,8 +147,6 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                 }
             }
         }
-        @Suppress("UNCHECKED_CAST")
-        res(result as T)
     }
 
     put("Pipeline") { diParams, res ->
