@@ -154,14 +154,18 @@ class ScriptingHostBackend(
     // ──────────────────────────────────────────────
 
     override fun eval(code: String): Any {
-        return evalWithSource(code, sourceName = null)
+        return evalWithSource(code, sourceName = null, lineOffset = 0)
     }
 
     fun eval(code: String, sourceName: String): Any {
-        return evalWithSource(code, sourceName)
+        return evalWithSource(code, sourceName, lineOffset = 0)
     }
 
-    private fun evalWithSource(code: String, sourceName: String?): Any {
+    fun eval(code: String, sourceName: String?, lineOffset: Int): Any {
+        return evalWithSource(code, sourceName, lineOffset)
+    }
+
+    private fun evalWithSource(code: String, sourceName: String?, lineOffset: Int = 0): Any {
         require(code.isNotBlank()) { "Script code must not be blank" }
 
         val scriptSourceName = sourceName?.takeIf { it.isNotBlank() }
@@ -185,11 +189,12 @@ class ScriptingHostBackend(
                 .filter { it.severity >= ScriptDiagnostic.Severity.WARNING }
                 .filter { shouldDisplayWarning(it) }
                 .forEach { diagnostic ->
-                    val location = diagnostic.location?.let { loc ->
-                        " (line ${loc.start.line}, col ${loc.start.col})"
+                    val adjustedLine = diagnostic.location?.let { loc ->
+                        val srcLine = (loc.start.line - lineOffset).coerceAtLeast(1)
+                        " (line $srcLine, col ${loc.start.col})"
                     } ?: ""
                     val src = sourceName?.takeIf { it.isNotBlank() }?.let { " [$it]" } ?: ""
-                    System.err.println("[ScriptingHost][${diagnostic.severity}]$src$location ${diagnostic.message}")
+                    System.err.println("[ScriptingHost][${diagnostic.severity}]$src$adjustedLine ${diagnostic.message}")
                 }
 
             val cs = compileResult.valueOrThrow()
