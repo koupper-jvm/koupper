@@ -339,15 +339,7 @@ object ScriptRunner {
             }
         }
 
-        try {
-            invoke.isAccessible = true
-        } catch (_: Exception) {
-            try {
-                val ao = Class.forName("java.lang.reflect.AccessibleObject")
-                val m = ao.getMethod("trySetAccessible")
-                m.invoke(invoke)
-            } catch (_: Throwable) { }
-        }
+        com.koupper.shared.ensureAccessible(invoke)
 
         val oldCl = Thread.currentThread().contextClassLoader
         Thread.currentThread().contextClassLoader = lambdaClass.classLoader
@@ -421,15 +413,7 @@ object ScriptRunner {
             }
         }
 
-        try {
-            invoke.isAccessible = true
-        } catch (_: Exception) {
-            try {
-                val ao = Class.forName("java.lang.reflect.AccessibleObject")
-                val m = ao.getMethod("trySetAccessible")
-                m.invoke(invoke)
-            } catch (_: Throwable) { }
-        }
+        com.koupper.shared.ensureAccessible(invoke)
 
         val meta = ExecutionMeta(
             exportId = exportIdFromSymbol(symbol),

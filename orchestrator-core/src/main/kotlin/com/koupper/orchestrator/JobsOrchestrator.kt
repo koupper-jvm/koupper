@@ -486,13 +486,7 @@ object JobRunner {
                         }
                     ?: error("❌ No se encontró método 'invoke' con aridad ${args.size} en ${lambdaClass.name}")
 
-                try { invoke.isAccessible = true } catch (_: Exception) {
-                    try {
-                        val ao = Class.forName("java.lang.reflect.AccessibleObject")
-                        val m  = ao.getMethod("trySetAccessible")
-                        m.invoke(invoke)
-                    } catch (_: Throwable) { /* ignore */ }
-                }
+                com.koupper.shared.ensureAccessible(invoke)
 
                 val result = invoke.invoke(value, *args.toTypedArray())
                 println("✅ Job result: $result")
@@ -502,7 +496,7 @@ object JobRunner {
             }
         } catch (e: Exception) {
             println("❌ Error ejecutando job compilado: ${e.message}")
-            e.printStackTrace()
+            GlobalLogger.log.error(e) { "Error executing compiled job: ${e.message}" }
             return null
         }
     }
@@ -1255,7 +1249,7 @@ object JobReplayer {
 
                     is JobResult.Error -> {
                         replayLogger.warn { res.message }
-                        res.exception?.printStackTrace()
+                        res.exception?.let { GlobalLogger.log.error(it) { "Job replay error: ${it.message}" } }
                     }
                 }
             }
