@@ -100,7 +100,7 @@ class ExecutableJarBuilder(
         // 3. Buscar y respaldar temporalmente la carpeta extensions (si existe)
         val extensionsBackup = backupExtensions(kotlinRoot.toFile())
 
-        // 4. ELIMINAR SOLO LAS CARPETAS ESPECÍFICAS (NO TODO)
+        // 4. Delete only specific folders (not everything)
         GlobalLogger.log.info { "Eliminando carpetas no deseadas:" }
 
         // Lista de carpetas a eliminar (solo las que están en la raíz de kotlin)
