@@ -323,6 +323,16 @@ class TextFileHandlerImpl : TextFileHandler {
         return content
     }
 
+    override fun writeLine(content: String, filePath: String) {
+        val file = when {
+            filePath != "undefined" -> File(filePath)
+            this.globalFilePath != "undefined" -> this.globalTargetFile
+            else -> throw Exception("It's necessary a file to do operations.")
+        }
+        file.parentFile?.mkdirs()
+        file.appendText(content + "\n", Charsets.UTF_8)
+    }
+
     override fun remove(): Boolean {
         return globalTargetFile.delete()
     }
