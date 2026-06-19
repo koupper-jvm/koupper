@@ -98,7 +98,7 @@ object ScheduledSetup {
         }
 
         File(queueDir, "$jobId.json").writeText(
-            """{"id":"$jobId","fileName":"$agentName","functionName":"${workerTask.functionName}","scriptPath":"$scriptPath","sourceType":"script","triggeredBy":"$triggeredBy","submittedAt":"$submittedAt"$inputFragment}"""
+            """{"id":"$jobId","fileName":"$agentName","functionName":"${workerTask.functionName}","scriptPath":"$scriptPath","sourceType":"script","triggeredBy":"$triggeredBy","submittedAt":"$submittedAt"$inputFragment,"traceId":"${com.koupper.octopus.TraceContext.get()}"}"""
         )
     }
 
@@ -120,7 +120,7 @@ object ScheduledSetup {
         val submittedAt = java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
         val jobId = "$coordinatorName-job"
         File(queueDir, "$jobId.json").writeText(
-            """{"id":"$jobId","fileName":"$coordinatorName","functionName":"setup","scriptPath":"${coordinatorFile.absolutePath}","sourceType":"script","triggeredBy":"pipeline/cron:$cron","submittedAt":"$submittedAt"}"""
+            """{"id":"$jobId","fileName":"$coordinatorName","functionName":"setup","scriptPath":"${coordinatorFile.absolutePath}","sourceType":"script","triggeredBy":"pipeline/cron:$cron","submittedAt":"$submittedAt","traceId":"${com.koupper.octopus.TraceContext.get()}"}"""
         )
     }
 
