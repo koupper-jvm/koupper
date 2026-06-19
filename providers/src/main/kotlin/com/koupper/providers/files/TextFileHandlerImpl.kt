@@ -112,7 +112,33 @@ class TextFileHandlerImpl : TextFileHandler {
 
 
     override fun replaceMultipleLines(lines: Map<Int, String>, filePath: String, overrideOriginal: Boolean): File {
-        TODO("Not yet implemented")
+        if (this.globalFilePath == "undefined" && filePath == "undefined") {
+            throw Exception("It's necessary a file to do operations.")
+        }
+
+        val file = if (this.globalFilePath != "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
+
+        val newContent = StringBuilder()
+        val existingLines = file.readLines()
+
+        for ((index, content) in existingLines.withIndex()) {
+            val lineNum = index + 1
+            val replacement = lines[lineNum]
+            if (replacement != null) {
+                newContent.append(replacement).append("\n")
+            } else {
+                newContent.append(content).append("\n")
+            }
+        }
+
+        return if (!overrideOriginal) {
+            val tmpFile = File(System.getProperty("java.io.tmpdir"), file.name)
+            tmpFile.writeText(newContent.toString())
+            tmpFile
+        } else {
+            file.printWriter().use { out -> out.print(newContent.toString()) }
+            file
+        }
     }
 
     override fun appendContentBefore(
