@@ -204,7 +204,9 @@ open class Route(private val container: Container) : RouteDefinition {
     }
 
     override fun stop() {
-        TODO("Not yet implemented")
+        // Server lifecycle is managed by the generated Setup.kt.
+        // To stop the server, kill the process running the generated code.
+        com.koupper.logging.GlobalLogger.log.info { "[Router] stop() called — server shutdown is handled externally" }
     }
 }
 
