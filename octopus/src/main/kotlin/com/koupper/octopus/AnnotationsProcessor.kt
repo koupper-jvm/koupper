@@ -19,6 +19,7 @@ import com.koupper.providers.io.TerminalContext
 import com.koupper.shared.normalizeType
 import com.koupper.shared.octopus.extractExportFunctionSignature
 import com.koupper.shared.octopus.reflectExportSignature
+import com.koupper.shared.octopus.validateAnnotationsViaReflection
 import com.koupper.shared.runtime.ScriptingHostBackend
 import java.io.File
 
@@ -307,6 +308,21 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
             } else 0
             
             backend.eval(augmentedScript, null, preambleLineCount)
+
+            // Validate annotations via reflection (post-compile)
+            backend.compiledClass?.let { cls ->
+                val validation = validateAnnotationsViaReflection(cls, diParams.annotations)
+                if (validation.warnings.isNotEmpty()) {
+                    com.koupper.logging.GlobalLogger.log.warn {
+                        "[ReflectionValidator] Warnings for ${diParams.scriptPath ?: diParams.functionName}: ${validation.warnings}"
+                    }
+                }
+                if (validation.exportCount > 1) {
+                    @Suppress("UNCHECKED_CAST")
+                    res("[ERR_EXPORT_MULTIPLE] Multiple @Export fields detected via reflection: ${validation.exportNames.joinToString(", ")}. Use exactly one @Export entrypoint." as T)
+                    return@put
+                }
+            }
         }
 
         if (finalSpec == null) {
