@@ -256,7 +256,7 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
             val current = Octopus.providerPreambleVersion
             if (!current.startsWith(declaredVersion)) {
                 @Suppress("UNCHECKED_CAST")
-                res("Koupper version mismatch: script expects v$declaredVersion but runtime is v$current. Update the script or downgrade Koupper." as T)
+                res("[ERR_VERSION_MISMATCH] Script expects v$declaredVersion but runtime is v$current. Update the script's @KoupperVersion or downgrade Koupper." as T)
                 return@put
             }
         }

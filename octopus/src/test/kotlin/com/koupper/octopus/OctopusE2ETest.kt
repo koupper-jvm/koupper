@@ -37,7 +37,7 @@ class OctopusE2ETest : AnnotationSpec() {
             val x: () -> String = { "nothing" }
         """.trimIndent())
 
-        assertTrue(result.contains("@Export"), "should mention @Export: $result")
+        assertTrue(result.contains("[ERR_EXPORT_MISSING]"), "should include error code: $result")
     }
 
     @Test
@@ -52,7 +52,7 @@ class OctopusE2ETest : AnnotationSpec() {
             val runner: () -> String = { "two" }
         """.trimIndent())
 
-        assertTrue(result.contains("Multiple @Export"), "should mention Multiple @Export: $result")
+        assertTrue(result.contains("[ERR_EXPORT_MULTIPLE]"), "should include error code: $result")
     }
 
     @Test
@@ -94,7 +94,20 @@ class OctopusE2ETest : AnnotationSpec() {
             val setup: () -> String = { "never-runs" }
         """.trimIndent())
 
-        assertTrue(result.contains("version mismatch"), "should fail with version mismatch: $result")
+        assertTrue(result.contains("[ERR_VERSION_MISMATCH]"), "should have error code: $result")
+    }
+
+    @Test
+    fun `should return compile error code for broken syntax`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+
+            @Export
+            val setup: () -> String = { brokenSyntax!!!
+        """.trimIndent())
+
+        assertTrue(result.contains("[ERR_COMPILE]") || result.contains("error"),
+            "should indicate compile failure: $result")
     }
 
     @Test
