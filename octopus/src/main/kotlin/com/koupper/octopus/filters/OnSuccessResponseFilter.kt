@@ -29,14 +29,15 @@ class OnSuccessResponseFilter : ContainerResponseFilter {
 
         val event: DomainEvent = try {
             builder.build(req, res)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            GlobalLogger.log.warn { "[OnSuccessFilter] Failed to build event: ${e.message}" }
             null
         } ?: return
 
         try {
             GlobalEventBus.bus.publish(event)
-        } catch (_: Exception) {
-            // no rompas la response
+        } catch (e: Exception) {
+            GlobalLogger.log.warn { "[OnSuccessFilter] Failed to publish event: ${e.message}" }
         }
     }
 
@@ -44,7 +45,8 @@ class OnSuccessResponseFilter : ContainerResponseFilter {
         ann.builder.objectInstance?.let { return it }
         return try {
             ann.builder.java.getDeclaredConstructor().newInstance()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            GlobalLogger.log.warn { "[OnSuccessFilter] Failed to instantiate event builder: ${ann.builder.simpleName}: ${e.message}" }
             null
         }
     }

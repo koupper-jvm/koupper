@@ -1,6 +1,7 @@
 package com.koupper.octopus.filters
 
 import com.koupper.container.app
+import com.koupper.logging.GlobalLogger
 import com.koupper.octopus.annotations.ApiKeyAuth
 import com.koupper.shared.annotations.Auth
 import com.koupper.os.env
@@ -82,7 +83,8 @@ class AuthFilter : ContainerRequestFilter {
         val jwt = app.getInstance(JWT::class)
         val decoded = try {
             jwt.decode(token, JWTAgentEnum.HMAC256)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            GlobalLogger.log.warn { "[AuthFilter] JWT decode failed: ${e.message}" }
             return null
         }
 

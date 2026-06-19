@@ -1,5 +1,6 @@
 package com.koupper.octopus.filters
 
+import com.koupper.logging.GlobalLogger
 import com.koupper.octopus.annotations.Authorize
 import com.koupper.providers.http.AuthSession
 import jakarta.annotation.Priority
@@ -31,7 +32,8 @@ class AuthorizationFilter : ContainerRequestFilter {
 
         val policy = try {
             ann.value.java.getDeclaredConstructor().newInstance()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            GlobalLogger.log.warn { "[AuthorizationFilter] Failed to instantiate auth policy: ${ann.value.simpleName}: ${e.message}" }
             ctx.abortWith(
                 Response.status(500)
                     .entity("""{"error":"auth_policy_init_failed"}""")
@@ -42,7 +44,8 @@ class AuthorizationFilter : ContainerRequestFilter {
 
         val allowed = try {
             policy.check(ctx)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            GlobalLogger.log.warn { "[AuthorizationFilter] Policy check failed: ${e.message}" }
             false
         }
 
