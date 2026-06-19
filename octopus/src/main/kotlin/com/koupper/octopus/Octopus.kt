@@ -259,7 +259,8 @@ internal fun daemonResponseJson(
     level: String? = null,
     message: String? = null,
     result: String? = null,
-    error: String? = null
+    error: String? = null,
+    errorCode: String? = null
 ): String {
     return "{" + listOf(
         jsonField("type", type),
@@ -267,7 +268,8 @@ internal fun daemonResponseJson(
         jsonField("level", level),
         jsonField("message", message),
         jsonField("result", result),
-        jsonField("error", error)
+        jsonField("error", error),
+        jsonField("errorCode", errorCode)
     ).joinToString(",") + "}"
 }
 
@@ -561,13 +563,13 @@ class Octopus(private var container: Container) : ScriptExecutor {
         val exportedDeclarations = extractExportedDeclarations(sentence)
         if (exportedDeclarations.size > 1) {
             val names = exportedDeclarations.joinToString(", ") { it.name }
-            result(castTo<T>("Multiple @Export declarations found: $names. Use exactly one @Export entrypoint (recommended: setup)."))
+            result(castTo<T>("[ERR_EXPORT_MULTIPLE] Multiple @Export declarations found: $names. Use exactly one @Export entrypoint (recommended: setup)."))
             return
         }
 
         val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence)
             ?: run {
-                result(castTo<T>("No function annotated with @Export was found."))
+                result(castTo<T>("[ERR_EXPORT_MISSING] No @Export entrypoint found. Add exactly one:\n  @Export\n  val setup: () -> String = { \"hello\" }"))
                 return
             }
 
@@ -600,7 +602,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             }
         } catch (e: Throwable) {
             if (e is InterruptedException) {
-                result(castTo<T>("Script interrupted by cancellation request"))
+                result(castTo<T>("[ERR_CANCELLED] Script interrupted by cancellation request"))
                 return
             }
             
@@ -611,11 +613,11 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 rootCause = rootCause.cause!!
             }
             if (rootCause is InterruptedException) {
-                result(castTo<T>("Script interrupted by cancellation request"))
+                result(castTo<T>("[ERR_CANCELLED] Script interrupted by cancellation request"))
                 return
             }
 
-            result(castTo<T>("Script error: ${e.message}"))
+            result(castTo<T>("[ERR_COMPILE] Script compilation failed: ${e.message}"))
         }
     }
 
@@ -1087,17 +1089,18 @@ private class SessionOutput(private val writer: java.io.BufferedWriter) {
         }
     }
 
-    fun error(message: String, mode: ResponseMode = ResponseMode.LEGACY, requestId: String? = null) {
+    fun error(message: String, mode: ResponseMode = ResponseMode.LEGACY, requestId: String? = null, errorCode: String? = null) {
         synchronized(lock) {
             when (mode) {
                 ResponseMode.LEGACY -> {
-                    writer.write("ERROR::$message")
+                    val prefix = if (errorCode != null) "[$errorCode] " else ""
+                    writer.write("ERROR::$prefix$message")
                     writer.newLine()
                     writer.flush()
                 }
 
                 ResponseMode.JSON -> {
-                    writer.write(daemonResponseJson(type = "error", requestId = requestId, error = message))
+                    writer.write(daemonResponseJson(type = "error", requestId = requestId, error = message, errorCode = errorCode))
                     writer.newLine()
                     writer.flush()
                 }
