@@ -84,7 +84,8 @@ data class CollectionPager(
 
                 else -> list
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            com.koupper.logging.GlobalLogger.log.warn { "[Pager] Sort failed for '$orderBy': ${e.message}" }
             result
         }
     }
@@ -633,7 +634,8 @@ data class DynamoPager(
                 startKey = startKey,
                 history = history
             )
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            com.koupper.logging.GlobalLogger.log.warn { "[Pager] Failed to decode cursor: ${e.message}" }
             null
         }
     }
