@@ -27,8 +27,6 @@ fun validateAnnotationsViaReflection(compiledClass: Class<*>, regexAnnotations: 
 
     if (exportNames.size > 1) {
         warnings.add("[REFLECTION] Multiple @Export fields detected: ${exportNames.joinToString(", ")}. Regex reported: ${regexAnnotations.size} annotations.")
-    } else if (exportNames.isEmpty() && regexAnnotations.isNotEmpty()) {
-        warnings.add("[REFLECTION] No @Export field found in compiled class. Regex may have misidentified the entrypoint.")
     }
 
     val annotationMap = mutableMapOf<String, Map<String, String>>()
