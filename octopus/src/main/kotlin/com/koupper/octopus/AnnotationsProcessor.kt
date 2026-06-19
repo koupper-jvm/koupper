@@ -302,8 +302,12 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
             } else {
                 diParams.sentence
             }
+
+            val preambleLineCount = if (finalPreamble.isNotBlank()) {
+                finalPreamble.lines().size + 1 // +1 for the "\n" separator
+            } else 0
             
-            backend.eval(augmentedScript)
+            backend.eval(augmentedScript, null, preambleLineCount)
         }
 
         if (finalSpec == null) {
