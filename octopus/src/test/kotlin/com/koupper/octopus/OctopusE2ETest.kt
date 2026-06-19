@@ -165,4 +165,60 @@ class OctopusE2ETest : AnnotationSpec() {
         assertEquals("first", r1)
         assertEquals("second", r2)
     }
+
+    @Test
+    fun `should use env with default value`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export
+            val setup: () -> String = {
+                val v = env("NONEXISTENT_VAR_12345", "fallback")
+                "got: ${'$'}v"
+            }
+        """.trimIndent())
+        assertEquals("got: fallback", result)
+    }
+
+    @Test
+    fun `should run same script twice with consistent results`() {
+        val script = """
+            import com.koupper.shared.annotations.Export
+            @Export val s: () -> String = {"consistent"}
+        """.trimIndent()
+
+        val r1 = octopus.runScript(script)
+        val r2 = octopus.runScript(script)
+        assertEquals("consistent", r1)
+        assertEquals("consistent", r2)
+    }
+
+    @Test
+    fun `should handle export with multiline lambda body`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export
+            val setup: () -> String = {
+                val x = 10
+                val y = 20
+                (x + y).toString()
+            }
+        """.trimIndent())
+        assertEquals("30", result)
+    }
+
+    @Test
+    fun `should include suggestion in error message`() {
+        val result = octopus.runScript("val x = 1")
+        assertTrue(result.contains("@Export"), "error should contain @Export hint: $result")
+        assertTrue(result.contains("Add exactly one"), "error should have actionable suggestion: $result")
+    }
+
+    @Test
+    fun `should handle script with only whitespace and comments`() {
+        val result = octopus.runScript("""
+            // This is a comment
+            val x = 1
+        """.trimIndent())
+        assertTrue(result.contains("[ERR_EXPORT_MISSING]"), "should fail with error: $result")
+    }
 }
