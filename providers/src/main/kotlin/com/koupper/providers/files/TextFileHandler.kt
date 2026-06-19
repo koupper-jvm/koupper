@@ -180,6 +180,14 @@ interface TextFileHandler {
     fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder
 
     /**
+     * Appends a line at the end of a file, creating it if it doesn't exist.
+     *
+     * @property content the text to append.
+     * @property filePath the file path. Uses the global file if "undefined".
+     */
+    fun writeLine(content: String, filePath: String = "undefined")
+
+    /**
      * Remove the global file.
      */
     fun remove(): Boolean
