@@ -11,11 +11,9 @@ class OctopusE2ETest : AnnotationSpec() {
     fun `should run script with Export and return result`() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
-
             @Export
             val setup: () -> String = { "hello world" }
         """.trimIndent())
-
         assertEquals("hello world", result)
     }
 
@@ -23,20 +21,15 @@ class OctopusE2ETest : AnnotationSpec() {
     fun `should run simple computation script`() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
-
             @Export
             val setup: () -> String = { (40 + 2).toString() }
         """.trimIndent())
-
         assertEquals("42", result)
     }
 
     @Test
     fun `should fail when no Export annotation`() {
-        val result = octopus.runScript("""
-            val x: () -> String = { "nothing" }
-        """.trimIndent())
-
+        val result = octopus.runScript("""val x: () -> String = { "nothing" }""")
         assertTrue(result.contains("[ERR_EXPORT_MISSING]"), "should include error code: $result")
     }
 
@@ -44,14 +37,9 @@ class OctopusE2ETest : AnnotationSpec() {
     fun `should fail when multiple Export declarations`() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
-
-            @Export
-            val setup: () -> String = { "one" }
-
-            @Export
-            val runner: () -> String = { "two" }
+            @Export val setup: () -> String = { "one" }
+            @Export val runner: () -> String = { "two" }
         """.trimIndent())
-
         assertTrue(result.contains("[ERR_EXPORT_MULTIPLE]"), "should include error code: $result")
     }
 
@@ -60,12 +48,9 @@ class OctopusE2ETest : AnnotationSpec() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
             import com.koupper.shared.annotations.Secret
-
-            @Secret
-            @Export
+            @Secret @Export
             val setup: () -> String = { "secret-op-ok" }
         """.trimIndent())
-
         assertEquals("secret-op-ok", result)
     }
 
@@ -74,12 +59,9 @@ class OctopusE2ETest : AnnotationSpec() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
             import com.koupper.shared.annotations.KoupperVersion
-
-            @KoupperVersion("6.5")
-            @Export
+            @KoupperVersion("6.5") @Export
             val setup: () -> String = { "version-ok" }
         """.trimIndent())
-
         assertEquals("version-ok", result)
     }
 
@@ -88,12 +70,9 @@ class OctopusE2ETest : AnnotationSpec() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
             import com.koupper.shared.annotations.KoupperVersion
-
-            @KoupperVersion("99.0")
-            @Export
+            @KoupperVersion("99.0") @Export
             val setup: () -> String = { "never-runs" }
         """.trimIndent())
-
         assertTrue(result.contains("[ERR_VERSION_MISMATCH]"), "should have error code: $result")
     }
 
@@ -101,24 +80,89 @@ class OctopusE2ETest : AnnotationSpec() {
     fun `should return compile error code for broken syntax`() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
-
             @Export
             val setup: () -> String = { brokenSyntax!!!
         """.trimIndent())
-
-        assertTrue(result.contains("[ERR_COMPILE]") || result.contains("error"),
-            "should indicate compile failure: $result")
+        assertTrue(result.contains("[ERR_COMPILE]") || result.contains("error"), "should indicate compile failure: $result")
     }
 
     @Test
     fun `should have KOUPPER_VERSION available in script`() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
-
             @Export
             val setup: () -> String = { KOUPPER_VERSION }
         """.trimIndent())
-
         assertTrue(result.startsWith("6."), "KOUPPER_VERSION should be 6.x: $result")
+    }
+
+    @Test
+    fun `should access env shortcut from preamble`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export
+            val setup: () -> String = {
+                val home = env("HOME")
+                if (home.isNotEmpty()) "env-ok" else "env-empty"
+            }
+        """.trimIndent())
+        assertEquals("env-ok", result)
+    }
+
+    @Test
+    fun `should use emit shortcut from preamble`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export
+            val setup: () -> String = {
+                emit("emitted message")
+                "emit-ok"
+            }
+        """.trimIndent())
+        assertEquals("emit-ok", result)
+    }
+
+    @Test
+    fun `should handle null input gracefully`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export
+            val setup: () -> String = { "no-input-needed" }
+        """.trimIndent())
+        assertEquals("no-input-needed", result)
+    }
+
+    @Test
+    fun `should return error code prefix in all error formats`() {
+        val missing = octopus.runScript("val x = 1")
+        assertTrue(missing.startsWith("[ERR_"), "should start with error code: $missing")
+
+        val multi = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export val a: () -> String = {"a"}
+            @Export val b: () -> String = {"b"}
+        """.trimIndent())
+        assertTrue(multi.startsWith("[ERR_"), "should start with error code: $multi")
+
+        val version = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            import com.koupper.shared.annotations.KoupperVersion
+            @KoupperVersion("99.0") @Export val s: () -> String = {"x"}
+        """.trimIndent())
+        assertTrue(version.startsWith("[ERR_"), "should start with error code: $version")
+    }
+
+    @Test
+    fun `should run two separate scripts without cross-contamination`() {
+        val r1 = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export val s: () -> String = {"first"}
+        """.trimIndent())
+        val r2 = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export val s: () -> String = {"second"}
+        """.trimIndent())
+        assertEquals("first", r1)
+        assertEquals("second", r2)
     }
 }
