@@ -51,7 +51,7 @@ object ScheduledSetup {
         this.scheduledParams = jlc.annotationParams as? Map<*, *> ?: emptyMap<Any?, Any?>()
         this.workerConfigId = scheduledParams["configId"] as? String
         this.pipelineChain = (scheduledParams["chain"] as? String)
-            ?.split(",")?.map { it.trim().removeSuffix(".kts") }?.filter { it.isNotBlank() } ?: emptyList()
+            ?.split(">")?.map { it.trim().removeSuffix(".kts") }?.filter { it.isNotBlank() } ?: emptyList()
         this.pipelineId = (scheduledParams["id"] as? String)?.takeIf { it.isNotBlank() }
             ?: File(jlc.scriptPath ?: jlc.functionName).nameWithoutExtension
         return createScheduledJob()
