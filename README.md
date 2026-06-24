@@ -119,8 +119,14 @@ Expected result:
 
 - **Kotlin-first, type-safe scripts** instead of ad-hoc shell glue.
 - **Production-grade Web Engine**: Powered by Grizzly NIO for high-concurrency APIs.
-- **Provider-first architecture** for cloud, infra, and workflow capabilities.
-- **Declarative Security**: Use `@Auth` and `@Authorize` annotations that work across scripts and HTTP routes.
+- **Provider-first architecture** with tier classification (CORE / COMMUNITY / EXPERIMENTAL).
+- **Declarative Security**: JWT auth with scopes (`koupper:read`, `koupper:execute`, `koupper:admin`) + `@Auth`/`@Authorize` annotations.
+- **HTTP REST API** (port 9997): Run scripts, health checks, status, job queues via JDK `HttpServer`.
+- **gRPC Bidirectional Streaming** (port 9996): Real-time job dispatch and status updates.
+- **Prometheus Metrics** (port 9999): Runtime observability in exposition format.
+- **OpenTelemetry Tracing**: Automatic span creation with W3C context propagation.
+- **Script Sandboxing**: Timeout enforcement, `System.exit()` interception, thread isolation.
+- **KSP Annotation Processing**: Compiler-accurate `@Export`/`@Scheduled`/`@Pipeline` extraction (no regex guessing).
 - **Local-first developer workflow** with production hardening paths.
 - **Predictable runtime contract** (`@Export` single entrypoint + pipeline orchestration).
 
