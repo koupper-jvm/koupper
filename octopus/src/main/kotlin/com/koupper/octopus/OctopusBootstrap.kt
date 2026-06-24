@@ -166,7 +166,7 @@ fun listenForExternalCommands(
                         }
 
                         parsedCommand.commandType == "RELOAD_PROVIDERS" -> {
-                            val spm = app.getInstance(com.koupper.providers.ServiceProviderManager::class)
+                            val spm = com.koupper.providers.ServiceProviderManager()
                             spm.reloadProvidersFromDirectory(System.getProperty("user.home") + "/.koupper/providers")
                             
                             // Clear container and re-register

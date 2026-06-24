@@ -31,7 +31,9 @@ val waitFor: (Thread) -> Thread = { thread ->
 }
 
 class ServiceProviderManager {
-    var customLoader: java.net.URLClassLoader? = null
+    companion object {
+        var customLoader: java.net.URLClassLoader? = null
+    }
 
     fun reloadProvidersFromDirectory(dirPath: String) {
         val dir = java.io.File(dirPath)

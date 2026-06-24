@@ -188,9 +188,10 @@ fun extractExportFunctionSignature(
 }
 
 fun extractExportFunctionSignature(input: String): ExportFunctionSignature? {
-    // KSP metadata is the only supported path (compiler-accurate, no regex guessing)
-    val metadata = KspMetadataReader.read()
-        ?: error("KSP metadata not available. Ensure the project is compiled with KSP enabled (apply 'com.google.devtools.ksp' plugin).")
+    // KSP metadata is the primary source of truth for compiled artifacts.
+    // If not available (e.g. dynamic .kts script), return null so the Dispatcher
+    // can fall back to JVM Reflection on the dynamically compiled class.
+    val metadata = KspMetadataReader.read() ?: return null
     
     val scriptPackage = Regex(
         """(?m)^\s*package\s+([A-Za-z_][\w.]*)\s*$"""
