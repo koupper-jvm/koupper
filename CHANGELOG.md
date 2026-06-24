@@ -50,6 +50,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **E2E harness expansion** — `OctopusE2ETest` now covers `@Scheduled` registration (with duplicate-skip guard) and `@Pipeline` execution path.
 - **JWT authentication with scoped authorization** — `OctopusProtocol` now supports JWT tokens (HMAC256) alongside legacy static tokens. Three scopes: `koupper:read` (HEALTH_CHECK), `koupper:execute` (RUN, DEPLOY), `koupper:admin` (WATCH, CANCEL). New `security/JwtAuth.kt` utility for generation, verification, and scope checking.
 - **HTTP REST API** — lightweight HTTP server (JDK `HttpServer`) on port 9997 provides REST endpoints: `POST /api/v1/run` (execute script), `GET /api/v1/health` (health check), `GET /api/v1/status` (daemon metrics), `GET /api/v1/jobs` (list queues). CORS-enabled. JWT auth on protected endpoints.
+- **OpenTelemetry tracing** — `KoupperTelemetry.kt` provides automatic span creation around script execution with W3C trace context propagation. Configurable via `KOUPPER_TELEMETRY_ENABLED` and `KOUPPER_TELEMETRY_SERVICE`. Exports spans to stdout by default; supports OTLP via standard OTEL environment variables.
 
 ### Changed
 - `ServiceProviderManager.listProviders()` now throws `IllegalStateException` with an actionable message when the SPI file is missing or empty, instead of silently falling back to a hardcoded list.
