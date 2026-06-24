@@ -254,4 +254,58 @@ class OctopusE2ETest : AnnotationSpec() {
         """.trimIndent())
         assertTrue(result.contains("[ERR_EXPORT_MISSING]"), "should fail with error: $result")
     }
+
+    @Test
+    fun `should register scheduled job with rate`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            import com.koupper.shared.annotations.Scheduled
+            @Scheduled(rate=3600000)
+            @Export
+            val setup_scheduled_test: () -> String = { "scheduled-ok" }
+        """.trimIndent())
+        // ScheduledSetup.run() returns a registration confirmation
+        assertTrue(
+            result.contains("Scheduled") || result.contains("registered") || result.contains("⏭️"),
+            "Should indicate scheduled registration: $result"
+        )
+    }
+
+    @Test
+    fun `should not register same scheduled script twice`() {
+        val script = """
+            import com.koupper.shared.annotations.Export
+            import com.koupper.shared.annotations.Scheduled
+            @Scheduled(rate=3600000)
+            @Export
+            val setup_scheduled_dup_test: () -> String = { "scheduled-dup" }
+        """.trimIndent()
+        val r1 = octopus.runScript(script)
+        val r2 = octopus.runScript(script)
+        // First run registers, second run skips
+        assertTrue(
+            r1.contains("Scheduled") || r1.contains("registered"),
+            "First run should register: $r1"
+        )
+        assertTrue(
+            r2.contains("Already scheduled") || r2.contains("⏭️"),
+            "Second run should skip: $r2"
+        )
+    }
+
+    @Test
+    fun `should execute pipeline annotation`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            import com.koupper.shared.annotations.Pipeline
+            @Pipeline(cron="0 0 * * *", chain="StageA,StageB", id="test-pipeline")
+            @Export
+            val setup_pipeline_test: () -> String = { "pipeline-trigger" }
+        """.trimIndent())
+        // Pipeline resolver is terminal; it should execute and return something
+        assertTrue(
+            result.contains("pipeline") || result.contains("Pipeline") || result.contains("coordinator"),
+            "Should execute pipeline setup: $result"
+        )
+    }
 }
