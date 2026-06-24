@@ -33,10 +33,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `LlamaServerSidecar` SSE parser — skips events where the `content` node is `null` or the literal string `"null"`. Eliminates the spurious `null` token emitted at the start of every streaming response.
 - `AgentOrchestrator.runAgent()` — replaced hardcoded `ToolCall("hardware-checker", "execute")` stub with real JSON parsing of LLM response (`toolName`, `action`, `arguments` fields).
 - `DefaultToolExecutor` — removed fake simulation responses (`ls output: AgenticCore.kt`). Now performs real `java.io.File` operations for `read`, `exists`, and `list` actions.
-- `octopus/build.gradle` `optimized` task filter — replaced `contains('container')` (which captured `jersey-container-*`) with `matches("module-[0-9].*\\.jar")` regex. Optimized JAR dropped from ~3.4MB with Grizzly leakage to 1.6MB with zero external class leakage.
+- `octopus/build.gradle` `optimized` task filter — replaced `contains('container')` (which captured `jersey-container-*`) with `matches("module-[0-9].*\.jar")` regex. Optimized JAR dropped from ~3.4MB with Grizzly leakage to 1.6MB with zero external class leakage.
 
 ### Release alignment
 - `octopus 6.5.3` / `koupper-cli 4.8.0`
+
+---
+
+## [6.6.0] - 2026-06-24
+
+### Added
+- **SPI-only provider discovery** — `ServiceProviderManager` no longer falls back to a hardcoded list. External providers can now be contributed without editing core framework files. The Gradle task `generateServiceProviderSpi` produces the `META-INF/services` manifest at build time.
+- **Compile error source mapping** — when the provider preamble is injected, compilation error line numbers are adjusted by subtracting the preamble offset. Users see line numbers relative to their `.kts` file, not the augmented source.
+- **Cross-validation: regex vs reflection signatures** — the `@Export` resolver now compares regex-extracted parameter types with reflection-extracted types and logs a warning on mismatch. Reflection remains the primary source; this adds visibility into regex parsing edge cases.
+- **Prometheus `/metrics` endpoint** — lightweight HTTP server (JDK `HttpServer`) exposes `DaemonMetrics` in Prometheus text exposition format at `http://127.0.0.1:9999/metrics`. Eight runtime counters available: uptime, active connections, total commands, total scripts, successful/failed scripts, unauthorized/invalid commands.
+- **E2E harness expansion** — `OctopusE2ETest` now covers `@Scheduled` registration (with duplicate-skip guard) and `@Pipeline` execution path.
+
+### Changed
+- `ServiceProviderManager.listProviders()` now throws `IllegalStateException` with an actionable message when the SPI file is missing or empty, instead of silently falling back to a hardcoded list.
+
+### Release alignment
+- `octopus 6.6.0` / `koupper-cli 4.8.0`
 
 ---
 

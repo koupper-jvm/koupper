@@ -550,7 +550,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
     }
 
     companion object {
-        const val koupperVersion = "6.5.3"
+        const val koupperVersion = "6.6.0"
         var providerPreamble: String = ""
         var providerPreambleVersion: String = koupperVersion
     }
