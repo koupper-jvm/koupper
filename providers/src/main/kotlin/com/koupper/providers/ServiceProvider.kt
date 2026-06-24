@@ -23,6 +23,13 @@ abstract class ServiceProvider {
      */
     open fun dependencies(): List<KClass<out ServiceProvider>> = emptyList()
 
+    /**
+     * Returns the tier classification of this provider.
+     * Override to declare CORE or EXPERIMENTAL tier.
+     * Default: COMMUNITY.
+     */
+    open fun tier(): ProviderTier = ProviderTier.COMMUNITY
+
     companion object {
         private const val SPI_PATH = "META-INF/services/com.koupper.providers.ServiceProvider"
 

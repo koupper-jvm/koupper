@@ -115,8 +115,8 @@ object KoupperTelemetry {
     fun injectContext(carrier: MutableMap<String, String>) {
         val otel = openTelemetry ?: return
         val context = io.opentelemetry.context.Context.current()
-        otel.propagators.textMapPropagator.inject(context, carrier) { map, key, value ->
-            map[key] = value
+        otel.propagators.textMapPropagator.inject(context, carrier) { map: MutableMap<String, String>?, key: String, value: String ->
+            map?.set(key, value)
         }
     }
 
@@ -127,7 +127,11 @@ object KoupperTelemetry {
         val otel = openTelemetry ?: return io.opentelemetry.context.Context.current()
         return otel.propagators.textMapPropagator.extract(
             io.opentelemetry.context.Context.current(),
-            carrier
-        ) { map, key -> map[key] }
+            carrier,
+            object : io.opentelemetry.context.propagation.TextMapGetter<Map<String, String>> {
+                override fun keys(carrier: Map<String, String>): Iterable<String> = carrier.keys
+                override fun get(carrier: Map<String, String>?, key: String): String? = carrier?.get(key)
+            }
+        )
     }
 }
