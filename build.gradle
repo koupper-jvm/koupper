@@ -100,6 +100,10 @@ project(':octopus') {
         implementation "jakarta.ws.rs:jakarta.ws.rs-api:3.1.0"
         implementation "jakarta.annotation:jakarta.annotation-api:2.1.1"
         implementation "com.auth0:java-jwt:4.4.0"
+        implementation "io.opentelemetry:opentelemetry-api:1.40.0"
+        implementation "io.opentelemetry:opentelemetry-sdk:1.40.0"
+        implementation "io.opentelemetry:opentelemetry-sdk-trace:1.40.0"
+        implementation "io.opentelemetry:opentelemetry-exporter-logging:1.40.0"
     }
 }
 
