@@ -334,6 +334,19 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
         val reflectedSig = backend?.compiledClass?.let { cls ->
             reflectExportSignature(cls, diParams.functionName)
         }
+
+        // Cross-validate regex vs reflection signatures. If they differ, prefer reflection
+        // (it's reading actual compiled types) but log a warning so we can fix the regex.
+        if (reflectedSig != null && functionSignature != null) {
+            if (reflectedSig.parameterTypes != functionSignature.parameterTypes) {
+                com.koupper.logging.GlobalLogger.log.warn {
+                    "[SchemaExtractor] Regex/Reflection mismatch for ${diParams.functionName}: " +
+                    "regex=${functionSignature.parameterTypes} reflection=${reflectedSig.parameterTypes}. " +
+                    "Using reflection (more reliable)."
+                }
+            }
+        }
+
         val effectiveSig = reflectedSig ?: functionSignature
         val functionArgTypeNames = effectiveSig?.parameterTypes ?: emptyList()
         val paramsJson = buildParamsJson(functionArgTypeNames, diParams.params?.positionals ?: emptyList(), diParams.params?.params ?: emptyMap(), diParams.params?.flags ?: emptySet())
