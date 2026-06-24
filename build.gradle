@@ -1,5 +1,6 @@
 plugins {
     id "org.jetbrains.kotlin.jvm" version "2.0.20" apply false
+    id "com.google.protobuf" version "0.9.4" apply false
 }
 
 allprojects {
@@ -104,6 +105,11 @@ project(':octopus') {
         implementation "io.opentelemetry:opentelemetry-sdk:1.40.0"
         implementation "io.opentelemetry:opentelemetry-sdk-trace:1.40.0"
         implementation "io.opentelemetry:opentelemetry-exporter-logging:1.40.0"
+
+        implementation "io.grpc:grpc-netty-shaded:1.65.1"
+        implementation "io.grpc:grpc-protobuf:1.65.1"
+        implementation "io.grpc:grpc-stub:1.65.1"
+        implementation "com.google.protobuf:protobuf-java:3.25.3"
     }
 }
 
@@ -183,5 +189,27 @@ project(':logging') {
     dependencies {
         implementation project(':shared')
         implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
+    }
+}
+
+project(':octopus') {
+    apply plugin: 'com.google.protobuf'
+
+    protobuf {
+        protoc {
+            artifact = 'com.google.protobuf:protoc:3.25.3'
+        }
+        plugins {
+            grpc {
+                artifact = 'io.grpc:protoc-gen-grpc-java:1.65.1'
+            }
+        }
+        generateProtoTasks {
+            all().configureEach { task ->
+                task.plugins {
+                    grpc {}
+                }
+            }
+        }
     }
 }
