@@ -188,96 +188,56 @@ fun extractExportFunctionSignature(
 }
 
 fun extractExportFunctionSignature(input: String): ExportFunctionSignature? {
-    // Try KSP metadata first (compiler-accurate, no regex guessing)
-    KspMetadataReader.read()?.let { metadata ->
-        val scriptPackage = Regex(
-            """(?m)^\s*package\s+([A-Za-z_][\w.]*)\s*$"""
-        ).find(input)?.groupValues?.get(1)
-        
-        val matchingExport = metadata.exports.find { export ->
-            scriptPackage == null || export.packageName == scriptPackage
-        }
-        
-        matchingExport?.let { export ->
-            val typeStr = export.type
-            val params = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
-                val generics = typeStr.substringAfter('<').substringBeforeLast('>')
-                val allTypes = splitTypesTopLevel(generics)
-                allTypes.dropLast(1)
-            } else {
-                emptyList()
-            }
-            val returnType = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
-                val generics = typeStr.substringAfter('<').substringBeforeLast('>')
-                val allTypes = splitTypesTopLevel(generics)
-                allTypes.lastOrNull() ?: "kotlin.Unit"
-            } else {
-                "kotlin.Unit"
-            }
-            
-            val imports = linkedMapOf<String, String>()
-            val importRegex = Regex(
-                """(?m)^\s*import\s+([A-Za-z_][\w.]*)(?:\s+as\s+([A-Za-z_]\w*))?\s*$"""
-            )
-            for (m in importRegex.findAll(input)) {
-                val fqcn = m.groupValues[1]
-                val alias = m.groupValues[2].takeIf { it.isNotBlank() }
-                val simpleName = alias ?: fqcn.substringAfterLast('.')
-                imports[simpleName] = fqcn
-            }
-            
-            return ExportFunctionSignature(
-                packageName = export.packageName,
-                imports = imports,
-                parameterTypes = params,
-                returnType = returnType,
-                code = input
-            )
-        }
-    }
+    // KSP metadata is the only supported path (compiler-accurate, no regex guessing)
+    val metadata = KspMetadataReader.read()
+        ?: error("KSP metadata not available. Ensure the project is compiled with KSP enabled (apply 'com.google.devtools.ksp' plugin).")
     
-    // Fallback to regex-based extraction (legacy)
-    val packageName = Regex(
+    val scriptPackage = Regex(
         """(?m)^\s*package\s+([A-Za-z_][\w.]*)\s*$"""
     ).find(input)?.groupValues?.get(1)
-
-    val imports = linkedMapOf<String, String>()
-    val importRegex = Regex(
-        """(?m)^\s*import\s+([A-Za-z_][\w.]*)(?:\s+as\s+([A-Za-z_]\w*))?\s*$"""
-    )
-
-    for (m in importRegex.findAll(input)) {
-        val fqcn = m.groupValues[1]
-        val alias = m.groupValues[2].takeIf { it.isNotBlank() }
-        val simpleName = alias ?: fqcn.substringAfterLast('.')
-        imports[simpleName] = fqcn
+    
+    val matchingExport = metadata.exports.find { export ->
+        scriptPackage == null || export.packageName == scriptPackage
     }
-
-    val exportMatch = Regex("""@(?:[\w.]*\.)?Export\b""").find(input) ?: return null
-    val tail = input.substring(exportMatch.range.first)
-
-    val sig = Regex(
-        """(?s)
-           (?:.*?@(?:[\w.]*\.)?Export\b.*?)
-           (?:\s*@[\w.]+(?:\([^()]*\))?\s*)*
-           \s*val\s+`?[\w$]+`?\s*:\s*
-           \((.*?)\)\s*->\s*
-           ([^=\{\n;]+)
-        """.trimIndent(),
-        setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.COMMENTS)
-    ).find(tail) ?: return null
-
-    val paramsRaw = sig.groupValues[1].trim()
-    val returnType = sig.groupValues[2].trim()
-    val params = splitTypesTopLevel(paramsRaw)
-
-    return ExportFunctionSignature(
-        packageName = packageName,
-        imports = imports,
-        parameterTypes = params,
-        returnType = returnType,
-        code = input
-    )
+    
+    matchingExport?.let { export ->
+        val typeStr = export.type
+        val params = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
+            val generics = typeStr.substringAfter('<').substringBeforeLast('>')
+            val allTypes = splitTypesTopLevel(generics)
+            allTypes.dropLast(1)
+        } else {
+            emptyList()
+        }
+        val returnType = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
+            val generics = typeStr.substringAfter('<').substringBeforeLast('>')
+            val allTypes = splitTypesTopLevel(generics)
+            allTypes.lastOrNull() ?: "kotlin.Unit"
+        } else {
+            "kotlin.Unit"
+        }
+        
+        val imports = linkedMapOf<String, String>()
+        val importRegex = Regex(
+            """(?m)^\s*import\s+([A-Za-z_][\w.]*)(?:\s+as\s+([A-Za-z_]\w*))?\s*$"""
+        )
+        for (m in importRegex.findAll(input)) {
+            val fqcn = m.groupValues[1]
+            val alias = m.groupValues[2].takeIf { it.isNotBlank() }
+            val simpleName = alias ?: fqcn.substringAfterLast('.')
+            imports[simpleName] = fqcn
+        }
+        
+        return ExportFunctionSignature(
+            packageName = export.packageName,
+            imports = imports,
+            parameterTypes = params,
+            returnType = returnType,
+            code = input
+        )
+    }
+    
+    return null
 }
 
 fun resolveClassFromArgName(
