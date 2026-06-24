@@ -87,6 +87,39 @@ class OctopusE2ETest : AnnotationSpec() {
     }
 
     @Test
+    fun `should map compile error lines to original source when preamble is injected`() {
+        // This script uses log. which triggers preamble injection.
+        // The error is on line 4 of the user script, but with preamble it becomes line ~25.
+        // Source mapping should report line 4 (or close to it), not 25.
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export
+            val setup: () -> String = {
+                log.info { "hello" }
+                brokenSyntaxForSourceMapping!!!
+            }
+        """.trimIndent())
+        assertTrue(result.contains("[ERR_COMPILE]"), "should have error code: $result")
+        // With source mapping, the line number should be small (original script line)
+        // rather than a large number (preamble-augmented line).
+        // The error occurs at line 5 of the user script (0-indexed: 4).
+        // We assert the line number is reasonable (< 20) and not > 30.
+        val lineNumberRegex = Regex("""\(line (\d+),""")
+        val match = lineNumberRegex.find(result)
+        if (match != null) {
+            val reportedLine = match.groupValues[1].toInt()
+            assertTrue(
+                reportedLine < 20,
+                "Reported line should be mapped to original source (< 20), but was $reportedLine. Full output: $result"
+            )
+        }
+        assertTrue(
+            result.contains("preamble offset:") || result.contains("relative to your .kts file"),
+            "Error message should mention source mapping: $result"
+        )
+    }
+
+    @Test
     fun `should have KOUPPER_VERSION available in script`() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
