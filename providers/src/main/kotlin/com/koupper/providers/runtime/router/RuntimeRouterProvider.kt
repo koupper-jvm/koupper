@@ -27,6 +27,27 @@ interface StreamResponse {
     fun onClose(callback: () -> Unit)
 }
 
+class SseEmitter : StreamResponse {
+    private var dataCallback: ((String) -> Unit)? = null
+    private var closeCallback: (() -> Unit)? = null
+
+    override fun onData(callback: (String) -> Unit) {
+        this.dataCallback = callback
+    }
+
+    override fun onClose(callback: () -> Unit) {
+        this.closeCallback = callback
+    }
+
+    fun emit(data: String) {
+        dataCallback?.invoke(data)
+    }
+
+    fun complete() {
+        closeCallback?.invoke()
+    }
+}
+
 data class RequestContext(
     val method: String, 
     val path: String, 

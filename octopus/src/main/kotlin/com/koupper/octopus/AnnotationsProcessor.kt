@@ -372,6 +372,12 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                         return@withSpan ScriptRunner.executeFunction(diParams.callable.property, diParams.callable.args.toList()) as T
                     }
 
+                    val useSandbox = System.getProperty("koupper.sandbox.enabled", "true").toBoolean()
+
+                    if (useSandbox) {
+                        return@withSpan com.koupper.octopus.sandbox.ProcessSandbox.execute(diParams, paramsJson) as T
+                    }
+
                     ScriptRunner.runScript(
                         ScriptCall(
                             code = diParams.sentence,

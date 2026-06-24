@@ -95,6 +95,78 @@ object HttpApiServer {
             }
         }
 
+        // POST /api/v1/run-stream — execute script and stream output via SSE
+        httpServer.createContext("/api/v1/run-stream") { exchange ->
+            handleCors(exchange)
+            if (exchange.requestMethod != "POST") {
+                sendJson(exchange, 405, ApiResponse(ok = false, error = "Method not allowed"))
+                return@createContext
+            }
+
+            if (!authenticate(exchange)) {
+                sendJson(exchange, 401, ApiResponse(ok = false, error = "Unauthorized"))
+                return@createContext
+            }
+
+            try {
+                val body = exchange.requestBody.bufferedReader().use { it.readText() }
+                val req = mapper.readValue<RunRequest>(body)
+                val traceId = java.util.UUID.randomUUID().toString().take(8)
+
+                val paramString = req.params.entries.joinToString(" ") { (k, v) ->
+                    val escaped = v.replace("\"", "\\\"")
+                    if (v.contains(" ")) "$k=\"$escaped\"" else "$k=$escaped"
+                }.ifBlank { "EMPTY_PARAMS" }
+
+                exchange.responseHeaders.add("Content-Type", "text/event-stream")
+                exchange.responseHeaders.add("Cache-Control", "no-cache")
+                exchange.responseHeaders.add("Connection", "keep-alive")
+                exchange.sendResponseHeaders(200, 0)
+                
+                val writer = exchange.responseBody.bufferedWriter()
+
+                // Custom SessionOutput to bridge to SSE
+                val sseOutput = object : com.koupper.logging.SessionOutput {
+                    override fun printLine(
+                        text: String,
+                        level: com.koupper.logging.LogLevel,
+                        mode: com.koupper.logging.ResponseMode,
+                        requestId: String?
+                    ) {
+                        try {
+                            val escaped = text.replace("\n", "\\n").replace("\r", "")
+                            writer.write("data: {\"level\":\"$level\", \"text\":\"$escaped\"}\n\n")
+                            writer.flush()
+                        } catch (e: Exception) {
+                            // Client disconnected
+                        }
+                    }
+                }
+
+                com.koupper.octopus.SessionStdoutBridge.bind(sseOutput)
+
+                scriptExecutor.runFromScriptFile<String>(
+                    context = req.context,
+                    scriptPath = req.scriptPath,
+                    params = paramString
+                ) { finalResult ->
+                    try {
+                        val escaped = (finalResult ?: "").replace("\n", "\\n").replace("\r", "")
+                        writer.write("data: {\"event\": \"done\", \"result\": \"$escaped\"}\n\n")
+                        writer.flush()
+                    } catch (e: Exception) {}
+                }
+
+                com.koupper.octopus.SessionStdoutBridge.clear()
+                writer.close()
+
+            } catch (e: Exception) {
+                GlobalLogger.log.error(e) { "HTTP API /run-stream failed" }
+                // Cannot send JSON error if already started streaming, so just close
+                exchange.close()
+            }
+        }
+
         // GET /api/v1/health — health check
         httpServer.createContext("/api/v1/health") { exchange ->
             handleCors(exchange)
