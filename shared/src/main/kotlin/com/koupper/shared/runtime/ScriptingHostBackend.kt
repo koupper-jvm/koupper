@@ -65,6 +65,42 @@ private fun saveToDisk(hash: String, compiled: CompiledScript) = runCatching {
 }.getOrNull()
 
 /**
+ * Maps compilation error line numbers back to the original script source
+ * by subtracting the preamble offset. Produces a single exception message
+ * that users can read against their .kts file.
+ */
+private fun mapCompileErrorLines(
+    compileResult: ResultWithDiagnostics<CompiledScript>,
+    lineOffset: Int,
+    sourceName: String
+): IllegalStateException {
+    val errors = compileResult.reports
+        .filter { it.severity == ScriptDiagnostic.Severity.ERROR }
+
+    val mappedMessages = errors.map { diagnostic ->
+        val loc = diagnostic.location
+        val adjustedLine = loc?.let {
+            (it.start.line - lineOffset).coerceAtLeast(1)
+        }
+        val adjustedCol = loc?.start?.col ?: 0
+        val locStr = if (adjustedLine != null) " (line $adjustedLine, col $adjustedCol)" else ""
+        val src = sourceName.takeIf { it.isNotBlank() }?.let { "[$it]" } ?: ""
+        "  • $src$locStr ${diagnostic.message}"
+    }
+
+    val message = buildString {
+        appendLine("Script compilation failed with ${errors.size} error(s):")
+        mappedMessages.forEach { appendLine(it) }
+        if (lineOffset > 0) {
+            appendLine()
+            appendLine("Note: line numbers are relative to your .kts file (preamble offset: $lineOffset lines)")
+        }
+    }
+
+    return IllegalStateException(message.trimEnd())
+}
+
+/**
  * Production-grade scripting host with support for external classpaths,
  * lazy classloader caching, diagnostics, safe resource cleanup, and
  * in-process compiled script caching (eliminates re-compilation of unchanged scripts).
@@ -197,7 +233,12 @@ class ScriptingHostBackend(
                     System.err.println("[ScriptingHost][${diagnostic.severity}]$src$adjustedLine ${diagnostic.message}")
                 }
 
-            val cs = compileResult.valueOrThrow()
+            val cs = compileResult.valueOrNull()
+                ?: throw mapCompileErrorLines(
+                    compileResult,
+                    lineOffset,
+                    scriptSourceName
+                )
             compiledScriptCache[cacheKey] = cs
             saveToDisk(cacheKey, cs)  // persist for next restart (graceful no-op if not serializable)
             cs
