@@ -2,11 +2,14 @@ package com.koupper.providers.aillmops
 
 import com.koupper.container.app
 import com.koupper.os.env
+import com.koupper.providers.ProviderTier
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.ai.AI
 import com.koupper.providers.ai.ModelType
 
 class AILlmOpsServiceProvider : ServiceProvider() {
+    override fun tier() = ProviderTier.EXPERIMENTAL
+
     override fun up() {
         app.bind(AILlmOpsProvider::class, {
             val aiProvider = try {

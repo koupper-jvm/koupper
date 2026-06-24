@@ -1,9 +1,12 @@
 package com.koupper.providers.files
 
 import com.koupper.container.app
+import com.koupper.providers.ProviderTier
 import com.koupper.providers.ServiceProvider
 
 class FileServiceProvider : ServiceProvider() {
+    override fun tier() = ProviderTier.CORE
+
     override fun up() {
         this.registerFileHandler()
         this.registerTextFileHandler()

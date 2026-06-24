@@ -45,4 +45,15 @@ class ServiceProviderManager {
 
         return discovered
     }
+
+    /**
+     * Returns providers filtered by tier.
+     * Useful for CI gates: e.g., run full suite only for CORE providers.
+     */
+    fun listProvidersByTier(tier: ProviderTier): List<KClass<*>> {
+        return listProviders().filter { providerClass ->
+            val instance = providerClass.constructors.firstOrNull()?.call() as? ServiceProvider
+            instance?.tier() == tier
+        }
+    }
 }

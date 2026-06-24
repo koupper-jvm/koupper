@@ -2,10 +2,13 @@ package com.koupper.providers.vision
 
 import com.koupper.container.app
 import com.koupper.os.env
+import com.koupper.providers.ProviderTier
 import com.koupper.providers.ServiceProvider
 import com.koupper.providers.http.HtppClient
 
 class VisionServiceProvider : ServiceProvider() {
+    override fun tier() = ProviderTier.EXPERIMENTAL
+
     override fun up() {
         app.bind(VisionProvider::class, {
             OpenAICompatVisionProvider(

@@ -3,9 +3,12 @@ package com.koupper.providers.stt
 import com.koupper.container.app
 import com.koupper.os.env
 import com.koupper.os.envOptional
+import com.koupper.providers.ProviderTier
 import com.koupper.providers.ServiceProvider
 
 class SpeechToTextServiceProvider : ServiceProvider() {
+    override fun tier() = ProviderTier.EXPERIMENTAL
+
     override fun externalDependencies() = listOf(
         "com.squareup.okhttp3:okhttp:4.12.0",
         "com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2"
