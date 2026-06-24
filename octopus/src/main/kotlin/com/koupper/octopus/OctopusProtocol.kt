@@ -308,6 +308,7 @@ internal fun parseIncomingCommand(command: String): IncomingCommand? {
             "HEALTH", "HEALTH_CHECK" -> IncomingCommand(ResponseMode.JSON, req.requestId, "HEALTH_CHECK")
             "DEPLOY" -> IncomingCommand(ResponseMode.JSON, req.requestId, "DEPLOY", req.context?.trim().orEmpty(), req.script?.trim().orEmpty(), req.params?.trim().takeUnless { it.isNullOrBlank() } ?: "EMPTY_PARAMS", req.scriptContent, req.contentSha256?.trim())
             "CANCEL" -> IncomingCommand(ResponseMode.JSON, req.requestId, "CANCEL")
+            "RELOAD_PROVIDERS" -> IncomingCommand(ResponseMode.JSON, req.requestId, "RELOAD_PROVIDERS")
             "WATCH" -> IncomingCommand(ResponseMode.JSON, req.requestId, "WATCH", req.context?.trim().orEmpty())
             else -> IncomingCommand(ResponseMode.JSON, req.requestId, "RUN", req.context?.trim().orEmpty(), req.script?.trim().orEmpty(), req.params?.trim().takeUnless { it.isNullOrBlank() } ?: "EMPTY_PARAMS")
         }
@@ -317,6 +318,7 @@ internal fun parseIncomingCommand(command: String): IncomingCommand? {
     if (inputData.isEmpty()) return null
     if (inputData[0] == "UPDATING_CHECK") return IncomingCommand(ResponseMode.LEGACY, commandType = "UPDATING_CHECK")
     if (inputData[0] == "HEALTH_CHECK") return IncomingCommand(ResponseMode.LEGACY, commandType = "HEALTH_CHECK")
+    if (inputData[0] == "RELOAD_PROVIDERS") return IncomingCommand(ResponseMode.LEGACY, commandType = "RELOAD_PROVIDERS")
 
     val scriptContext = inputData[0].replace("\"", "")
     val scriptPath = if (inputData.size > 1) inputData[1].replace("\"", "") else ""

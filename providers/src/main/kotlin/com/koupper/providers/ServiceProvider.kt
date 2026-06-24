@@ -37,8 +37,7 @@ abstract class ServiceProvider {
          * Discovers all ServiceProvider KClass references via the SPI services file
          * without initializing the classes. Reads META-INF/services/ directly.
          */
-        fun discoverProviderClasses(): List<KClass<out ServiceProvider>> {
-            val classLoader = ServiceProvider::class.java.classLoader
+        fun discoverProviderClasses(classLoader: ClassLoader = ServiceProvider::class.java.classLoader): List<KClass<out ServiceProvider>> {
             val resources = classLoader.getResources(SPI_PATH)
             val classNames = mutableSetOf<String>()
 

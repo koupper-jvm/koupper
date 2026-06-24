@@ -165,6 +165,24 @@ fun listenForExternalCommands(
                             checkForUpdates()
                         }
 
+                        parsedCommand.commandType == "RELOAD_PROVIDERS" -> {
+                            val spm = app.getInstance(com.koupper.providers.ServiceProviderManager::class)
+                            spm.reloadProvidersFromDirectory(System.getProperty("user.home") + "/.koupper/providers")
+                            
+                            // Clear container and re-register
+                            app.clear()
+                            
+                            // Re-initialize Octopus config
+                            val octopus = com.koupper.octopus.Octopus(app)
+                            octopus.registerBuildInServicesProvidersInContainer()
+                            
+                            sessionOutput.result(
+                                "{\"ok\":true,\"requestId\":\"${parsedCommand.requestId ?: ""}\",\"reloaded\":true}",
+                                parsedCommand.mode,
+                                parsedCommand.requestId
+                            )
+                        }
+
                         parsedCommand.commandType == "HEALTH_CHECK" -> {
                             val snapshot = DaemonMetrics.snapshot()
                             val health = "{" + listOf(

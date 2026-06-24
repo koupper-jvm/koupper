@@ -31,8 +31,19 @@ val waitFor: (Thread) -> Thread = { thread ->
 }
 
 class ServiceProviderManager {
+    var customLoader: java.net.URLClassLoader? = null
+
+    fun reloadProvidersFromDirectory(dirPath: String) {
+        val dir = java.io.File(dirPath)
+        if (dir.exists() && dir.isDirectory) {
+            val jars = dir.listFiles { it.extension == "jar" }?.map { it.toURI().toURL() }?.toTypedArray() ?: emptyArray()
+            customLoader = java.net.URLClassLoader(jars, this::class.java.classLoader)
+        }
+    }
+
     fun listProviders(): List<KClass<*>> {
-        val discovered = ServiceProvider.discoverProviderClasses()
+        val loader = customLoader ?: this::class.java.classLoader
+        val discovered = ServiceProvider.discoverProviderClasses(loader)
 
         if (discovered.isEmpty()) {
             throw IllegalStateException(

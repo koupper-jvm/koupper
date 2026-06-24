@@ -125,7 +125,9 @@ Expected result:
 - **gRPC Bidirectional Streaming** (port 9996): Real-time job dispatch and status updates.
 - **Prometheus Metrics** (port 9999): Runtime observability in exposition format.
 - **OpenTelemetry Tracing**: Automatic span creation with W3C context propagation.
-- **Script Sandboxing**: Timeout enforcement, `System.exit()` interception, thread isolation.
+- **Script Sandboxing**: Process Isolation via JVM ProcessBuilder, timeout enforcement, `System.exit()` interception, thread isolation.
+- **Real-Time Streaming**: Server-Sent Events (SSE) out-of-the-box for logging long-running background tasks to frontend clients.
+- **Hot-Reloading**: Dynamic plugin and provider reloading via custom `URLClassLoader` and `koupper reload` CLI without Daemon restarts.
 - **KSP Annotation Processing**: Compiler-accurate `@Export`/`@Scheduled`/`@Pipeline` extraction (no regex guessing).
 - **Local-first developer workflow** with production hardening paths.
 - **Predictable runtime contract** (`@Export` single entrypoint + pipeline orchestration).
