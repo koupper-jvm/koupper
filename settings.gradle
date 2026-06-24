@@ -10,7 +10,7 @@ plugins {
  */
 
 rootProject.name = 'koupper'
-include 'octopus', 'container', 'providers', 'bootstrap', 'configurations', 'shared', 'os', 'orchestrator-core', 'logging'
+include 'octopus', 'container', 'providers', 'bootstrap', 'configurations', 'shared', 'os', 'orchestrator-core', 'logging', 'annotation-processor'
 
 
 include ':koupper-monitor'
