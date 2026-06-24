@@ -50,6 +50,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **E2E harness expansion** — `OctopusE2ETest` now covers `@Scheduled` registration (with duplicate-skip guard) and `@Pipeline` execution path.
 - **JWT authentication with scoped authorization** — `OctopusProtocol` now supports JWT tokens (HMAC256) alongside legacy static tokens. Three scopes: `koupper:read` (HEALTH_CHECK), `koupper:execute` (RUN, DEPLOY), `koupper:admin` (WATCH, CANCEL). New `security/JwtAuth.kt` utility for generation, verification, and scope checking.
 - **HTTP REST API** — lightweight HTTP server (JDK `HttpServer`) on port 9997 provides REST endpoints: `POST /api/v1/run` (execute script), `GET /api/v1/health` (health check), `GET /api/v1/status` (daemon metrics), `GET /api/v1/jobs` (list queues). CORS-enabled. JWT auth on protected endpoints.
+- **Script sandboxing** — `ScriptSandbox.kt` protects the daemon JVM from misbehaving scripts with three layers: (1) timeout enforcement (default 5min), (2) `System.exit()` interception via SecurityManager, (3) thread-level isolation with ExecutorService. Disabled by default; enable with `-Dkoupper.scripting.sandbox=true`.
 
 ### Changed
 - `ServiceProviderManager.listProviders()` now throws `IllegalStateException` with an actionable message when the SPI file is missing or empty, instead of silently falling back to a hardcoded list.
