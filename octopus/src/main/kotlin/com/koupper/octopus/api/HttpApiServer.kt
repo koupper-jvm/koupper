@@ -126,24 +126,25 @@ object HttpApiServer {
                 val writer = exchange.responseBody.bufferedWriter()
 
                 // Custom SessionOutput to bridge to SSE
-                val sseOutput = object : com.koupper.logging.SessionOutput {
-                    override fun printLine(
-                        text: String,
-                        level: com.koupper.logging.LogLevel,
-                        mode: com.koupper.logging.ResponseMode,
-                        requestId: String?
-                    ) {
-                        try {
-                            val escaped = text.replace("\n", "\\n").replace("\r", "")
-                            writer.write("data: {\"level\":\"$level\", \"text\":\"$escaped\"}\n\n")
-                            writer.flush()
-                        } catch (e: Exception) {
-                            // Client disconnected
-                        }
+                val sseWriter = java.io.BufferedWriter(object : java.io.Writer() {
+                    private val sb = StringBuilder()
+                    override fun write(cbuf: CharArray, off: Int, len: Int) {
+                        sb.append(cbuf, off, len)
                     }
-                }
+                    override fun flush() {
+                        val str = sb.toString()
+                        if (str.isNotBlank()) {
+                            writer.write("data: $str\n")
+                            writer.flush()
+                        }
+                        sb.clear()
+                    }
+                    override fun close() {}
+                })
+                
+                val sseOutput = com.koupper.octopus.SessionOutput(sseWriter)
 
-                com.koupper.octopus.SessionStdoutBridge.bind(sseOutput)
+                com.koupper.octopus.SessionStdoutBridge.bind(sseOutput, com.koupper.octopus.ResponseMode.JSON)
 
                 scriptExecutor.runFromScriptFile<String>(
                     context = req.context,
