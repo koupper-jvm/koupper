@@ -16,19 +16,32 @@ class KoupperSymbolProcessor(
 ) : SymbolProcessor {
 
     private val exports = mutableListOf<ExportMetadata>()
+    private val scheduled = mutableListOf<ScheduledMetadata>()
+    private val pipelines = mutableListOf<PipelineMetadata>()
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
-        val symbols = resolver.getSymbolsWithAnnotation("com.koupper.shared.annotations.Export")
+        val unableToProcess = mutableListOf<KSAnnotated>()
         
-        val unableToProcess = symbols.filter { !it.validate() }.toList()
+        // Process @Export
+        val exportSymbols = resolver.getSymbolsWithAnnotation("com.koupper.shared.annotations.Export")
+        unableToProcess.addAll(exportSymbols.filter { !it.validate() })
+        exportSymbols.filter { it is KSPropertyDeclaration && it.validate() }
+            .forEach { processExport(it as KSPropertyDeclaration) }
         
-        symbols.filter { it is KSPropertyDeclaration && it.validate() }
-            .forEach { symbol ->
-                processExport(symbol as KSPropertyDeclaration)
-            }
+        // Process @Scheduled
+        val scheduledSymbols = resolver.getSymbolsWithAnnotation("com.koupper.shared.annotations.Scheduled")
+        unableToProcess.addAll(scheduledSymbols.filter { !it.validate() })
+        scheduledSymbols.filter { it is KSPropertyDeclaration && it.validate() }
+            .forEach { processScheduled(it as KSPropertyDeclaration) }
         
-        // Generate metadata file if we found any exports
-        if (exports.isNotEmpty()) {
+        // Process @Pipeline
+        val pipelineSymbols = resolver.getSymbolsWithAnnotation("com.koupper.shared.annotations.Pipeline")
+        unableToProcess.addAll(pipelineSymbols.filter { !it.validate() })
+        pipelineSymbols.filter { it is KSPropertyDeclaration && it.validate() }
+            .forEach { processPipeline(it as KSPropertyDeclaration) }
+        
+        // Generate metadata file if we found anything
+        if (exports.isNotEmpty() || scheduled.isNotEmpty() || pipelines.isNotEmpty()) {
             generateMetadataFile()
         }
         
@@ -72,6 +85,8 @@ class KoupperSymbolProcessor(
         
         val json = buildString {
             appendLine("{")
+            
+            // Exports
             appendLine("  \"exports\": [")
             exports.forEachIndexed { index, export ->
                 appendLine("    {")
@@ -92,11 +107,87 @@ class KoupperSymbolProcessor(
                 val comma = if (index < exports.size - 1) "," else ""
                 appendLine("    }$comma")
             }
+            appendLine("  ],")
+            
+            // Scheduled
+            appendLine("  \"scheduled\": [")
+            scheduled.forEachIndexed { index, s ->
+                appendLine("    {")
+                appendLine("      \"packageName\": \"${s.packageName}\",")
+                appendLine("      \"propertyName\": \"${s.propertyName}\",")
+                s.cron?.let { appendLine("      \"cron\": \"$it\",") }
+                s.rate?.let { appendLine("      \"rate\": $it,") }
+                s.delay?.let { appendLine("      \"delay\": $it,") }
+                s.at?.let { appendLine("      \"at\": \"$it\",") }
+                s.configId?.let { appendLine("      \"configId\": \"$it\",") }
+                s.chain?.let { appendLine("      \"chain\": \"$it\",") }
+                appendLine("      \"_dummy\": true")
+                val comma = if (index < scheduled.size - 1) "," else ""
+                appendLine("    }$comma")
+            }
+            appendLine("  ],")
+            
+            // Pipelines
+            appendLine("  \"pipelines\": [")
+            pipelines.forEachIndexed { index, p ->
+                appendLine("    {")
+                appendLine("      \"packageName\": \"${p.packageName}\",")
+                appendLine("      \"propertyName\": \"${p.propertyName}\",")
+                p.cron?.let { appendLine("      \"cron\": \"$it\",") }
+                appendLine("      \"chain\": \"${p.chain}\",")
+                appendLine("      \"id\": \"${p.id}\"")
+                val comma = if (index < pipelines.size - 1) "," else ""
+                appendLine("    }$comma")
+            }
             appendLine("  ]")
+            
             appendLine("}")
         }
         
         file.use { it.write(json.toByteArray()) }
+    }
+    
+    private fun processScheduled(property: KSPropertyDeclaration) {
+        val packageName = property.packageName.asString()
+        val propertyName = property.simpleName.asString()
+        
+        val scheduledAnn = property.annotations.find { it.shortName.asString() == "Scheduled" }
+        val args = scheduledAnn?.arguments?.associate { 
+            (it.name?.asString() ?: "") to (it.value?.toString() ?: "")
+        } ?: emptyMap()
+        
+        logger.info("KSP: Found @Scheduled property '$propertyName' in package '$packageName' with args: $args")
+        
+        scheduled.add(ScheduledMetadata(
+            packageName = packageName,
+            propertyName = propertyName,
+            cron = args["cron"],
+            rate = args["rate"]?.toLongOrNull(),
+            delay = args["delay"]?.toLongOrNull(),
+            at = args["at"],
+            configId = args["configId"],
+            chain = args["chain"]
+        ))
+    }
+    
+    private fun processPipeline(property: KSPropertyDeclaration) {
+        val packageName = property.packageName.asString()
+        val propertyName = property.simpleName.asString()
+        
+        val pipelineAnn = property.annotations.find { it.shortName.asString() == "Pipeline" }
+        val args = pipelineAnn?.arguments?.associate { 
+            (it.name?.asString() ?: "") to (it.value?.toString() ?: "")
+        } ?: emptyMap()
+        
+        logger.info("KSP: Found @Pipeline property '$propertyName' in package '$packageName' with args: $args")
+        
+        pipelines.add(PipelineMetadata(
+            packageName = packageName,
+            propertyName = propertyName,
+            cron = args["cron"],
+            chain = args["chain"] ?: "",
+            id = args["id"] ?: ""
+        ))
     }
     
     data class ExportMetadata(
@@ -104,6 +195,25 @@ class KoupperSymbolProcessor(
         val propertyName: String,
         val type: String,
         val annotations: Map<String, Map<String, String>>
+    )
+    
+    data class ScheduledMetadata(
+        val packageName: String,
+        val propertyName: String,
+        val cron: String?,
+        val rate: Long?,
+        val delay: Long?,
+        val at: String?,
+        val configId: String?,
+        val chain: String?
+    )
+    
+    data class PipelineMetadata(
+        val packageName: String,
+        val propertyName: String,
+        val cron: String?,
+        val chain: String,
+        val id: String
     )
 }
 

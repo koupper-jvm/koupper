@@ -188,6 +188,55 @@ fun extractExportFunctionSignature(
 }
 
 fun extractExportFunctionSignature(input: String): ExportFunctionSignature? {
+    // Try KSP metadata first (compiler-accurate, no regex guessing)
+    KspMetadataReader.read()?.let { metadata ->
+        val scriptPackage = Regex(
+            """(?m)^\s*package\s+([A-Za-z_][\w.]*)\s*$"""
+        ).find(input)?.groupValues?.get(1)
+        
+        val matchingExport = metadata.exports.find { export ->
+            scriptPackage == null || export.packageName == scriptPackage
+        }
+        
+        matchingExport?.let { export ->
+            val typeStr = export.type
+            val params = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
+                val generics = typeStr.substringAfter('<').substringBeforeLast('>')
+                val allTypes = splitTypesTopLevel(generics)
+                allTypes.dropLast(1)
+            } else {
+                emptyList()
+            }
+            val returnType = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
+                val generics = typeStr.substringAfter('<').substringBeforeLast('>')
+                val allTypes = splitTypesTopLevel(generics)
+                allTypes.lastOrNull() ?: "kotlin.Unit"
+            } else {
+                "kotlin.Unit"
+            }
+            
+            val imports = linkedMapOf<String, String>()
+            val importRegex = Regex(
+                """(?m)^\s*import\s+([A-Za-z_][\w.]*)(?:\s+as\s+([A-Za-z_]\w*))?\s*$"""
+            )
+            for (m in importRegex.findAll(input)) {
+                val fqcn = m.groupValues[1]
+                val alias = m.groupValues[2].takeIf { it.isNotBlank() }
+                val simpleName = alias ?: fqcn.substringAfterLast('.')
+                imports[simpleName] = fqcn
+            }
+            
+            return ExportFunctionSignature(
+                packageName = export.packageName,
+                imports = imports,
+                parameterTypes = params,
+                returnType = returnType,
+                code = input
+            )
+        }
+    }
+    
+    // Fallback to regex-based extraction (legacy)
     val packageName = Regex(
         """(?m)^\s*package\s+([A-Za-z_][\w.]*)\s*$"""
     ).find(input)?.groupValues?.get(1)
