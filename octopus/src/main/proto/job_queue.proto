@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package com.koupper.octopus.grpc;
+
+option java_multiple_files = true;
+option java_package = "com.koupper.octopus.grpc";
+option java_outer_classname = "JobQueueProto";
+
+service JobQueue {
+  // Bidirectional streaming for real-time job dispatch and status updates.
+  // Client sends JobRequest messages; server responds with JobResponse.
+  rpc StreamJobs (stream JobRequest) returns (stream JobResponse);
+}
+
+message JobRequest {
+  string job_id = 1;
+  string queue = 2;
+  string script_path = 3;
+  string payload = 4; // JSON string
+  map<string, string> metadata = 5;
+}
+
+message JobResponse {
+  string job_id = 1;
+  string status = 2; // PENDING, RUNNING, COMPLETED, FAILED
+  string output = 3;
+  string error = 4;
+  int64 timestamp = 5;
+}
