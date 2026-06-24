@@ -1,53 +1,5 @@
 package com.koupper.providers
 
-import com.koupper.providers.browser.InteractiveBrowserServiceProvider
-import com.koupper.providers.mediadownloader.MediaDownloaderServiceProvider
-import com.koupper.providers.stt.SpeechToTextServiceProvider
-import com.koupper.providers.buildops.BuildServiceProvider
-import com.koupper.providers.lsp.LspServiceProvider
-import com.koupper.providers.helloworld.HelloWorldServiceProvider
-import com.koupper.providers.agent.AgentServiceProvider
-import com.koupper.providers.commandbridge.CommandBridgeServiceProvider
-import com.koupper.providers.telegram.TelegramServiceProvider
-import com.koupper.providers.ai.AIServiceProvider
-import com.koupper.providers.aillmops.AILlmOpsServiceProvider
-import com.koupper.providers.aws.dynamo.AwsServiceProvider
-import com.koupper.providers.aws.deploy.AwsDeployServiceProvider
-import com.koupper.providers.aws.s3.AwsS3ServiceProvider
-import com.koupper.providers.command.CommandRunnerServiceProvider
-import com.koupper.providers.crypto.CryptoServiceProvider
-import com.koupper.providers.db.DBServiceProvider
-import com.koupper.providers.docker.DockerServiceProvider
-import com.koupper.providers.files.FileServiceProvider
-import com.koupper.providers.hashing.HasherServiceProvider
-import com.koupper.providers.github.GitHubServiceProvider
-import com.koupper.providers.git.GitServiceProvider
-import com.koupper.providers.http.HttpServiceProvider
-import com.koupper.providers.iac.IaCServiceProvider
-import com.koupper.providers.jwt.JWTServiceProvider
-import com.koupper.providers.jobops.JobOpsServiceProvider
-import com.koupper.providers.k8s.K8sServiceProvider
-import com.koupper.providers.locale2e.LocalE2EServiceProvider
-import com.koupper.providers.logger.LoggerServiceProvider
-import com.koupper.providers.mcp.MCPServiceProvider
-import com.koupper.providers.mcp.MCPClientServiceProvider
-import com.koupper.providers.mailing.SenderServiceProvider
-import com.koupper.providers.n8n.N8NServiceProvider
-import com.koupper.providers.notifications.NotificationsServiceProvider
-import com.koupper.providers.observability.ObservabilityServiceProvider
-import com.koupper.providers.process.ProcessSupervisorServiceProvider
-import com.koupper.providers.queueops.QueueOpsServiceProvider
-import com.koupper.providers.rss.RSSServiceProvider
-import com.koupper.providers.runtime.router.RuntimeRouterServiceProvider
-import com.koupper.providers.secrets.SecretsServiceProvider
-import com.koupper.providers.ssh.SSHServiceProvider
-import com.koupper.providers.templates.TemplateServiceProvider
-import com.koupper.providers.vectordb.VectorDbServiceProvider
-import com.koupper.providers.memory.MemoryServiceProvider
-import com.koupper.providers.vision.VisionServiceProvider
-import com.koupper.providers.web.WebReaderServiceProvider
-import com.koupper.providers.pdf.PDFReaderServiceProvider
-import com.koupper.providers.search.WebSearchServiceProvider
 import kotlin.reflect.KClass
 
 val launchProcess: (() -> Unit) -> Thread = { callback ->
@@ -82,65 +34,15 @@ class ServiceProviderManager {
     fun listProviders(): List<KClass<*>> {
         val discovered = ServiceProvider.discoverProviderClasses()
 
-        if (discovered.isNotEmpty()) {
-            return discovered
+        if (discovered.isEmpty()) {
+            throw IllegalStateException(
+                "No ServiceProviders discovered via SPI. " +
+                "Ensure META-INF/services/com.koupper.providers.ServiceProvider exists " +
+                "and the Gradle task 'generateServiceProviderSpi' has run. " +
+                "If running tests from IDE, execute './gradlew :providers:processResources' first."
+            )
         }
 
-        // Fallback: hardcoded list for environments without generated SPI file
-        return hardcodedProviderList()
-    }
-
-    private fun hardcodedProviderList(): List<KClass<*>> {
-        return listOf(
-            DBServiceProvider::class,
-            DockerServiceProvider::class,
-
-            LoggerServiceProvider::class,
-            MCPServiceProvider::class,
-            MCPClientServiceProvider::class,
-            N8NServiceProvider::class,
-            NotificationsServiceProvider::class,
-            ObservabilityServiceProvider::class,
-            QueueOpsServiceProvider::class,
-            CommandRunnerServiceProvider::class,
-            ProcessSupervisorServiceProvider::class,
-            JobOpsServiceProvider::class,
-            LocalE2EServiceProvider::class,
-            HttpServiceProvider::class,
-            IaCServiceProvider::class,
-            FileServiceProvider::class,
-            JWTServiceProvider::class,
-            K8sServiceProvider::class,
-            CryptoServiceProvider::class,
-            AwsServiceProvider::class,
-            AwsS3ServiceProvider::class,
-            AwsDeployServiceProvider::class,
-            HasherServiceProvider::class,
-            GitServiceProvider::class,
-            GitHubServiceProvider::class,
-            AIServiceProvider::class,
-            AILlmOpsServiceProvider::class,
-            VisionServiceProvider::class,
-            TemplateServiceProvider::class,
-            VectorDbServiceProvider::class,
-            MemoryServiceProvider::class,
-            RSSServiceProvider::class,
-            RuntimeRouterServiceProvider::class,
-            SecretsServiceProvider::class,
-            SSHServiceProvider::class,
-            AgentServiceProvider::class,
-            CommandBridgeServiceProvider::class,
-            SenderServiceProvider::class,
-            TelegramServiceProvider::class,
-            WebReaderServiceProvider::class,
-            PDFReaderServiceProvider::class,
-            WebSearchServiceProvider::class,
-            HelloWorldServiceProvider::class,
-            BuildServiceProvider::class,
-            LspServiceProvider::class,
-            InteractiveBrowserServiceProvider::class,
-            MediaDownloaderServiceProvider::class,
-            SpeechToTextServiceProvider::class,
-        )
+        return discovered
     }
 }
