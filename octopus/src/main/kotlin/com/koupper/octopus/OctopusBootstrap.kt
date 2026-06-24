@@ -33,6 +33,11 @@ fun main() = runBlocking {
         listenForExternalCommands(processManager, serverScope)
     }
 
+    // Start Prometheus metrics endpoint on a background thread
+    Thread {
+        startPrometheusMetricsServer()
+    }.apply { isDaemon = true; start() }
+
     while (true) delay(1000)
 }
 
@@ -501,4 +506,55 @@ fun createLambdaConfiguration(container: Container = app): ScriptExecutor {
     ScriptRunner.monitor = app.getInstance(com.koupper.shared.monitoring.ExecutionMonitor::class)
 
     return octopus
+}
+
+// ──────────────────────────────────────────────
+// Prometheus metrics endpoint
+// ──────────────────────────────────────────────
+
+fun startPrometheusMetricsServer(port: Int = 9999) {
+    val httpServer = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", port), 0)
+    httpServer.createContext("/metrics") { exchange ->
+        val snapshot = DaemonMetrics.snapshot()
+        val body = buildString {
+            appendLine("# HELP koupper_uptime_ms Daemon uptime in milliseconds")
+            appendLine("# TYPE koupper_uptime_ms gauge")
+            appendLine("koupper_uptime_ms ${snapshot.uptimeMs}")
+            appendLine()
+            appendLine("# HELP koupper_active_connections Current active TCP connections")
+            appendLine("# TYPE koupper_active_connections gauge")
+            appendLine("koupper_active_connections ${snapshot.activeConnections}")
+            appendLine()
+            appendLine("# HELP koupper_total_commands_total Total commands processed")
+            appendLine("# TYPE koupper_total_commands_total counter")
+            appendLine("koupper_total_commands_total ${snapshot.totalCommands}")
+            appendLine()
+            appendLine("# HELP koupper_total_scripts_total Total scripts executed")
+            appendLine("# TYPE koupper_total_scripts_total counter")
+            appendLine("koupper_total_scripts_total ${snapshot.totalScripts}")
+            appendLine()
+            appendLine("# HELP koupper_successful_scripts_total Successful script executions")
+            appendLine("# TYPE koupper_successful_scripts_total counter")
+            appendLine("koupper_successful_scripts_total ${snapshot.successfulScripts}")
+            appendLine()
+            appendLine("# HELP koupper_failed_scripts_total Failed script executions")
+            appendLine("# TYPE koupper_failed_scripts_total counter")
+            appendLine("koupper_failed_scripts_total ${snapshot.failedScripts}")
+            appendLine()
+            appendLine("# HELP koupper_unauthorized_commands_total Rejected unauthorized commands")
+            appendLine("# TYPE koupper_unauthorized_commands_total counter")
+            appendLine("koupper_unauthorized_commands_total ${snapshot.unauthorizedCommands}")
+            appendLine()
+            appendLine("# HELP koupper_invalid_commands_total Rejected invalid commands")
+            appendLine("# TYPE koupper_invalid_commands_total counter")
+            appendLine("koupper_invalid_commands_total ${snapshot.invalidCommands}")
+        }
+        val bytes = body.toByteArray(Charsets.UTF_8)
+        exchange.responseHeaders.set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        exchange.sendResponseHeaders(200, bytes.size.toLong())
+        exchange.responseBody.write(bytes)
+        exchange.responseBody.close()
+    }
+    httpServer.start()
+    GlobalLogger.log.info { "📊 Prometheus metrics available at http://127.0.0.1:$port/metrics" }
 }
