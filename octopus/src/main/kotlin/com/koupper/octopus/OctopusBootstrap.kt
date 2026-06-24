@@ -38,6 +38,11 @@ fun main() = runBlocking {
         startPrometheusMetricsServer()
     }.apply { isDaemon = true; start() }
 
+    // Start HTTP REST API on a background thread
+    Thread {
+        com.koupper.octopus.api.HttpApiServer.start(processManager)
+    }.apply { isDaemon = true; start() }
+
     while (true) delay(1000)
 }
 
