@@ -28,4 +28,6 @@ interface Container {
     fun getListeners(): MutableMap<Any, Any>
 
     fun loadAbstractClassesFromScope(tag: String = "undefined")
+
+    fun clear()
 }

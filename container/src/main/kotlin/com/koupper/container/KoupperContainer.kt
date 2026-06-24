@@ -32,6 +32,14 @@ class KoupperContainer() : Container {
 
     private var listeners: MutableMap<Any, Any> = mutableMapOf()
 
+    override fun clear() {
+        this.bindings.clear()
+        this.bindingsMirror.clear()
+        this.singletonMirror.clear()
+        this.singletons.clear()
+        this.listeners.clear()
+    }
+
     override fun <T : Any> bind(abstractClass: T, callback: (container: Container) -> T, tag: String) {
         if (this.bindings[abstractClass] != null) {
             if (this.bindings[abstractClass] is Map<*, *>) {
