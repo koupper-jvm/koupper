@@ -244,16 +244,18 @@ class ScriptingHostBackend(
             cs
         }
 
-        val evalResult = runBlocking { host.evaluator(compiled, evalConfig) }
+        val evalRes = ScriptSandbox.execute {
+            val result = runBlocking { host.evaluator(compiled, evalConfig) }
 
-        evalResult.reports
-            .filter { it.severity >= ScriptDiagnostic.Severity.WARNING }
-            .filter { shouldDisplayWarning(it) }
-            .forEach { diagnostic ->
-                System.err.println("[ScriptingHost][${diagnostic.severity}] ${diagnostic.message}")
-            }
+            result.reports
+                .filter { it.severity >= ScriptDiagnostic.Severity.WARNING }
+                .filter { shouldDisplayWarning(it) }
+                .forEach { diagnostic ->
+                    System.err.println("[ScriptingHost][${diagnostic.severity}] ${diagnostic.message}")
+                }
 
-        val evalRes = evalResult.valueOrThrow()
+            result.valueOrThrow()
+        }
 
         lastInstance  = evalRes.returnValue.scriptInstance
         lastScriptClass = lastInstance?.javaClass
