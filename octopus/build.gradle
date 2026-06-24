@@ -3,6 +3,7 @@ plugins {
     id 'org.jetbrains.kotlin.jvm'
     id 'maven-publish'
     id 'com.google.devtools.ksp' version '2.0.20-1.0.25'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 group = 'com.koupper'
@@ -85,13 +86,14 @@ tasks.register('optimized', Jar) {
     reproducibleFileOrder = true
 }
 
-tasks.register('fatJar', Jar) {
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
+tasks.register('fatJar', ShadowJar) {
     archiveBaseName = 'octopus'
     archiveVersion = project.version.toString()
     zip64 = true
 
-    // zip64 incremental patching corrupts LOC headers — always build from scratch
-    doFirst { delete(archiveFile) }
+    mergeServiceFiles()
 
     manifest {
         attributes 'Main-Class': 'com.koupper.octopus.OctopusBootstrapKt'
@@ -100,27 +102,10 @@ tasks.register('fatJar', Jar) {
     }
 
     from sourceSets.main.output
-    from {
-        configurations.runtimeClasspath.collect { dep ->
-            if (dep.isDirectory()) {
-                dep
-            } else {
-                zipTree(dep).matching {
-                    exclude 'module-info.class'
-                    exclude 'META-INF/versions/*/module-info.class'
-                    exclude 'META-INF/services/javax.annotation.processing.Processor'
-                    exclude 'META-INF/*.SF'
-                    exclude 'META-INF/*.DSA'
-                    exclude 'META-INF/*.RSA'
-                }
-            }
-        }
-    }
-
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    configurations = [project.configurations.runtimeClasspath]
 
     doLast {
-        println "✅ JAR generado: ${archiveFile.get()}"
+        println "✅ JAR generado con Shadow: ${archiveFile.get()}"
         println "📦 Tamaño: ${archiveFile.get().asFile.length() / (1024 * 1024)} MB"
     }
 }
