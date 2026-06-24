@@ -359,35 +359,45 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
 
         val (result, _) = captureLogs("Scripts.Dispatcher", spec) { logger ->
             withScriptLogger(logger, spec.mdc, spec.toStreamRoutingConfig()) {
-                if (diParams.callable != null) {
-                    return@captureLogs ScriptRunner.executeFunction(diParams.callable.property, diParams.callable.args.toList()) as T
-                }
-
-                ScriptRunner.runScript(
-                    ScriptCall(
-                        code = diParams.sentence,
-                        functionName = diParams.functionName,
-                        paramsJson = paramsJson,
-                        argTypes = functionArgTypeNames,
-                        symbol = backend?.getSymbol(diParams.functionName),
-                        annotationParams = emptyMap(),
-                        context = diParams.scriptContext,
-                        scriptPath = diParams.scriptPath,
-                        kind = "KTS",
-                        className = backend?.lastScriptClassName
+                com.koupper.shared.telemetry.KoupperTelemetry.withSpan(
+                    name = "koupper.script.execute",
+                    kind = io.opentelemetry.api.trace.SpanKind.INTERNAL,
+                    attributes = mapOf(
+                        "script.name" to (diParams.scriptPath ?: diParams.functionName),
+                        "script.context" to diParams.scriptContext,
+                        "trace.id" to (diParams.traceId ?: "none")
                     )
-                ) { typeName ->
-                    when (typeName.normalizeType()) {
-                        "Container", "app" -> com.koupper.container.app
-                        "TerminalIO" -> TerminalContext.get()
-                        "JobRunner" -> JobRunner
-                        "JobLister" -> JobLister
-                        "JobBuilder" -> JobBuilder
-                        "JobDisplayer" -> JobDisplayer
-                        "RoutesRegistration" -> RoutesRegistration(diParams.scriptContext)
-                        "ModuleAnalyzer" -> ModuleAnalyzer(diParams.scriptContext)
-                        "ModuleProcessor" -> ModuleProcessor(diParams.scriptContext)
-                        else -> null
+                ) { span ->
+                    if (diParams.callable != null) {
+                        return@withSpan ScriptRunner.executeFunction(diParams.callable.property, diParams.callable.args.toList()) as T
+                    }
+
+                    ScriptRunner.runScript(
+                        ScriptCall(
+                            code = diParams.sentence,
+                            functionName = diParams.functionName,
+                            paramsJson = paramsJson,
+                            argTypes = functionArgTypeNames,
+                            symbol = backend?.getSymbol(diParams.functionName),
+                            annotationParams = emptyMap(),
+                            context = diParams.scriptContext,
+                            scriptPath = diParams.scriptPath,
+                            kind = "KTS",
+                            className = backend?.lastScriptClassName
+                        )
+                    ) { typeName ->
+                        when (typeName.normalizeType()) {
+                            "Container", "app" -> com.koupper.container.app
+                            "TerminalIO" -> TerminalContext.get()
+                            "JobRunner" -> JobRunner
+                            "JobLister" -> JobLister
+                            "JobBuilder" -> JobBuilder
+                            "JobDisplayer" -> JobDisplayer
+                            "RoutesRegistration" -> RoutesRegistration(diParams.scriptContext)
+                            "ModuleAnalyzer" -> ModuleAnalyzer(diParams.scriptContext)
+                            "ModuleProcessor" -> ModuleProcessor(diParams.scriptContext)
+                            else -> null
+                        }
                     }
                 }
             }
