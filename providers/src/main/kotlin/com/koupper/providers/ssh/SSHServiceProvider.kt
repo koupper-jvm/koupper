@@ -2,9 +2,12 @@ package com.koupper.providers.ssh
 
 import com.koupper.container.app
 import com.koupper.os.env
+import com.koupper.providers.ProviderTier
 import com.koupper.providers.ServiceProvider
 
 class SSHServiceProvider : ServiceProvider() {
+    override fun tier() = ProviderTier.CORE
+
     override fun up() {
         app.bind(SSHClient::class, {
             JschSSHClient(
