@@ -262,13 +262,38 @@ internal fun parseAuthenticatedCommand(
 ): Pair<Boolean, String?> {
     val trimmed = firstLine.trim()
     val tokenIsRequired = !requiredToken.isNullOrBlank()
+
     if (trimmed.startsWith("AUTH::")) {
         val providedToken = trimmed.removePrefix("AUTH::").trim()
+
+        // JWT mode: if the token looks like a JWT (three base64url parts), validate via JwtAuth
+        if (providedToken.count { it == '.' } == 2) {
+            val jwt = com.koupper.octopus.security.JwtAuth.verifyToken(providedToken)
+            return if (jwt != null) true to reader.readLine()?.trim() else false to null
+        }
+
+        // Legacy static token mode
         if (!tokenIsRequired) return true to reader.readLine()?.trim()
         return (providedToken == requiredToken) to (if (providedToken == requiredToken) reader.readLine()?.trim() else null)
     }
+
     if (tokenIsRequired) return false to null
     return true to trimmed
+}
+
+/**
+ * Validates that the authenticated session has the required scope for the given command.
+ * Returns true if authorized, false otherwise.
+ */
+internal fun validateCommandScope(token: String?, commandType: String): Boolean {
+    if (token.isNullOrBlank()) return true // No token = no scope check (backward compat)
+
+    // Only validate JWT tokens; legacy tokens bypass scope checks
+    if (token.count { it == '.' } != 2) return true
+
+    val jwt = com.koupper.octopus.security.JwtAuth.verifyToken(token) ?: return false
+    val scopes = com.koupper.octopus.security.JwtAuth.extractScopes(jwt)
+    return com.koupper.octopus.security.JwtAuth.isAuthorized(scopes, commandType)
 }
 
 internal fun parseIncomingCommand(command: String): IncomingCommand? {
