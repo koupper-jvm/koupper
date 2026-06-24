@@ -48,6 +48,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Cross-validation: regex vs reflection signatures** — the `@Export` resolver now compares regex-extracted parameter types with reflection-extracted types and logs a warning on mismatch. Reflection remains the primary source; this adds visibility into regex parsing edge cases.
 - **Prometheus `/metrics` endpoint** — lightweight HTTP server (JDK `HttpServer`) exposes `DaemonMetrics` in Prometheus text exposition format at `http://127.0.0.1:9999/metrics`. Eight runtime counters available: uptime, active connections, total commands, total scripts, successful/failed scripts, unauthorized/invalid commands.
 - **E2E harness expansion** — `OctopusE2ETest` now covers `@Scheduled` registration (with duplicate-skip guard) and `@Pipeline` execution path.
+- **JWT authentication with scoped authorization** — `OctopusProtocol` now supports JWT tokens (HMAC256) alongside legacy static tokens. Three scopes: `koupper:read` (HEALTH_CHECK), `koupper:execute` (RUN, DEPLOY), `koupper:admin` (WATCH, CANCEL). New `security/JwtAuth.kt` utility for generation, verification, and scope checking.
 
 ### Changed
 - `ServiceProviderManager.listProviders()` now throws `IllegalStateException` with an actionable message when the SPI file is missing or empty, instead of silently falling back to a hardcoded list.
