@@ -99,6 +99,11 @@ fun listenForExternalCommands(
 
                     if (command.isNullOrBlank() || command == "null") return@launch
 
+                    // Extract token for scope validation (JWT mode only)
+                    val providedToken = if (firstLine.startsWith("AUTH::")) {
+                        firstLine.removePrefix("AUTH::").trim()
+                    } else null
+
                     DaemonMetrics.onCommandReceived()
 
                     sessionLogger.info { "\uD83D\uDCE5 [session=$sessionId] Command received in Octopus: $command" }
@@ -116,6 +121,23 @@ fun listenForExternalCommands(
                             )
                         }
                         sessionOutput.error("Invalid command format")
+                        return@launch
+                    }
+
+                    // Scope validation for JWT tokens
+                    if (providedToken != null && !validateCommandScope(providedToken, parsedCommand.commandType)) {
+                        DaemonMetrics.onUnauthorizedCommand()
+                        sessionLogger.warn {
+                            structuredEvent(
+                                event = "octopus.auth.forbidden",
+                                fields = mapOf(
+                                    "sessionId" to sessionId,
+                                    "commandType" to parsedCommand.commandType,
+                                    "remoteAddress" to it.inetAddress.hostAddress
+                                )
+                            )
+                        }
+                        sessionOutput.error("Forbidden: insufficient scope for command '${parsedCommand.commandType}'")
                         return@launch
                     }
 

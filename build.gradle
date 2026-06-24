@@ -99,6 +99,7 @@ project(':octopus') {
         implementation("com.cronutils:cron-utils:9.2.1")
         implementation "jakarta.ws.rs:jakarta.ws.rs-api:3.1.0"
         implementation "jakarta.annotation:jakarta.annotation-api:2.1.1"
+        implementation "com.auth0:java-jwt:4.4.0"
     }
 }
 
