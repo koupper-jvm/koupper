@@ -334,7 +334,19 @@ object ScriptRunner {
                 if (expectedClass != null) {
                     callArgs[i] = mapper.readValue(json, expectedClass)
                 } else {
-                    callArgs[i] = json
+                    val genericType = target.javaClass.genericInterfaces
+                        .asSequence()
+                        .filterIsInstance<java.lang.reflect.ParameterizedType>()
+                        .firstOrNull { it.rawType.typeName.startsWith("kotlin.jvm.functions.Function") }
+                        ?.actualTypeArguments
+                        ?.getOrNull(i)
+
+                    if (genericType != null) {
+                        val javaType = mapper.typeFactory.constructType(genericType)
+                        callArgs[i] = mapper.readValue(json, javaType)
+                    } else {
+                        callArgs[i] = json
+                    }
                 }
             }
         }
