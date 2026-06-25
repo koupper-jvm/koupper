@@ -12,6 +12,7 @@ import com.koupper.shared.runtime.RegisteredRuntimeRoute
 import com.koupper.shared.runtime.WebResponse
 import com.koupper.shared.runtime.TemplateResponse
 import com.koupper.providers.templates.TemplateProvider
+import com.koupper.shared.validators.core.Schema
 import org.glassfish.grizzly.http.server.HttpHandler
 import org.glassfish.grizzly.http.server.HttpServer
 import org.glassfish.grizzly.http.server.Request
@@ -100,7 +101,8 @@ class RuntimeRouterDsl {
             fullPath = fullPath,
             middlewares = builder.middlewares,
             handler = builder.handler ?: throw IllegalStateException("Handler not defined for $fullPath"),
-            inputType = if (inputClass != Any::class.java) inputClass else builder.inputType
+            inputType = if (inputClass != Any::class.java) inputClass else builder.inputType,
+            validationSchema = builder.validationSchema
         ))
     }
 
@@ -113,9 +115,11 @@ class RouteBuilder<I> {
     var middlewares: List<String> = emptyList()
     var handler: Any? = null
     var inputType: java.lang.reflect.Type? = null
+    var validationSchema: Schema<I>? = null
 
     fun path(block: () -> String) { path = block() }
     fun middlewares(block: () -> List<String>) { middlewares = block() }
+    fun schema(block: () -> Schema<I>) { validationSchema = block() }
     fun script(block: () -> Any) { 
         handler = block()
         inputType = handler?.javaClass?.methods
@@ -351,6 +355,16 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
 
             val output = if (invokeMethod.parameterCount == 1) {
                 val arg = buildArgument(request, route)
+
+                if (route.validationSchema != null && arg != null) {
+                    val schema = route.validationSchema as Schema<Any>
+                    val vResult = com.koupper.shared.validators.core.validate(arg, schema)
+                    if (!vResult.ok) {
+                        respond(response, 400, mapOf("error" to "Validation failed", "details" to vResult.errors))
+                        return
+                    }
+                }
+
                 invokeMethod.invoke(handler, arg)
             } else {
                 invokeMethod.invoke(handler)
