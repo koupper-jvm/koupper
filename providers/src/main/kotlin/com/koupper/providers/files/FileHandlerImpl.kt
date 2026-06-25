@@ -182,4 +182,19 @@ class FileHandlerImpl : FileHandler {
             .sorted()
             .toList()
     }
+
+    // ── File System Operations (v7.2) ───────────────────────────────────────
+
+    override fun exists(path: String) = load(path).exists()
+    override fun delete(path: String) = load(path).delete()
+    override fun isDirectory(path: String) = load(path).isDirectory
+    override fun isFile(path: String) = load(path).isFile
+    override fun length(path: String) = load(path).length()
+    override fun lastModified(path: String) = load(path).lastModified()
+    override fun mkdirs(path: String) = load(path).mkdirs()
+    override fun canonicalPath(path: String) = load(path).canonicalPath
+    override fun readBytes(path: String) = load(path).readBytes()
+    override fun writeBytes(path: String, data: ByteArray) { load(path).writeBytes(data) }
+    override fun copy(source: String, target: String) { load(source).copyTo(load(target), overwrite = true) }
+    override fun move(source: String, target: String) { copy(source, target); load(source).delete() }
 }

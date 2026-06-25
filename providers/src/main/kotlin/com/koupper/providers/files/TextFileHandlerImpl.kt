@@ -401,4 +401,23 @@ class TextFileHandlerImpl : TextFileHandler {
 
         return matchingInfo
     }
+
+    // ── Stateless convenience methods (v7.2) ────────────────────────────────
+
+    override fun readText(path: String): String {
+        val f = fileHandler.load(path)
+        return f.readText(Charsets.UTF_8)
+    }
+
+    override fun writeText(path: String, content: String) {
+        val f = fileHandler.load(path)
+        f.parentFile?.mkdirs()
+        f.writeText(content, Charsets.UTF_8)
+    }
+
+    override fun appendText(path: String, content: String) {
+        val f = fileHandler.load(path)
+        f.parentFile?.mkdirs()
+        f.appendText(content + "\n", Charsets.UTF_8)
+    }
 }

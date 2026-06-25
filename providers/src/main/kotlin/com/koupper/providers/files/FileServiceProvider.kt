@@ -61,6 +61,10 @@ class FileServiceProvider : ServiceProvider() {
             import com.koupper.providers.files.TextFileHandler
             fun txt(): TextFileHandler = com.koupper.container.app.getInstance(TextFileHandler::class)
         """.trimIndent(),
+        "fs" to """
+            import com.koupper.providers.files.FileHandler
+            fun fs(): FileHandler = com.koupper.container.app.getInstance(FileHandler::class)
+        """.trimIndent(),
         "watcher" to """
             import com.koupper.providers.files.FileWatcherProvider
             fun watcher(): FileWatcherProvider = com.koupper.container.app.getInstance(FileWatcherProvider::class)
