@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [7.1.0] - 2026-06-24
+
+### Added
+- **Enterprise-Grade HTTP Router Capabilities**: Added native parsing for `MultipartForm` bodies for binary file uploads without Grizzly classpath leakage.
+- **Global Exception Handling**: New `exceptionHandler { }` DSL block in the router to gracefully capture and format unhandled exceptions across all scripts and routes.
+- **Global CORS Config**: Native `cors { }` block in the router DSL to define allowed origins, methods, and headers at the registry level.
+
+---
+
 ## [Unreleased]
 
 ### Added
