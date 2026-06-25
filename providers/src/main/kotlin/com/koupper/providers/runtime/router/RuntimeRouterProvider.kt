@@ -93,6 +93,16 @@ class RuntimeRouterDsl {
         registerWithType(com.koupper.shared.runtime.RouteMethod.POST, I::class.java, block)
     }
 
+    // ── Global router config (v7.2) ───────────────────────────────────────
+
+    fun cors(block: CorsConfig.() -> Unit) {
+        GlobalRouteRegistry.corsConfig = CorsConfig().apply(block)
+    }
+
+    fun exceptionHandler(block: (Throwable) -> WebResponse) {
+        GlobalRouteRegistry.exceptionHandler = block
+    }
+
     @PublishedApi
     internal fun <I> registerWithType(method: com.koupper.shared.runtime.RouteMethod, inputClass: Class<*>, block: RouteBuilder<I>.() -> Unit) {
         val builder = RouteBuilder<I>()
