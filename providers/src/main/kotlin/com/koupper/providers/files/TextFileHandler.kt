@@ -202,4 +202,15 @@ interface TextFileHandler {
      */
     fun replacePlaceholders(placeholders: Map<String, String?>, filePath: String = "undefined", overrideOriginal: Boolean = false): File
 
+    // ── Stateless convenience methods (v7.2) ────────────────────────────────
+
+    /** Read entire file without the .using() ceremony. */
+    fun readText(path: String): String
+
+    /** Overwrite entire file, creating parent dirs if needed. */
+    fun writeText(path: String, content: String)
+
+    /** Append a line to a file, creating parent dirs if needed. */
+    fun appendText(path: String, content: String)
+
 }

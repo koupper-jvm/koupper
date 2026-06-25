@@ -42,4 +42,19 @@ interface FileHandler {
      * @return absolute paths of matching files, sorted.
      */
     fun listFiles(dirPath: String, recursive: Boolean = true, extensions: List<String> = emptyList()): List<String>
+
+    // ── File System Operations (v7.2) ───────────────────────────────────────
+
+    fun exists(path: String): Boolean
+    fun delete(path: String): Boolean
+    fun isDirectory(path: String): Boolean
+    fun isFile(path: String): Boolean
+    fun length(path: String): Long
+    fun lastModified(path: String): Long
+    fun mkdirs(path: String): Boolean
+    fun canonicalPath(path: String): String
+    fun readBytes(path: String): ByteArray
+    fun writeBytes(path: String, data: ByteArray)
+    fun copy(source: String, target: String)
+    fun move(source: String, target: String)
 }
