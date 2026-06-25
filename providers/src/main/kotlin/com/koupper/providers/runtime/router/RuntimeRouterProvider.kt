@@ -9,6 +9,9 @@ import com.koupper.shared.annotations.WebRoute
 import com.koupper.shared.annotations.RouteMethod
 import com.koupper.shared.runtime.GlobalRouteRegistry
 import com.koupper.shared.runtime.RegisteredRuntimeRoute
+import com.koupper.shared.runtime.WebResponse
+import com.koupper.shared.runtime.TemplateResponse
+import com.koupper.providers.templates.TemplateProvider
 import org.glassfish.grizzly.http.server.HttpHandler
 import org.glassfish.grizzly.http.server.HttpServer
 import org.glassfish.grizzly.http.server.Request
@@ -360,8 +363,21 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
 
             var status = 200
             var finalOutput = output ?: mapOf("ok" to true)
+            var explicitContentType: String? = null
+            var explicitHeaders = mapOf<String, String>()
 
-            if (output != null) {
+            if (output is WebResponse) {
+                status = output.statusCode
+                finalOutput = output.body
+                explicitContentType = output.contentType
+                explicitHeaders = output.headers
+            } else if (output is TemplateResponse) {
+                val templateProvider = (app as com.koupper.container.KoupperContainer).getInstance(TemplateProvider::class)
+                status = output.statusCode
+                explicitHeaders = output.headers
+                explicitContentType = "text/html; charset=UTF-8"
+                finalOutput = templateProvider.load(output.templatePath, output.context, fromFile = false)
+            } else if (output != null) {
                 val clazz = output.javaClass
                 try {
                     val statusCodeGetter = clazz.methods.find { it.name == "getStatusCode" && it.parameterCount == 0 }
@@ -370,12 +386,20 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
                         status = statusCodeGetter.invoke(output) as? Int ?: 200
                         finalOutput = bodyGetter.invoke(output) ?: mapOf("ok" to true)
                     }
+                    val contentTypeGetter = clazz.methods.find { it.name == "getContentType" && it.parameterCount == 0 }
+                    if (contentTypeGetter != null) {
+                        explicitContentType = contentTypeGetter.invoke(output) as? String
+                    }
+                    val headersGetter = clazz.methods.find { it.name == "getHeaders" && it.parameterCount == 0 }
+                    if (headersGetter != null) {
+                        explicitHeaders = headersGetter.invoke(output) as? Map<String, String> ?: emptyMap()
+                    }
                 } catch (e: Exception) {
                     // Ignore reflection errors and treat as normal payload
                 }
             }
 
-            respond(response, status, finalOutput)
+            respond(response, status, finalOutput, explicitContentType, explicitHeaders)
         } catch (e: IllegalArgumentException) {
             respond(response, 400, mapOf("error" to "Invalid input format", "detail" to (e.message ?: "")))
         } catch (e: Throwable) {
@@ -476,13 +500,19 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         stream.onClose { try { response.resume() } catch (e: Exception) {} }
     }
 
-    private fun respond(response: Response, status: Int, payload: Any) {
+    private fun respond(response: Response, status: Int, payload: Any, explicitContentType: String? = null, headers: Map<String, String> = emptyMap()) {
         response.status = status
+        headers.forEach { (k, v) -> response.setHeader(k, v) }
+        
         val (ct, bytes) = when {
+            explicitContentType != null -> 
+                explicitContentType to (if (payload is String) payload.toByteArray(Charsets.UTF_8) else mapper.writeValueAsBytes(payload))
             payload is String && payload.trimStart().let { it.startsWith("<!DOCTYPE") || it.startsWith("<html") } ->
                 "text/html; charset=UTF-8" to payload.toByteArray(Charsets.UTF_8)
             payload is String && (payload.startsWith("{") || payload.startsWith("[")) ->
                 "application/json" to payload.toByteArray(Charsets.UTF_8)
+            payload is String ->
+                "text/plain; charset=UTF-8" to payload.toByteArray(Charsets.UTF_8)
             else ->
                 "application/json" to mapper.writeValueAsBytes(payload)
         }
