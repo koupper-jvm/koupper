@@ -306,8 +306,8 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
             val preambleLineCount = if (finalPreamble.isNotBlank()) {
                 finalPreamble.lines().size + 1 // +1 for the "\n" separator
             } else 0
-            
-            backend.eval(augmentedScript, null, preambleLineCount)
+            val sourceName = diParams.scriptPath?.let { java.io.File(it).absolutePath } ?: diParams.scriptContext
+            backend.eval(augmentedScript, sourceName, preambleLineCount)
 
             // Validate annotations via reflection (post-compile)
             backend.compiledClass?.let { cls ->
