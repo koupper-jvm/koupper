@@ -37,10 +37,10 @@ tasks.named('jar', Jar) {
 }
 
 tasks.register('verifyFatJar') {
-    dependsOn fatJar
+    dependsOn shadowJar
     doLast {
         println "🔍 Verificando contenido del JAR..."
-        def jarFile = tasks.fatJar.archiveFile.get().asFile
+        def jarFile = tasks.shadowJar.archiveFile.get().asFile
         def process = "jar tf ${jarFile}".execute()
         def foundServices = false
         process.inputStream.eachLine { line ->
