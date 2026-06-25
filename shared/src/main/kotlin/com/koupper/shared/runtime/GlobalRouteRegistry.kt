@@ -23,6 +23,12 @@ data class RegisteredRuntimeRoute(
     val validationSchema: Any? = null
 )
 
+data class CorsConfig(
+    var allowedOrigins: List<String> = listOf("*"),
+    var allowedMethods: List<String> = listOf("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"),
+    var allowedHeaders: List<String> = listOf("Content-Type", "Authorization")
+)
+
 /**
  * Shared Registry for the Web Server.
  * This is the SINGLE point of truth for the entire JVM process.
@@ -30,4 +36,6 @@ data class RegisteredRuntimeRoute(
 object GlobalRouteRegistry {
     val routes = CopyOnWriteArrayList<RegisteredRuntimeRoute>()
     val middlewares = ConcurrentHashMap<String, (Any) -> Any>() // Generic bridge
+    var corsConfig: CorsConfig? = null
+    var exceptionHandler: ((Throwable) -> WebResponse)? = null
 }

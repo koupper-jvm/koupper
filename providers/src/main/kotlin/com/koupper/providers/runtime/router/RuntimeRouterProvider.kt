@@ -11,6 +11,8 @@ import com.koupper.shared.runtime.GlobalRouteRegistry
 import com.koupper.shared.runtime.RegisteredRuntimeRoute
 import com.koupper.shared.runtime.WebResponse
 import com.koupper.shared.runtime.TemplateResponse
+import com.koupper.shared.runtime.MultipartForm
+import com.koupper.shared.runtime.CorsConfig
 import com.koupper.providers.templates.TemplateProvider
 import com.koupper.shared.validators.core.Schema
 import org.glassfish.grizzly.http.server.HttpHandler
@@ -120,6 +122,8 @@ class RouteBuilder<I> {
     fun path(block: () -> String) { path = block() }
     fun middlewares(block: () -> List<String>) { middlewares = block() }
     fun schema(block: () -> Schema<I>) { validationSchema = block() }
+    fun cors(block: CorsConfig.() -> Unit) { GlobalRouteRegistry.corsConfig = CorsConfig().apply(block) }
+    fun exceptionHandler(block: (Throwable) -> WebResponse) { GlobalRouteRegistry.exceptionHandler = block }
     fun script(block: () -> Any) { 
         handler = block()
         inputType = handler?.javaClass?.methods
@@ -288,9 +292,10 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         val httpServer = HttpServer.createSimpleServer(null, host, port)
         httpServer.serverConfiguration.addHttpHandler(object : HttpHandler() {
             override fun service(request: Request, response: Response) {
-                response.setHeader("Access-Control-Allow-Origin", "*")
-                response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-                response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
+                val cors = GlobalRouteRegistry.corsConfig
+                response.setHeader("Access-Control-Allow-Origin", cors?.allowedOrigins?.joinToString(",") ?: "*")
+                response.setHeader("Access-Control-Allow-Methods", cors?.allowedMethods?.joinToString(",") ?: "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+                response.setHeader("Access-Control-Allow-Headers", cors?.allowedHeaders?.joinToString(",") ?: "Content-Type, Authorization")
                 if (request.method.methodString == "OPTIONS") { response.status = 204; return }
                 handleInternal(request, response)
             }
@@ -418,7 +423,17 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
             respond(response, 400, mapOf("error" to "Invalid input format", "detail" to (e.message ?: "")))
         } catch (e: Throwable) {
             val root = e.cause ?: e
-            respond(response, 500, mapOf("error" to root.message, "type" to root.javaClass.name))
+            val handler = GlobalRouteRegistry.exceptionHandler
+            if (handler != null) {
+                try {
+                    val res = handler(root)
+                    respond(response, res.statusCode, res.body, res.contentType, res.headers)
+                } catch (e2: Throwable) {
+                    respond(response, 500, mapOf("error" to "Error in exception handler", "type" to e2.javaClass.name))
+                }
+            } else {
+                respond(response, 500, mapOf("error" to root.message, "type" to root.javaClass.name))
+            }
         }
     }
 
@@ -426,9 +441,17 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         val inputType = route.inputType ?: return null
         val httpMethod = request.method.methodString.uppercase()
 
+        if (inputType == MultipartForm::class.java) {
+            val contentType = request.contentType ?: ""
+            if (contentType.startsWith("multipart/form-data")) {
+                return parseMultipart(contentType, readRequestBodyBytes(request))
+            }
+            return MultipartForm()
+        }
+
         if (inputType == String::class.java) {
             if (httpMethod == "POST" || httpMethod == "PUT" || httpMethod == "PATCH") {
-                return readRequestBody(request)
+                return String(readRequestBodyBytes(request), Charsets.UTF_8)
             }
             val pathParams = extractPathParams(route.fullPath, request.requestURI)
             return pathParams.values.firstOrNull()
@@ -444,6 +467,16 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         }
 
         if (inputType is Class<*>) {
+            if (httpMethod == "POST" || httpMethod == "PUT" || httpMethod == "PATCH") {
+                val bodyBytes = readRequestBodyBytes(request)
+                if (bodyBytes.isNotEmpty()) {
+                    try {
+                        return mapper.readValue(bodyBytes, inputType)
+                    } catch (e: Exception) {
+                        throw IllegalArgumentException("Cannot parse JSON to ${inputType.simpleName}: ${e.message}")
+                    }
+                }
+            }
             val queryParams = parseQueryString(request.queryString ?: "").mapValues { it.value.firstOrNull() ?: "" }
             try {
                 return mapper.convertValue(queryParams, inputType)
@@ -455,18 +488,72 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         return null
     }
 
-    private fun readRequestBody(request: Request): String {
+    private fun readRequestBodyBytes(request: Request): ByteArray {
         val contentLength = request.contentLengthLong.toInt()
-        if (contentLength <= 0) return ""
+        if (contentLength <= 0) return ByteArray(0)
         val inputBuffer = request.inputBuffer
         try {
             inputBuffer.fillFully(contentLength)
         } catch (e: Exception) {
-            return ""
+            return ByteArray(0)
         }
         val buf = ByteArray(contentLength)
         val n = inputBuffer.read(buf, 0, contentLength)
-        return if (n > 0) String(buf, 0, n, Charsets.UTF_8) else ""
+        return if (n > 0) buf.copyOf(n) else ByteArray(0)
+    }
+
+    private fun parseMultipart(contentType: String, body: ByteArray): MultipartForm {
+        val boundary = "boundary=(.+)".toRegex().find(contentType)?.groupValues?.get(1) ?: return MultipartForm()
+        val boundaryBytes = "--$boundary".toByteArray()
+        val fields = mutableMapOf<String, String>()
+        val files = mutableMapOf<String, com.koupper.shared.runtime.UploadedFile>()
+        
+        var pos = 0
+        while (pos < body.size) {
+            val nextBoundary = indexOf(body, boundaryBytes, pos)
+            if (nextBoundary == -1) break
+            if (pos > 0) {
+                val partEnd = nextBoundary - 2
+                if (partEnd > pos) {
+                    val part = body.copyOfRange(pos, partEnd)
+                    val headerEnd = indexOf(part, "\r\n\r\n".toByteArray(), 0)
+                    if (headerEnd != -1) {
+                        val headersStr = String(part, 0, headerEnd, Charsets.UTF_8)
+                        val content = part.copyOfRange(headerEnd + 4, part.size)
+                        
+                        val nameMatch = "name=\"([^\"]+)\"".toRegex().find(headersStr)
+                        val filenameMatch = "filename=\"([^\"]+)\"".toRegex().find(headersStr)
+                        val ctMatch = "Content-Type: (.+)".toRegex().find(headersStr)
+                        
+                        val name = nameMatch?.groupValues?.get(1)
+                        if (name != null) {
+                            if (filenameMatch != null) {
+                                files[name] = com.koupper.shared.runtime.UploadedFile(
+                                    filename = filenameMatch.groupValues[1],
+                                    contentType = ctMatch?.groupValues?.get(1)?.trim() ?: "application/octet-stream",
+                                    content = content
+                                )
+                            } else {
+                                fields[name] = String(content, Charsets.UTF_8)
+                            }
+                        }
+                    }
+                }
+            }
+            pos = nextBoundary + boundaryBytes.size + 2
+        }
+        return MultipartForm(fields, files)
+    }
+
+    private fun indexOf(array: ByteArray, target: ByteArray, start: Int): Int {
+        if (target.isEmpty()) return 0
+        outer@ for (i in start..array.size - target.size) {
+            for (j in target.indices) {
+                if (array[i + j] != target[j]) continue@outer
+            }
+            return i
+        }
+        return -1
     }
 
     private fun extractPathParams(routePath: String, requestPath: String): Map<String, String> {
