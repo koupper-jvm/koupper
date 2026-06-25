@@ -189,34 +189,68 @@ fun extractExportFunctionSignature(
 
 fun extractExportFunctionSignature(input: String): ExportFunctionSignature? {
     // KSP metadata is the primary source of truth for compiled artifacts.
-    // If not available (e.g. dynamic .kts script), return null so the Dispatcher
-    // can fall back to JVM Reflection on the dynamically compiled class.
-    val metadata = KspMetadataReader.read() ?: return null
-    
-    val scriptPackage = Regex(
-        """(?m)^\s*package\s+([A-Za-z_][\w.]*)\s*$"""
-    ).find(input)?.groupValues?.get(1)
-    
-    val matchingExport = metadata.exports.find { export ->
-        scriptPackage == null || export.packageName == scriptPackage
+    val metadata = KspMetadataReader.read()
+    if (metadata != null) {
+        val scriptPackage = Regex(
+            """(?m)^\s*package\s+([A-Za-z_][\w.]*)\s*$"""
+        ).find(input)?.groupValues?.get(1)
+        
+        val matchingExport = metadata.exports.find { export ->
+            scriptPackage == null || export.packageName == scriptPackage
+        }
+        
+        matchingExport?.let { export ->
+            val typeStr = export.type
+            val params = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
+                val generics = typeStr.substringAfter('<').substringBeforeLast('>')
+                val allTypes = splitTypesTopLevel(generics)
+                allTypes.dropLast(1)
+            } else {
+                emptyList()
+            }
+            val returnType = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
+                val generics = typeStr.substringAfter('<').substringBeforeLast('>')
+                val allTypes = splitTypesTopLevel(generics)
+                allTypes.lastOrNull() ?: "kotlin.Unit"
+            } else {
+                "kotlin.Unit"
+            }
+            
+            val imports = linkedMapOf<String, String>()
+            val importRegex = Regex(
+                """(?m)^\s*import\s+([A-Za-z_][\w.]*)(?:\s+as\s+([A-Za-z_]\w*))?\s*$"""
+            )
+            for (m in importRegex.findAll(input)) {
+                val fqcn = m.groupValues[1]
+                val alias = m.groupValues[2].takeIf { it.isNotBlank() }
+                val simpleName = alias ?: fqcn.substringAfterLast('.')
+                imports[simpleName] = fqcn
+            }
+            
+            return ExportFunctionSignature(
+                packageName = export.packageName,
+                imports = imports,
+                parameterTypes = params,
+                returnType = returnType,
+                code = input
+            )
+        }
     }
     
-    matchingExport?.let { export ->
-        val typeStr = export.type
-        val params = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
-            val generics = typeStr.substringAfter('<').substringBeforeLast('>')
-            val allTypes = splitTypesTopLevel(generics)
-            allTypes.dropLast(1)
-        } else {
+    // Fallback: parse signature from source code using regex (for dynamic .kts scripts)
+    val exportMatch = Regex(
+        """@Export\s*(?:\([^)]*\))?\s*val\s+(\w+)\s*:\s*\(([^)]*)\)\s*->\s*([^\s=]+)""",
+        RegexOption.DOT_MATCHES_ALL
+    ).find(input)
+    
+    if (exportMatch != null) {
+        val paramStr = exportMatch.groupValues[2].trim()
+        val paramTypes = if (paramStr.isBlank()) {
             emptyList()
-        }
-        val returnType = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
-            val generics = typeStr.substringAfter('<').substringBeforeLast('>')
-            val allTypes = splitTypesTopLevel(generics)
-            allTypes.lastOrNull() ?: "kotlin.Unit"
         } else {
-            "kotlin.Unit"
+            paramStr.split(",").map { it.trim() }
         }
+        val returnType = exportMatch.groupValues[3].trim()
         
         val imports = linkedMapOf<String, String>()
         val importRegex = Regex(
@@ -230,9 +264,9 @@ fun extractExportFunctionSignature(input: String): ExportFunctionSignature? {
         }
         
         return ExportFunctionSignature(
-            packageName = export.packageName,
+            packageName = null,
             imports = imports,
-            parameterTypes = params,
+            parameterTypes = paramTypes,
             returnType = returnType,
             code = input
         )

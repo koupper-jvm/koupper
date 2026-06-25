@@ -59,7 +59,7 @@ fun buildParamsJson(
 
         val v = params[key]
             ?: positionals.getOrNull(pos)?.also { pos++ }
-            ?: return@forEachIndexed
+            ?: ""
 
         out[key] = v
     }
