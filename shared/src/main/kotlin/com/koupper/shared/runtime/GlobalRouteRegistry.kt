@@ -19,7 +19,8 @@ data class RegisteredRuntimeRoute(
     val fullPath: String,
     val middlewares: List<String>,
     val handler: Any,
-    val inputType: java.lang.reflect.Type? = null
+    val inputType: java.lang.reflect.Type? = null,
+    val validationSchema: Any? = null
 )
 
 /**
