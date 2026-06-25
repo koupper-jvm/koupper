@@ -4,10 +4,14 @@ All notable changes to the Koupper monorepo are documented here.
 Versioning follows the Octopus engine version (`build.gradle`).
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [7.1.1] - 2026-06-24
+## [7.1.1] - 2026-06-25
 
 ### Fixed
 - **HTTP Router Body Parsing**: Fixed a critical bug in `readRequestBodyBytes` where it relied on `Content-Length` and failed on chunked encoding or missing headers, causing JSON mapping exceptions.
+- **Sandbox Parameter Pass-Through**: Removed `--` prefix from `SandboxWorker.kt` CLI args construction. The prefix caused key mismatch between `parseArgs` (stores `--key`) and `buildParamsJson` (looks up `key` without prefix), causing parameter loss in sandboxed script execution.
+- **Inline Data Class Deserialization**: Added Type generic fallback in `ScriptRunnerOrchestrator.kt` for inline data classes (e.g. `SalesReportCommand`). When `resolveClassFromArgName` returns null, uses `target.javaClass.genericInterfaces` → `FunctionN` to extract the generic Type and deserialize with Jackson.
+- **Generic-Aware Parameter Splitting**: Replaced naive `split(",")` with `splitTypesTopLevel()` in regex fallback path of `extractExportFunctionSignature()`. Types like `Map<String, Any?>` no longer split into 2 parameters.
+- **Multi-Annotation Regex Support**: Extended regex fallback to match `@Export` followed by other annotations (`@Scheduled`, `@Logger`, `@JobsListener`) before `val`.
 
 ---
 
