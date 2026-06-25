@@ -23,7 +23,7 @@ fun main(args: Array<String>) {
     val octopus = Octopus(app)
 
     val paramsMap = jacksonObjectMapper().readValue<Map<String, Any>>(paramsString.replace("\\\"", "\""))
-    val cliArgs = paramsMap.entries.joinToString(" ") { "--${it.key}=${it.value}" }
+    val cliArgs = paramsMap.entries.joinToString(" ") { "${it.key}=${it.value}" }
 
     octopus.runFromScriptFile<Any?>(
         context = context,

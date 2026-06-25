@@ -239,7 +239,7 @@ fun extractExportFunctionSignature(input: String): ExportFunctionSignature? {
     
     // Fallback: parse signature from source code using regex (for dynamic .kts scripts)
     val exportMatch = Regex(
-        """@Export\s*(?:\([^)]*\))?\s*val\s+(\w+)\s*:\s*\(([^)]*)\)\s*->\s*([^\s=]+)""",
+        """@Export\s*(?:\([^)]*\))?\s*(?:@\w+(?:\([^)]*\))?\s*)*val\s+(\w+)\s*:\s*\(([^)]*)\)\s*->\s*([^\s=]+)""",
         RegexOption.DOT_MATCHES_ALL
     ).find(input)
     
@@ -248,7 +248,7 @@ fun extractExportFunctionSignature(input: String): ExportFunctionSignature? {
         val paramTypes = if (paramStr.isBlank()) {
             emptyList()
         } else {
-            paramStr.split(",").map { it.trim() }
+            splitTypesTopLevel(paramStr)
         }
         val returnType = exportMatch.groupValues[3].trim()
         
