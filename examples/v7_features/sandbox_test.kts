@@ -7,7 +7,7 @@ import com.koupper.shared.annotations.Export
  * the termination and report it cleanly back to the client.
  */
 @Export
-fun runSandboxTest(): String {
+val runSandboxTest: () -> String = {
     println("[Sandbox Example] Iniciando ejecución de rutina crítica...")
     
     for (i in 1..3) {
@@ -21,5 +21,5 @@ fun runSandboxTest(): String {
     // En la v7, el ProcessSandbox lo aísla y simplemente falla el trabajo de este script.
     System.exit(1)
     
-    return "Este punto nunca se alcanzará"
+    "Este punto nunca se alcanzará"
 }
