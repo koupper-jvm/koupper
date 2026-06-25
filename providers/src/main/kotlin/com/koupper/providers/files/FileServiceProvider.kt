@@ -65,6 +65,21 @@ class FileServiceProvider : ServiceProvider() {
             import com.koupper.providers.files.FileHandler
             fun fs(): FileHandler = com.koupper.container.app.getInstance(FileHandler::class)
         """.trimIndent(),
+        "sse" to """
+            import com.koupper.providers.runtime.router.SseEmitter
+            fun sse(): SseEmitter = SseEmitter()
+        """.trimIndent(),
+        "validate" to """
+            import com.koupper.shared.validators.core.*
+            fun validate(map: Map<String, Any?>, required: List<String>): VResult<Map<String, Any?>> {
+                val errors = required.mapNotNull { field ->
+                    if (map[field] == null || map[field].toString().isBlank())
+                        VError(field, listOf("required"))
+                    else null
+                }
+                return if (errors.isEmpty()) VResult(true, map) else VResult(false, null, errors)
+            }
+        """.trimIndent(),
         "watcher" to """
             import com.koupper.providers.files.FileWatcherProvider
             fun watcher(): FileWatcherProvider = com.koupper.container.app.getInstance(FileWatcherProvider::class)
