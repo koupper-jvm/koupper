@@ -4,6 +4,11 @@ All notable changes to the Koupper monorepo are documented here.
 Versioning follows the Octopus engine version (`build.gradle`).
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [7.1.1] - 2026-06-24
+
+### Fixed
+- **HTTP Router Body Parsing**: Fixed a critical bug in `readRequestBodyBytes` where it relied on `Content-Length` and failed on chunked encoding or missing headers, causing JSON mapping exceptions.
+
 ---
 
 ## [7.1.0] - 2026-06-24
