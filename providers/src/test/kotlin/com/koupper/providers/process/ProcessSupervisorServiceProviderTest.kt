@@ -299,7 +299,10 @@ class ProcessSupervisorServiceProviderTest : AnnotationSpec() {
         val supervisor: LocalProcessSupervisor
     ) {
         fun testMainArgs(sleepMs: Long): List<String> {
-            return listOf("-cp", classPath, "com.koupper.providers.process.ProcessSupervisorTestMain", sleepMs.toString())
+            val argFile = File.createTempFile("args", ".txt", rootDir)
+            val escapedCp = classPath.replace("\\", "\\\\")
+            argFile.writeText("-cp\n\"$escapedCp\"\ncom.koupper.providers.process.ProcessSupervisorTestMain\n$sleepMs")
+            return listOf("@${argFile.absolutePath}")
         }
 
         fun cleanup() {

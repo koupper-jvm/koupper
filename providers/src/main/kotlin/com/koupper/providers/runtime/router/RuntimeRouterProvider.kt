@@ -215,7 +215,7 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         while (entries.hasMoreElements()) {
             val entry = entries.nextElement()
             val name = entry.name
-            if (name.startsWith(path) && name.endsWith("Kt.class")) {
+            if (name.startsWith(path) && name.endsWith(".class") && !name.contains("$")) {
                 val className = name.replace('/', '.').removeSuffix(".class")
                 processClass(className, discoveredRoutes)
             }
@@ -490,8 +490,23 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
 
     private fun readRequestBodyBytes(request: Request): ByteArray {
         return try {
-            request.inputStream.readBytes()
+            val length = request.contentLength
+            if (length > 0) {
+                val buf = ByteArray(length)
+                var read = 0
+                while (read < length) {
+                    val r = request.inputStream.read(buf, read, length - read)
+                    if (r == -1) break
+                    read += r
+                }
+                buf
+            } else if (request.getHeader("Transfer-Encoding")?.contains("chunked") == true) {
+                request.inputStream.readBytes()
+            } else {
+                ByteArray(0)
+            }
         } catch (e: Exception) {
+            e.printStackTrace()
             ByteArray(0)
         }
     }

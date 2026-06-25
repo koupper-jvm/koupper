@@ -42,9 +42,15 @@ private fun ByteArray.md5hex(): String =
     java.security.MessageDigest.getInstance("MD5")
         .digest(this).joinToString("") { "%02x".format(it) }
 
-// Process-level compiled script cache — survives within a single daemon session.
+// Process-level compiled script cache (LRU bounded) — survives within a single daemon session.
 // Key: MD5 of script content. Scripts are never mutated after first load in production.
-private val compiledScriptCache = ConcurrentHashMap<String, CompiledScript>()
+private val compiledScriptCache = java.util.Collections.synchronizedMap(
+    object : java.util.LinkedHashMap<String, CompiledScript>(100, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CompiledScript>?): Boolean {
+            return size > 500 // Max 500 scripts in RAM
+        }
+    }
+)
 
 private val diskCacheDir = File(System.getProperty("user.home"), ".koupper/cache/compiled-scripts")
     .also { it.mkdirs() }
@@ -204,7 +210,7 @@ class ScriptingHostBackend(
     private fun evalWithSource(code: String, sourceName: String?, lineOffset: Int = 0): Any {
         require(code.isNotBlank()) { "Script code must not be blank" }
 
-        val scriptSourceName = sourceName?.takeIf { it.isNotBlank() }
+        val scriptSourceName = sourceName?.takeIf { it.isNotBlank() && it != "." && !it.endsWith("\\.") && !it.endsWith("/.") }
             ?: "KoupperScript_${java.util.UUID.randomUUID().toString().replace("-", "")}.kts"
 
         val cacheKey   = code.toByteArray(Charsets.UTF_8).md5hex()

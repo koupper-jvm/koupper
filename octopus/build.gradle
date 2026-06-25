@@ -88,7 +88,7 @@ tasks.register('optimized', Jar) {
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
-tasks.register('fatJar', ShadowJar) {
+tasks.named('shadowJar', ShadowJar) {
     archiveBaseName = 'octopus'
     archiveVersion = project.version.toString()
     zip64 = true

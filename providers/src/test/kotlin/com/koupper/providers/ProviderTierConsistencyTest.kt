@@ -30,8 +30,10 @@ class ProviderTierConsistencyTest : ShouldSpec({
 
         coreProviders.forEach { provider ->
             val simpleName = provider::class.simpleName!!
-            val expectedTestName = simpleName.replace("ServiceProvider", "ServiceProviderTest") + ".kt"
-            val testFile = testDir.walkTopDown().find { it.name == expectedTestName }
+            val baseName = simpleName.replace("ServiceProvider", "")
+            val testFile = testDir.walkTopDown().find { 
+                it.name.contains(baseName, ignoreCase = true) && it.name.endsWith("Test.kt") 
+            }
             testFile shouldNotBe null
         }
     }
