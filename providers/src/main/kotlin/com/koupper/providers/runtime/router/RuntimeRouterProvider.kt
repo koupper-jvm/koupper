@@ -489,17 +489,11 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
     }
 
     private fun readRequestBodyBytes(request: Request): ByteArray {
-        val contentLength = request.contentLengthLong.toInt()
-        if (contentLength <= 0) return ByteArray(0)
-        val inputBuffer = request.inputBuffer
-        try {
-            inputBuffer.fillFully(contentLength)
+        return try {
+            request.inputStream.readBytes()
         } catch (e: Exception) {
-            return ByteArray(0)
+            ByteArray(0)
         }
-        val buf = ByteArray(contentLength)
-        val n = inputBuffer.read(buf, 0, contentLength)
-        return if (n > 0) buf.copyOf(n) else ByteArray(0)
     }
 
     private fun parseMultipart(contentType: String, body: ByteArray): MultipartForm {
