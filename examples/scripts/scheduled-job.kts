@@ -1,5 +1,5 @@
 import com.koupper.shared.annotations.Export
-import com.koupper.shared.annotations.Scheduled
+import com.koupper.octopus.annotations.Scheduled
 
 /**
  * Scheduled job using KSP-processed @Scheduled annotation.
@@ -9,7 +9,8 @@ import com.koupper.shared.annotations.Scheduled
  */
 @Scheduled(cron = "0 8 * * *")
 @Export
-val dailyReport: () -> Unit = {
+val dailyReport: () -> String = {
     println("Running daily report at 8:00 AM")
     // Your daily logic here
+    "Daily report completed"
 }

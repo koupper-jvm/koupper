@@ -80,12 +80,15 @@ object HttpApiServer {
                 }.ifBlank { "EMPTY_PARAMS" }
 
                 var result: String? = null
-                scriptExecutor.runFromScriptFile<String>(
+                scriptExecutor.runFromScriptFile<Any?>(
                     context = req.context,
                     scriptPath = req.scriptPath,
                     params = paramString
                 ) { output ->
-                    result = output
+                    result = when (output) {
+                        is Unit, null -> ""
+                        else -> output.toString()
+                    }
                 }
 
                 sendJson(exchange, 200, ApiResponse(ok = true, result = result, traceId = traceId))
@@ -146,13 +149,17 @@ object HttpApiServer {
 
                 com.koupper.octopus.SessionStdoutBridge.bind(sseOutput, com.koupper.octopus.ResponseMode.JSON)
 
-                scriptExecutor.runFromScriptFile<String>(
+                scriptExecutor.runFromScriptFile<Any?>(
                     context = req.context,
                     scriptPath = req.scriptPath,
                     params = paramString
                 ) { finalResult ->
                     try {
-                        val escaped = (finalResult ?: "").replace("\n", "\\n").replace("\r", "")
+                        val resultStr = when (finalResult) {
+                            is Unit, null -> ""
+                            else -> finalResult.toString()
+                        }
+                        val escaped = resultStr.replace("\n", "\\n").replace("\r", "")
                         writer.write("data: {\"event\": \"done\", \"result\": \"$escaped\"}\n\n")
                         writer.flush()
                     } catch (e: Exception) {}

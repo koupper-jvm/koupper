@@ -7,7 +7,7 @@ import com.koupper.shared.annotations.Export
  * rather than waiting for the script to finish completely to return a response.
  */
 @Export
-fun runStreamingTest(): String {
+val runStreamingTest: () -> String = {
     println("[SSE Example] Iniciando trabajo de larga duración...")
     
     for (i in 1..10) {
@@ -19,5 +19,5 @@ fun runStreamingTest(): String {
 
     println("[SSE Example] Trabajo finalizado con éxito.")
     
-    return "SUCCESS"
+    "SUCCESS"
 }
