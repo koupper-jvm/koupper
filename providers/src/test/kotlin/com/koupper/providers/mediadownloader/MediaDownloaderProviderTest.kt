@@ -78,7 +78,7 @@ class MediaDownloaderProviderTest : AnnotationSpec() {
         val result = provider.extractAudio(AudioExtractRequest(videoPath = "/tmp/videos/abc123.mp4"))
 
         assertTrue(result.ok)
-        assertEquals("/tmp/videos/abc123.mp3", result.filePath)
+        assertEquals(java.io.File("/tmp/videos/abc123.mp3").absolutePath, result.filePath)
     }
 
     @Test
@@ -90,7 +90,7 @@ class MediaDownloaderProviderTest : AnnotationSpec() {
         val result = provider.extractAudio(AudioExtractRequest(videoPath = "/tmp/videos/abc123.mp4", outputFormat = "wav"))
 
         assertTrue(result.ok)
-        assertEquals("/tmp/videos/abc123.wav", result.filePath)
+        assertEquals(java.io.File("/tmp/videos/abc123.wav").absolutePath, result.filePath)
     }
 
     @Test

@@ -35,7 +35,7 @@ class KoupperSymbolProcessorTest : ShouldSpec({
         val mockLogger = mockk<KSPLogger>(relaxed = true)
         val processor = KoupperSymbolProcessor(mockCodeGenerator, mockLogger)
         
-        val mockResolver = mockk<Resolver> {
+        val mockResolver = mockk<Resolver>(relaxed = true) {
             every { getSymbolsWithAnnotation("com.koupper.shared.annotations.Export") } returns emptySequence()
         }
         
