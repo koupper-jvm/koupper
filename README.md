@@ -134,7 +134,7 @@ Expected result:
 
 ## Typical use cases
 
-- **High-performance HTTP APIs**: Backed by Grizzly and Jersey filters.
+- **High-performance HTTP APIs**: Backed by Grizzly, featuring native Multipart parsing, CORS support, and Global Exception Handling.
 - **Script-driven backend workers** and async jobs.
 - **Deployment orchestration** and infra workflows.
 - **Operational automations** (GitHub, Docker, SSH, notifications, queue ops).
