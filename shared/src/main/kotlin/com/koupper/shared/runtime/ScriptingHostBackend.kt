@@ -208,7 +208,13 @@ class ScriptingHostBackend(
             ?: "KoupperScript_${java.util.UUID.randomUUID().toString().replace("-", "")}.kts"
 
         val cacheKey   = code.toByteArray(Charsets.UTF_8).md5hex()
-        val source     = code.toScriptSource(scriptSourceName)
+        
+        // Workaround for K2/FIR NPE (source must not be null) in FirJvmModuleAccessibilityTypeChecker
+        // StringScriptSource lacks a physical file, which crashes K2 when checking accessibility of certain symbols.
+        val scriptFile = java.io.File(scriptSourceName)
+        val tempFile = java.io.File(System.getProperty("java.io.tmpdir"), scriptFile.name)
+        tempFile.writeText(code)
+        val source = tempFile.toScriptSource()
 
         // Try to retrieve a previously compiled script (same content = same bytecode).
         // Check: 1) in-process cache, 2) disk cache, 3) compile fresh.
