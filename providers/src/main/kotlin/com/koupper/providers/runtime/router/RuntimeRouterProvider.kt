@@ -59,7 +59,8 @@ data class RequestContext(
     val path: String, 
     val body: String, 
     val headers: Map<String, List<String>>,
-    val queryParams: Map<String, List<String>>
+    val queryParams: Map<String, List<String>>,
+    val attributes: MutableMap<String, Any> = mutableMapOf()
 )
 
 interface RuntimeRouterProvider {
@@ -91,6 +92,18 @@ class RuntimeRouterDsl {
 
     inline fun <reified I> post(noinline block: RouteBuilder<I>.() -> Unit) {
         registerWithType(com.koupper.shared.runtime.RouteMethod.POST, I::class.java, block)
+    }
+
+    inline fun <reified I> put(noinline block: RouteBuilder<I>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.PUT, I::class.java, block)
+    }
+
+    inline fun <reified I> patch(noinline block: RouteBuilder<I>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.PATCH, I::class.java, block)
+    }
+
+    inline fun <reified I> delete(noinline block: RouteBuilder<I>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.DELETE, I::class.java, block)
     }
 
     // ── Global router config (v7.2) ───────────────────────────────────────
@@ -344,13 +357,19 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         }
 
         val queryParams = parseQueryString(request.queryString ?: "")
+        val headersMap = mutableMapOf<String, List<String>>()
+        request.headerNames.forEach { name ->
+            headersMap[name] = request.getHeaders(name).toList()
+        }
         val reqCtx = RequestContext(
             method = method,
             path = path,
             body = "",
-            headers = emptyMap(),
+            headers = headersMap,
             queryParams = queryParams
         )
+        GlobalRouteRegistry.currentRequest.set(reqCtx)
+        try {
         for (middlewareName in route.middlewares) {
             val middleware = GlobalRouteRegistry.middlewares[middlewareName] ?: continue
             val result = middleware(reqCtx) as? MiddlewareResult ?: continue
@@ -444,6 +463,9 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
             } else {
                 respond(response, 500, mapOf("error" to root.message, "type" to root.javaClass.name))
             }
+        }
+        } finally {
+            GlobalRouteRegistry.currentRequest.remove()
         }
     }
 
