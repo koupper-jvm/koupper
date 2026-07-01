@@ -38,4 +38,5 @@ object GlobalRouteRegistry {
     val middlewares = ConcurrentHashMap<String, (Any) -> Any>() // Generic bridge
     var corsConfig: CorsConfig? = null
     var exceptionHandler: ((Throwable) -> WebResponse)? = null
+    val currentRequest = ThreadLocal<Any>()
 }
