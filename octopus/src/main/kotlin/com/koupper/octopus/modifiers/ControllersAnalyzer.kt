@@ -33,6 +33,7 @@ class ControllersAnalyzer {
                 val controllerContent = controllerFile.readText()
                 val endpoints = extractControllerInfo(controllerContent, khandlerIndex, fileIndex)
                 mapOf(
+                    "project" to moduleDir.name,
                     "port" to port,
                     "controller" to controllerFile.nameWithoutExtension,
                     "path" to (extractControllerBasePath(controllerContent) ?: "/"),
