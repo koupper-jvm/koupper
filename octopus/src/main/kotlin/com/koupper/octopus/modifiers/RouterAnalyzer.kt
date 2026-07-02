@@ -44,6 +44,7 @@ class RouterAnalyzer {
                 val content = routerFile.readText()
                 val endpoints = extractRouterEndpoints(content, handlerGenerics)
                 mapOf(
+                    "project" to moduleDir.name,
                     "port" to port,
                     "controller" to routerFile.nameWithoutExtension,
                     "path" to "/",
