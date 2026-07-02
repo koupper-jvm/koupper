@@ -7,6 +7,7 @@ import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
 import com.koupper.container.app
 import com.koupper.octopus.modifiers.ControllersAnalyzer
+import com.koupper.octopus.modifiers.RouterAnalyzer
 import com.koupper.octopus.modules.validateScript
 import com.koupper.orchestrator.config.JobConfig
 import com.koupper.shared.monitoring.ExecutionMonitor
@@ -37,6 +38,7 @@ class ModuleAnalyzer(private val context: String) : Process {
 
         val port = runCatching { extractServerPort(baseDir)?.toInt() }.getOrNull()
         ControllersAnalyzer().analyzeControllers(baseDir, port = port ?: 0)
+        RouterAnalyzer().analyzeRouters(baseDir, port = port ?: 0)
 
         val info = buildString {
             appendLine("${ANSI_CYAN}📦 Module Setup Info:${ANSI_RESET}")
