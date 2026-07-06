@@ -58,10 +58,16 @@ data class RequestContext(
     val method: String, 
     val path: String, 
     val body: String, 
-    val headers: Map<String, List<String>>,
-    val queryParams: Map<String, List<String>>,
+    val headers: Map<String, List<String>> = emptyMap(),
+    val queryParams: Map<String, List<String>> = emptyMap(),
     val attributes: MutableMap<String, Any> = mutableMapOf()
-)
+) {
+    fun queryParam(name: String): String? = try {
+        queryParams[name]?.firstOrNull()
+    } catch (e: NullPointerException) {
+        null
+    }
+}
 
 interface RuntimeRouterProvider {
     fun registerMiddleware(name: String, middleware: (RequestContext) -> MiddlewareResult)
@@ -387,7 +393,37 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
 
             invokeMethod.isAccessible = true
 
-            val output = if (invokeMethod.parameterCount == 1) {
+            val isSuspend = invokeMethod.parameterTypes.lastOrNull()?.name == "kotlin.coroutines.Continuation"
+
+            val output = if (isSuspend) {
+                if (invokeMethod.parameterCount == 2) {
+                    val arg = buildArgument(request, route)
+                    if (route.validationSchema != null && arg != null) {
+                        val schema = route.validationSchema as Schema<Any>
+                        val vResult = com.koupper.shared.validators.core.validate(arg, schema)
+                        if (!vResult.ok) {
+                            respond(response, 400, mapOf("error" to "Validation failed", "details" to vResult.errors))
+                            return
+                        }
+                    }
+                    val suspendHandler = handler as suspend (Any?) -> Any?
+                    kotlinx.coroutines.runBlocking { suspendHandler(arg) }
+                } else {
+                    val suspendHandler = handler as suspend () -> Any?
+                    kotlinx.coroutines.runBlocking { suspendHandler() }
+                }
+            } else if (invokeMethod.parameterCount == 2) {
+                val arg = buildArgument(request, route)
+                if (route.validationSchema != null && arg != null) {
+                    val schema = route.validationSchema as Schema<Any>
+                    val vResult = com.koupper.shared.validators.core.validate(arg, schema)
+                    if (!vResult.ok) {
+                        respond(response, 400, mapOf("error" to "Validation failed", "details" to vResult.errors))
+                        return
+                    }
+                }
+                invokeMethod.invoke(handler, arg) // removed , null which is invalid for 2 params unless 2nd is optional
+            } else if (invokeMethod.parameterCount == 1) {
                 val arg = buildArgument(request, route)
 
                 if (route.validationSchema != null && arg != null) {
@@ -398,7 +434,6 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
                         return
                     }
                 }
-
                 invokeMethod.invoke(handler, arg)
             } else {
                 invokeMethod.invoke(handler)
@@ -450,14 +485,22 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
             respond(response, status, finalOutput, explicitContentType, explicitHeaders)
         } catch (e: IllegalArgumentException) {
             respond(response, 400, mapOf("error" to "Invalid input format", "detail" to (e.message ?: "")))
+        } catch (e: NullPointerException) {
+            respond(response, 400, mapOf("error" to "Missing required parameter or value", "detail" to (e.message ?: "Null reference")))
+        } catch (e: IndexOutOfBoundsException) {
+            respond(response, 400, mapOf("error" to "Index out of bounds", "detail" to (e.message ?: "")))
         } catch (e: Throwable) {
             val root = e.cause ?: e
+            System.err.println("=== [KOUPPER V7 ROUTER EXCEPTION] ===")
+            root.printStackTrace()
             val handler = GlobalRouteRegistry.exceptionHandler
             if (handler != null) {
                 try {
                     val res = handler(root)
                     respond(response, res.statusCode, res.body, res.contentType, res.headers)
                 } catch (e2: Throwable) {
+                    System.err.println("=== [KOUPPER V7 EXCEPTION HANDLER CRASHED] ===")
+                    e2.printStackTrace()
                     respond(response, 500, mapOf("error" to "Error in exception handler", "type" to e2.javaClass.name))
                 }
             } else {

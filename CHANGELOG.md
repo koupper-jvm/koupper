@@ -27,6 +27,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Defensive Router Exceptions**: The `RuntimeRouterProvider` now natively catches `NullPointerException` and `IndexOutOfBoundsException` (commonly caused by missing URL params or empty paginations) and gracefully returns a `400 Bad Request` instead of crashing the server with a 500 error.
+- **Router Exception Observability**: Internal exceptions that result in a 500 Internal Server Error now print their full stack trace to standard error (`System.err.println`) instead of silently terminating the execution.
 - **Scripting DX**: Native namespaced shortcuts for Service Providers (`koupper.json()`, `koupper.dynamo()`, etc.).
 - **Octopus Sentinel**: Background project watcher for automatic dependency management (`koupper watch`).
 - **Dependency Contracts**: Service Providers now declare `externalDependencies()` for autonomous resolution.

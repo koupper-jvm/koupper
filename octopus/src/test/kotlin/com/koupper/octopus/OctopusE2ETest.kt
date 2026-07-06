@@ -135,7 +135,7 @@ class OctopusE2ETest : AnnotationSpec() {
             import com.koupper.shared.annotations.Export
             @Export
             val setup: () -> String = {
-                val home = env("HOME")
+                val home = env("PATH")
                 if (home.isNotEmpty()) "env-ok" else "env-empty"
             }
         """.trimIndent())

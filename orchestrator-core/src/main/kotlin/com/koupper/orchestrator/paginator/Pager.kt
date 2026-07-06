@@ -99,6 +99,10 @@ data class CollectionPager(
     }
 
     override fun setCurrentPage(pageNumber: Int) {
+        if (totalOfPages() == 0) {
+            currentPage = 0
+            return
+        }
         if (pageNumber < 0 || pageNumber >= totalOfPages()) {
             throw IndexOutOfBoundsException("Page index $pageNumber out of range")
         }
