@@ -36,20 +36,33 @@ interface StreamResponse {
 class SseEmitter : StreamResponse {
     private var dataCallback: ((String) -> Unit)? = null
     private var closeCallback: (() -> Unit)? = null
+    // handleStream registers callbacks AFTER the route handler returns the emitter,
+    // so anything emitted in that gap must be buffered and replayed on registration.
+    private val pendingData = mutableListOf<String>()
+    private var completed = false
 
+    @Synchronized
     override fun onData(callback: (String) -> Unit) {
         this.dataCallback = callback
+        pendingData.forEach { callback(it) }
+        pendingData.clear()
     }
 
+    @Synchronized
     override fun onClose(callback: () -> Unit) {
         this.closeCallback = callback
+        if (completed) callback()
     }
 
+    @Synchronized
     fun emit(data: String) {
-        dataCallback?.invoke(data)
+        val callback = dataCallback
+        if (callback != null) callback(data) else pendingData.add(data)
     }
 
+    @Synchronized
     fun complete() {
+        completed = true
         closeCallback?.invoke()
     }
 }
