@@ -6,13 +6,15 @@ import kotlin.test.*
 
 class ScriptSandboxTest : AnnotationSpec() {
 
-    @BeforeTest
+    // Kotest's AnnotationSpec ignores kotlin.test's @BeforeTest/@AfterTest;
+    // only its own @BeforeEach/@AfterEach actually run.
+    @BeforeEach
     fun setup() {
         System.setProperty("koupper.scripting.sandbox", "true")
         System.setProperty("koupper.scripting.timeoutMs", "5000") // 5s for tests
     }
 
-    @AfterTest
+    @AfterEach
     fun teardown() {
         System.clearProperty("koupper.scripting.sandbox")
         System.clearProperty("koupper.scripting.timeoutMs")
