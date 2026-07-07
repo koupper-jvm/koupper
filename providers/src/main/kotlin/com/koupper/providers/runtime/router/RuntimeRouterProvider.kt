@@ -106,6 +106,31 @@ class RuntimeRouterDsl {
         registerWithType(com.koupper.shared.runtime.RouteMethod.DELETE, I::class.java, block)
     }
 
+    @JvmName("getAny")
+    fun get(block: RouteBuilder<Any>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.GET, Any::class.java, block)
+    }
+
+    @JvmName("postAny")
+    fun post(block: RouteBuilder<Any>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.POST, Any::class.java, block)
+    }
+
+    @JvmName("putAny")
+    fun put(block: RouteBuilder<Any>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.PUT, Any::class.java, block)
+    }
+
+    @JvmName("patchAny")
+    fun patch(block: RouteBuilder<Any>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.PATCH, Any::class.java, block)
+    }
+
+    @JvmName("deleteAny")
+    fun delete(block: RouteBuilder<Any>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.DELETE, Any::class.java, block)
+    }
+
     // ── Global router config (v7.2) ───────────────────────────────────────
 
     fun cors(block: CorsConfig.() -> Unit) {
