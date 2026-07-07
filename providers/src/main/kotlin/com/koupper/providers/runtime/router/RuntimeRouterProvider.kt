@@ -60,6 +60,7 @@ data class RequestContext(
     val body: String, 
     val headers: Map<String, List<String>>,
     val queryParams: Map<String, List<String>>,
+    val pathParams: Map<String, String> = emptyMap(),
     val attributes: MutableMap<String, Any> = mutableMapOf()
 )
 
@@ -382,6 +383,7 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         }
 
         val queryParams = parseQueryString(request.queryString ?: "")
+        val pathParamsMap = extractPathParams(route.fullPath, path)
         val headersMap = mutableMapOf<String, List<String>>()
         request.headerNames.forEach { name ->
             headersMap[name] = request.getHeaders(name).toList()
@@ -391,7 +393,8 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
             path = path,
             body = "",
             headers = headersMap,
-            queryParams = queryParams
+            queryParams = queryParams,
+            pathParams = pathParamsMap
         )
         GlobalRouteRegistry.currentRequest.set(reqCtx)
         try {
