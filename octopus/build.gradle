@@ -95,6 +95,11 @@ tasks.named('shadowJar', ShadowJar) {
 
     mergeServiceFiles()
     exclude "META-INF/maven/**"
+    // A merged module-info comes from a random dependency (Jackson) and turns the fat
+    // jar into a bogus JPMS module, breaking script compilation. External JPMS
+    // consumers must not depend on this jar's module descriptor.
+    exclude "module-info.class"
+    exclude "META-INF/versions/*/module-info.class"
 
     manifest {
         attributes 'Main-Class': 'com.koupper.octopus.OctopusBootstrapKt'
