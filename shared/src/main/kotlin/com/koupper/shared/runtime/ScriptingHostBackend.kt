@@ -106,6 +106,65 @@ private fun mapCompileErrorLines(
     return IllegalStateException(message.trimEnd())
 }
 
+// K2 treats a classpath jar containing module-info.class as a named JPMS module. The
+// fat jar's merged module-info comes from a single dependency (Jackson annotations),
+// so no com.koupper.* package is "exported" and every fresh script compile fails with
+// "Symbol is declared in module ... which does not export package ...". The fat jar
+// must keep its module-info for external JPMS consumers (see commit e099ff6), so
+// scripts compile against a stripped copy cached per jar version instead.
+private fun compileSafeJar(jar: File): File {
+    val hasModuleInfo = runCatching {
+        java.util.zip.ZipFile(jar).use { zip ->
+            zip.entries().asSequence().any {
+                it.name == "module-info.class" ||
+                    (it.name.startsWith("META-INF/versions/") && it.name.endsWith("/module-info.class"))
+            }
+        }
+    }.getOrDefault(false)
+    if (!hasModuleInfo) return jar
+
+    val cacheDir = File(System.getProperty("user.home"), ".koupper/cache/compile-classpath")
+        .also { it.mkdirs() }
+    val stripped = File(cacheDir, "${jar.nameWithoutExtension}-${jar.length()}-${jar.lastModified()}.jar")
+    if (stripped.exists()) return stripped
+
+    return runCatching {
+        // Temp file + atomic move: more than one daemon may build this copy concurrently.
+        val temp = File.createTempFile("koupper_cp_", ".jar", cacheDir)
+        java.nio.file.Files.copy(
+            jar.toPath(), temp.toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        )
+        java.nio.file.FileSystems.newFileSystem(temp.toPath()).use { fs ->
+            java.nio.file.Files.deleteIfExists(fs.getPath("module-info.class"))
+            val versions = fs.getPath("META-INF/versions")
+            if (java.nio.file.Files.isDirectory(versions)) {
+                java.nio.file.Files.list(versions).use { dirs ->
+                    dirs.forEach { java.nio.file.Files.deleteIfExists(it.resolve("module-info.class")) }
+                }
+            }
+        }
+        try {
+            java.nio.file.Files.move(
+                temp.toPath(), stripped.toPath(),
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE
+            )
+        } catch (e: java.nio.file.FileAlreadyExistsException) {
+            temp.delete() // another daemon won the race; use its copy
+        }
+        // Copies from older jar versions are dead weight (~300MB each); locked files
+        // (a daemon still on the old jar) simply fail to delete and are retried later.
+        cacheDir.listFiles()?.forEach { old ->
+            if (old != stripped && old != temp && old.extension == "jar" &&
+                old.name.startsWith(jar.nameWithoutExtension + "-")
+            ) {
+                old.delete()
+            }
+        }
+        stripped
+    }.getOrElse { jar }
+}
+
 /**
  * Production-grade scripting host with support for external classpaths,
  * lazy classloader caching, diagnostics, safe resource cleanup, and
@@ -164,7 +223,7 @@ class ScriptingHostBackend(
                 // Avoids scanning the full classloader hierarchy which can hit JARs with bad LOC headers.
                 val selfJar = this::class.java.protectionDomain.codeSource?.location?.toURI()?.let { File(it) }
                 if (selfJar != null && selfJar.exists() && selfJar.extension == "jar") {
-                    updateClasspath(listOf(selfJar))
+                    updateClasspath(listOf(compileSafeJar(selfJar)))
                 } else {
                     // Fallback: scan whole classpath (may fail in some JVM configurations)
                     dependenciesFromCurrentContext(wholeClasspath = true)
