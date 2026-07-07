@@ -1,7 +1,5 @@
 package com.koupper.providers.runtime.router
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import com.koupper.container.app
 import com.koupper.shared.annotations.Auth
 import com.koupper.shared.annotations.Export
@@ -10,18 +8,13 @@ import com.koupper.shared.annotations.RouteMethod
 import com.koupper.shared.runtime.GlobalRouteRegistry
 import com.koupper.shared.runtime.RegisteredRuntimeRoute
 import com.koupper.shared.runtime.WebResponse
-import com.koupper.shared.runtime.TemplateResponse
-import com.koupper.shared.runtime.MultipartForm
 import com.koupper.shared.runtime.CorsConfig
-import com.koupper.providers.templates.TemplateProvider
 import com.koupper.shared.validators.core.Schema
 import org.glassfish.grizzly.http.server.HttpHandler
 import org.glassfish.grizzly.http.server.HttpServer
 import org.glassfish.grizzly.http.server.Request
 import org.glassfish.grizzly.http.server.Response
 import java.io.File
-import java.net.JarURLConnection
-import java.net.URLDecoder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -197,7 +190,7 @@ class RouteBuilder<I> {
 data class RuntimeServerInfo(val host: String, val port: Int, val routes: List<String>)
 
 class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
-    private val mapper = jacksonObjectMapper()
+    private val dispatcher = RouteDispatcher()
 
     companion object {
         val staticMappings = CopyOnWriteArrayList<StaticMapping>()
@@ -382,183 +375,26 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
     }
 
     private fun handleInternal(request: Request, response: Response) {
-        val method = request.method.methodString.uppercase()
-        val path = request.requestURI
-
         if (serveStatic(request, response)) return
 
-        val routes = GlobalRouteRegistry.routes
-        val route = routes.firstOrNull { it.method.name == method && matches(it.fullPath, path) }
-
-        if (route == null) {
-            respond(response, 404, mapOf("error" to "Route not found", "path" to path, "registered" to routes.map { "${it.method} ${it.fullPath}" }))
-            return
-        }
-
-        val queryParams = parseQueryString(request.queryString ?: "")
-        val pathParamsMap = extractPathParams(route.fullPath, path)
         val headersMap = mutableMapOf<String, List<String>>()
         request.headerNames.forEach { name ->
             headersMap[name] = request.getHeaders(name).toList()
         }
-        val reqCtx = RequestContext(
-            method = method,
-            path = path,
-            body = "",
+
+        val outcome = dispatcher.dispatch(DispatchRequest(
+            method = request.method.methodString,
+            path = request.requestURI,
             headers = headersMap,
-            queryParams = queryParams,
-            pathParams = pathParamsMap
-        )
-        GlobalRouteRegistry.currentRequest.set(reqCtx)
-        try {
-        for (middlewareName in route.middlewares) {
-            val middleware = GlobalRouteRegistry.middlewares[middlewareName] ?: continue
-            val result = middleware(reqCtx) as? MiddlewareResult ?: continue
-            if (!result.allowed) {
-                respond(response, result.statusCode, mapOf("error" to result.message))
-                return
-            }
+            queryString = request.queryString,
+            contentType = request.contentType,
+            bodyProvider = { readRequestBodyBytes(request) }
+        ))
+
+        when (outcome) {
+            is DispatchOutcome.Stream -> handleStream(response, outcome.stream)
+            is DispatchOutcome.Completed -> respond(response, outcome.status, outcome.payload, outcome.contentType, outcome.headers)
         }
-
-        try {
-            val handler = route.handler
-            val invokeMethod = handler.javaClass.methods
-                .filter { it.name == "invoke" && !it.isBridge }
-                .firstOrNull() ?: throw IllegalStateException("No invoke found")
-
-            invokeMethod.isAccessible = true
-
-            val output = if (invokeMethod.parameterCount == 1) {
-                val arg = buildArgument(request, route)
-
-                if (route.validationSchema != null && arg != null) {
-                    val schema = route.validationSchema as Schema<Any>
-                    val vResult = com.koupper.shared.validators.core.validate(arg, schema)
-                    if (!vResult.ok) {
-                        respond(response, 400, mapOf("error" to "Validation failed", "details" to vResult.errors))
-                        return
-                    }
-                }
-
-                invokeMethod.invoke(handler, arg)
-            } else {
-                invokeMethod.invoke(handler)
-            }
-
-            if (output is StreamResponse) {
-                handleStream(response, output)
-                return
-            }
-
-            var status = 200
-            var finalOutput = output ?: mapOf("ok" to true)
-            var explicitContentType: String? = null
-            var explicitHeaders = mapOf<String, String>()
-
-            if (output is WebResponse) {
-                status = output.statusCode
-                finalOutput = output.body
-                explicitContentType = output.contentType
-                explicitHeaders = output.headers
-            } else if (output is TemplateResponse) {
-                val templateProvider = (app as com.koupper.container.KoupperContainer).getInstance(TemplateProvider::class)
-                status = output.statusCode
-                explicitHeaders = output.headers
-                explicitContentType = "text/html; charset=UTF-8"
-                finalOutput = templateProvider.load(output.templatePath, output.context, fromFile = false)
-            } else if (output != null) {
-                val clazz = output.javaClass
-                try {
-                    val statusCodeGetter = clazz.methods.find { it.name == "getStatusCode" && it.parameterCount == 0 }
-                    val bodyGetter = clazz.methods.find { it.name == "getBody" && it.parameterCount == 0 }
-                    if (statusCodeGetter != null && bodyGetter != null) {
-                        status = statusCodeGetter.invoke(output) as? Int ?: 200
-                        finalOutput = bodyGetter.invoke(output) ?: mapOf("ok" to true)
-                    }
-                    val contentTypeGetter = clazz.methods.find { it.name == "getContentType" && it.parameterCount == 0 }
-                    if (contentTypeGetter != null) {
-                        explicitContentType = contentTypeGetter.invoke(output) as? String
-                    }
-                    val headersGetter = clazz.methods.find { it.name == "getHeaders" && it.parameterCount == 0 }
-                    if (headersGetter != null) {
-                        explicitHeaders = headersGetter.invoke(output) as? Map<String, String> ?: emptyMap()
-                    }
-                } catch (e: Exception) {
-                    // Ignore reflection errors and treat as normal payload
-                }
-            }
-
-            respond(response, status, finalOutput, explicitContentType, explicitHeaders)
-        } catch (e: IllegalArgumentException) {
-            respond(response, 400, mapOf("error" to "Invalid input format", "detail" to (e.message ?: "")))
-        } catch (e: Throwable) {
-            val root = e.cause ?: e
-            val handler = GlobalRouteRegistry.exceptionHandler
-            if (handler != null) {
-                try {
-                    val res = handler(root)
-                    respond(response, res.statusCode, res.body, res.contentType, res.headers)
-                } catch (e2: Throwable) {
-                    respond(response, 500, mapOf("error" to "Error in exception handler", "type" to e2.javaClass.name))
-                }
-            } else {
-                respond(response, 500, mapOf("error" to root.message, "type" to root.javaClass.name))
-            }
-        }
-        } finally {
-            GlobalRouteRegistry.currentRequest.remove()
-        }
-    }
-
-    private fun buildArgument(request: Request, route: RegisteredRuntimeRoute): Any? {
-        val inputType = route.inputType ?: return null
-        val httpMethod = request.method.methodString.uppercase()
-
-        if (inputType == MultipartForm::class.java) {
-            val contentType = request.contentType ?: ""
-            if (contentType.startsWith("multipart/form-data")) {
-                return parseMultipart(contentType, readRequestBodyBytes(request))
-            }
-            return MultipartForm()
-        }
-
-        if (inputType == String::class.java) {
-            if (httpMethod == "POST" || httpMethod == "PUT" || httpMethod == "PATCH") {
-                return String(readRequestBodyBytes(request), Charsets.UTF_8)
-            }
-            val pathParams = extractPathParams(route.fullPath, request.requestURI)
-            return pathParams.values.firstOrNull()
-                ?: URLDecoder.decode(request.requestURI.trim('/').split("/").lastOrNull() ?: "", "UTF-8")
-        }
-
-        if (inputType is java.lang.reflect.ParameterizedType) {
-            val rawType = inputType.rawType
-            if (rawType is Class<*> && Collection::class.java.isAssignableFrom(rawType)) {
-                val queryParams = parseQueryString(request.queryString ?: "")
-                return queryParams.values.flatten()
-            }
-        }
-
-        if (inputType is Class<*>) {
-            if (httpMethod == "POST" || httpMethod == "PUT" || httpMethod == "PATCH") {
-                val bodyBytes = readRequestBodyBytes(request)
-                if (bodyBytes.isNotEmpty()) {
-                    try {
-                        return mapper.readValue(bodyBytes, inputType)
-                    } catch (e: Exception) {
-                        throw IllegalArgumentException("Cannot parse JSON to ${inputType.simpleName}: ${e.message}")
-                    }
-                }
-            }
-            val queryParams = parseQueryString(request.queryString ?: "").mapValues { it.value.firstOrNull() ?: "" }
-            try {
-                return mapper.convertValue(queryParams, inputType)
-            } catch (e: Exception) {
-                throw IllegalArgumentException("Cannot map params to ${inputType.simpleName}: ${e.message}")
-            }
-        }
-
-        return null
     }
 
     private fun readRequestBodyBytes(request: Request): ByteArray {
@@ -584,94 +420,6 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         }
     }
 
-    private fun parseMultipart(contentType: String, body: ByteArray): MultipartForm {
-        val boundary = "boundary=(.+)".toRegex().find(contentType)?.groupValues?.get(1) ?: return MultipartForm()
-        val boundaryBytes = "--$boundary".toByteArray()
-        val fields = mutableMapOf<String, String>()
-        val files = mutableMapOf<String, com.koupper.shared.runtime.UploadedFile>()
-        
-        var pos = 0
-        while (pos < body.size) {
-            val nextBoundary = indexOf(body, boundaryBytes, pos)
-            if (nextBoundary == -1) break
-            if (pos > 0) {
-                val partEnd = nextBoundary - 2
-                if (partEnd > pos) {
-                    val part = body.copyOfRange(pos, partEnd)
-                    val headerEnd = indexOf(part, "\r\n\r\n".toByteArray(), 0)
-                    if (headerEnd != -1) {
-                        val headersStr = String(part, 0, headerEnd, Charsets.UTF_8)
-                        val content = part.copyOfRange(headerEnd + 4, part.size)
-                        
-                        val nameMatch = "name=\"([^\"]+)\"".toRegex().find(headersStr)
-                        val filenameMatch = "filename=\"([^\"]+)\"".toRegex().find(headersStr)
-                        val ctMatch = "Content-Type: (.+)".toRegex().find(headersStr)
-                        
-                        val name = nameMatch?.groupValues?.get(1)
-                        if (name != null) {
-                            if (filenameMatch != null) {
-                                files[name] = com.koupper.shared.runtime.UploadedFile(
-                                    filename = filenameMatch.groupValues[1],
-                                    contentType = ctMatch?.groupValues?.get(1)?.trim() ?: "application/octet-stream",
-                                    content = content
-                                )
-                            } else {
-                                fields[name] = String(content, Charsets.UTF_8)
-                            }
-                        }
-                    }
-                }
-            }
-            pos = nextBoundary + boundaryBytes.size + 2
-        }
-        return MultipartForm(fields, files)
-    }
-
-    private fun indexOf(array: ByteArray, target: ByteArray, start: Int): Int {
-        if (target.isEmpty()) return 0
-        outer@ for (i in start..array.size - target.size) {
-            for (j in target.indices) {
-                if (array[i + j] != target[j]) continue@outer
-            }
-            return i
-        }
-        return -1
-    }
-
-    private fun extractPathParams(routePath: String, requestPath: String): Map<String, String> {
-        val routeParts = routePath.trim('/').split("/")
-        val requestParts = requestPath.trim('/').split("/")
-        val params = mutableMapOf<String, String>()
-        routeParts.forEachIndexed { i, part ->
-            if (part.startsWith("{") && part.endsWith("}") && i < requestParts.size) {
-                params[part.substring(1, part.length - 1)] = URLDecoder.decode(requestParts[i], "UTF-8")
-            }
-        }
-        return params
-    }
-
-    private fun parseQueryString(queryString: String): Map<String, List<String>> {
-        if (queryString.isBlank()) return emptyMap()
-        val result = mutableMapOf<String, MutableList<String>>()
-        queryString.split("&").forEach { pair ->
-            val idx = pair.indexOf('=')
-            if (idx > 0) {
-                val key = URLDecoder.decode(pair.substring(0, idx), "UTF-8")
-                val value = URLDecoder.decode(pair.substring(idx + 1), "UTF-8")
-                result.getOrPut(key) { mutableListOf() }.add(value)
-            }
-        }
-        return result
-    }
-
-    private fun matches(routePath: String, requestPath: String): Boolean {
-        val cleanRoute = routePath.trim('/')
-        val cleanRequest = requestPath.trim('/')
-        if (cleanRoute == cleanRequest) return true
-        val regex = "^" + cleanRoute.replace(Regex("\\{[^/]+\\}"), "[^/]+") + "$"
-        return cleanRequest.matches(Regex(regex))
-    }
-
     private fun handleStream(response: Response, stream: StreamResponse) {
         response.status = 200
         response.setContentType("text/event-stream")
@@ -686,19 +434,7 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
     private fun respond(response: Response, status: Int, payload: Any, explicitContentType: String? = null, headers: Map<String, String> = emptyMap()) {
         response.status = status
         headers.forEach { (k, v) -> response.setHeader(k, v) }
-        
-        val (ct, bytes) = when {
-            explicitContentType != null -> 
-                explicitContentType to (if (payload is String) payload.toByteArray(Charsets.UTF_8) else mapper.writeValueAsBytes(payload))
-            payload is String && payload.trimStart().let { it.startsWith("<!DOCTYPE") || it.startsWith("<html") } ->
-                "text/html; charset=UTF-8" to payload.toByteArray(Charsets.UTF_8)
-            payload is String && (payload.startsWith("{") || payload.startsWith("[")) ->
-                "application/json" to payload.toByteArray(Charsets.UTF_8)
-            payload is String ->
-                "text/plain; charset=UTF-8" to payload.toByteArray(Charsets.UTF_8)
-            else ->
-                "application/json" to mapper.writeValueAsBytes(payload)
-        }
+        val (ct, bytes) = dispatcher.serializePayload(payload, explicitContentType)
         response.setContentType(ct)
         response.outputStream.write(bytes)
     }
