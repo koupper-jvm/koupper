@@ -20,16 +20,35 @@ object ProcessSandbox {
             isTempFile = true
         }
 
-        val paramsString = jacksonObjectMapper().writeValueAsString(paramsJson).replace("\"", "\\\"")
+        // Params travel via temp file: passing JSON as a process argument breaks on
+        // Windows, where ProcessBuilder quoting corrupts the embedded escaped quotes.
+        val paramsFile = File.createTempFile("koupper_sandbox_params_", ".json")
+        paramsFile.writeText(jacksonObjectMapper().writeValueAsString(paramsJson))
 
-        val builder = ProcessBuilder(
-            javaBin,
-            "-cp", classpath,
-            "com.koupper.octopus.sandbox.SandboxWorkerKt",
-            scriptFile.absolutePath,
-            diParams.scriptContext,
-            paramsString
-        )
+        // Classpath travels in a java @argfile: Windows caps command lines at ~32K
+        // chars and an inline -cp can exceed it (CreateProcess error=206).
+        val classpathFile = File.createTempFile("koupper_sandbox_cp_", ".txt")
+        classpathFile.writeText("-cp \"" + classpath.replace('\\', '/') + "\"")
+
+        // The worker writes the script result here; stdout carries only live logs.
+        val resultFile = File.createTempFile("koupper_sandbox_result_", ".txt")
+
+        // The worker is a fresh JVM: without forwarding koupper.* properties it would
+        // lose config like koupper.scripting.timeoutMs and never enforce script timeouts.
+        val koupperProps = System.getProperties().stringPropertyNames()
+            .filter { it.startsWith("koupper.") && it != "koupper.sandbox.enabled" }
+            .map { "-D$it=${System.getProperty(it)}" }
+
+        val command = mutableListOf(javaBin)
+        command.addAll(koupperProps)
+        command.add("@" + classpathFile.absolutePath)
+        command.add("com.koupper.octopus.sandbox.SandboxWorkerKt")
+        command.add(scriptFile.absolutePath)
+        command.add(diParams.scriptContext)
+        command.add(paramsFile.absolutePath)
+        command.add(resultFile.absolutePath)
+
+        val builder = ProcessBuilder(command)
 
         builder.redirectErrorStream(true)
 
@@ -48,21 +67,34 @@ object ProcessSandbox {
             }
             readerThread.start()
 
-            val finished = process.waitFor(5, TimeUnit.MINUTES)
+            val timeoutMs = System.getProperty("koupper.scripting.timeoutMs")?.toLongOrNull()
+                ?: TimeUnit.MINUTES.toMillis(5)
+            val finished = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+            // Destroy before join: the reader thread only ends when the process
+            // closes its stdout, so joining a live process would hang forever.
+            if (!finished) {
+                process.destroyForcibly()
+            }
             readerThread.join()
 
             val output = outputBuilder.toString()
             if (!finished) {
-                process.destroyForcibly()
-                throw RuntimeException("Sandbox Execution Timeout: El proceso tardó más de 5 minutos.")
+                throw RuntimeException("Sandbox execution timeout: el script excedió ${timeoutMs}ms.")
             }
 
             if (process.exitValue() != 0) {
                 throw RuntimeException("Sandbox Execution Failed:\n$output")
             }
 
-            return output.trim()
+            // The result file is pre-created, so it always exists; a blank file means
+            // the worker finished without invoking the result callback (e.g. terminal
+            // resolvers like @Pipeline) — fall back to stdout as before.
+            val resultText = if (resultFile.exists()) resultFile.readText().trim() else ""
+            return if (resultText.isNotEmpty()) resultText else output.trim()
         } finally {
+            paramsFile.delete()
+            classpathFile.delete()
+            resultFile.delete()
             if (isTempFile) {
                 scriptFile?.delete()
             }
