@@ -9,7 +9,7 @@ import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     if (args.size < 2) {
-        System.err.println("Usage: SandboxWorkerKt <scriptPath> <context> [paramsJson]")
+        System.err.println("Usage: SandboxWorkerKt <scriptPath> <context> [paramsJsonFile]")
         exitProcess(1)
     }
 
@@ -17,12 +17,13 @@ fun main(args: Array<String>) {
 
     val scriptPath = args[0]
     val context = args[1]
-    val paramsString = if (args.size > 2) args[2] else "{}"
+    val paramsString = if (args.size > 2) java.io.File(args[2]).readText() else "{}"
+    val resultFile = if (args.size > 3) java.io.File(args[3]) else null
 
     createDefaultConfiguration()
     val octopus = Octopus(app)
 
-    val paramsMap = jacksonObjectMapper().readValue<Map<String, Any>>(paramsString.replace("\\\"", "\""))
+    val paramsMap = jacksonObjectMapper().readValue<Map<String, Any>>(paramsString)
     val cliArgs = paramsMap.entries.joinToString(" ") { "${it.key}=${it.value}" }
 
     octopus.runFromScriptFile<Any?>(
@@ -30,7 +31,10 @@ fun main(args: Array<String>) {
         scriptPath = scriptPath,
         params = cliArgs
     ) { output ->
-        println(output ?: "")
+        // The result travels via file so stdout stays clean for live logs:
+        // boot/debug noise on stdout used to pollute the returned value.
+        if (resultFile != null) resultFile.writeText(output?.toString() ?: "")
+        else println(output ?: "")
         exitProcess(0)
     }
 }
