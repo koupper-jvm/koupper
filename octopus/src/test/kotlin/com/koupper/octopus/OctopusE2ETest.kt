@@ -34,13 +34,60 @@ class OctopusE2ETest : AnnotationSpec() {
     }
 
     @Test
-    fun `should fail when multiple Export declarations`() {
+    fun `should select setup by name when multiple exports exist and no param specified`() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
             @Export val setup: () -> String = { "one" }
             @Export val runner: () -> String = { "two" }
         """.trimIndent())
-        assertTrue(result.contains("[ERR_EXPORT_MULTIPLE]"), "should include error code: $result")
+        assertEquals("one", result)
+    }
+
+    @Test
+    fun `should select export by name via function param when multiple exports exist`() {
+        val result = octopus.runScript(
+            """
+            import com.koupper.shared.annotations.Export
+            @Export val setup: () -> String = { "one" }
+            @Export val runner: () -> String = { "two" }
+            """.trimIndent(),
+            ParsedParams(emptySet(), mapOf("function" to "runner"))
+        )
+        assertEquals("two", result)
+    }
+
+    @Test
+    fun `should prefer Export isDefault=true over name-based fallback`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export
+            val setup: () -> String = { "one" }
+            @Export(isDefault = true)
+            val runner: () -> String = { "two" }
+        """.trimIndent())
+        assertEquals("two", result)
+    }
+
+    @Test
+    fun `should fall back to first export when no name matches and no default`() {
+        val result = octopus.runScript("""
+            import com.koupper.shared.annotations.Export
+            @Export val alpha: () -> String = { "first" }
+            @Export val beta: () -> String = { "second" }
+        """.trimIndent())
+        assertEquals("first", result)
+    }
+
+    @Test
+    fun `should return ERR_EXPORT_NOT_FOUND when specified function does not exist`() {
+        val result = octopus.runScript(
+            """
+            import com.koupper.shared.annotations.Export
+            @Export val setup: () -> String = { "one" }
+            """.trimIndent(),
+            ParsedParams(emptySet(), mapOf("function" to "nonexistent"))
+        )
+        assertTrue(result.contains("[ERR_EXPORT_NOT_FOUND]"), "should include error code: $result")
     }
 
     @Test
@@ -170,12 +217,14 @@ class OctopusE2ETest : AnnotationSpec() {
         val missing = octopus.runScript("val x = 1")
         assertTrue(missing.startsWith("[ERR_"), "should start with error code: $missing")
 
-        val multi = octopus.runScript("""
+        val notFound = octopus.runScript(
+            """
             import com.koupper.shared.annotations.Export
             @Export val a: () -> String = {"a"}
-            @Export val b: () -> String = {"b"}
-        """.trimIndent())
-        assertTrue(multi.startsWith("[ERR_"), "should start with error code: $multi")
+            """.trimIndent(),
+            ParsedParams(emptySet(), mapOf("function" to "nonexistent"))
+        )
+        assertTrue(notFound.startsWith("[ERR_"), "should start with error code: $notFound")
 
         val version = octopus.runScript("""
             import com.koupper.shared.annotations.Export
