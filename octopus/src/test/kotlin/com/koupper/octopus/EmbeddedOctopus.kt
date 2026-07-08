@@ -9,13 +9,15 @@ class EmbeddedOctopus private constructor() {
         o
     }
 
-    fun runScript(scriptContent: String): String {
+    fun runScript(scriptContent: String): String = runScript(scriptContent, null)
+
+    fun runScript(scriptContent: String, params: ParsedParams?): String {
         var captured = ""
         octopus.run<String>(
             context = ".",
             scriptPath = null,
             sentence = scriptContent,
-            params = null,
+            params = params,
             callable = null
         ) { output ->
             captured = output
