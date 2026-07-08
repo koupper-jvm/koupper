@@ -64,8 +64,18 @@ class RouteDispatcher {
         GlobalRouteRegistry.currentRequest.set(reqCtx)
         try {
             for (middlewareName in route.middlewares) {
-                val middleware = GlobalRouteRegistry.middlewares[middlewareName] ?: continue
-                val result = middleware(reqCtx) as? MiddlewareResult ?: continue
+                // Fail closed: a declared-but-missing middleware (typo, setup not run)
+                // must never silently leave the route unprotected.
+                val middleware = GlobalRouteRegistry.middlewares[middlewareName]
+                    ?: return DispatchOutcome.Completed(
+                        500,
+                        mapOf("error" to "Middleware '$middlewareName' declared on ${route.method} ${route.fullPath} is not registered")
+                    )
+                val result = middleware(reqCtx) as? MiddlewareResult
+                    ?: return DispatchOutcome.Completed(
+                        500,
+                        mapOf("error" to "Middleware '$middlewareName' returned an invalid result")
+                    )
                 if (!result.allowed) {
                     return DispatchOutcome.Completed(result.statusCode, mapOf("error" to result.message))
                 }
