@@ -118,6 +118,28 @@ class RouteDispatcherTest : AnnotationSpec() {
     }
 
     @Test
+    fun `unregistered middleware fails closed with 500 instead of running the handler`() {
+        registerRoute(RouteMethod.GET, "/secure", { "secret" }, middlewares = listOf("auth"))
+
+        val outcome = dispatcher.dispatch(DispatchRequest("GET", "/secure"))
+
+        val completed = assertIs<DispatchOutcome.Completed>(outcome)
+        assertEquals(500, completed.status)
+        assertTrue((completed.payload as Map<*, *>)["error"].toString().contains("auth"))
+    }
+
+    @Test
+    fun `middleware returning an invalid result fails closed with 500`() {
+        GlobalRouteRegistry.middlewares["broken"] = { "not a MiddlewareResult" }
+        registerRoute(RouteMethod.GET, "/secure", { "secret" }, middlewares = listOf("broken"))
+
+        val outcome = dispatcher.dispatch(DispatchRequest("GET", "/secure"))
+
+        val completed = assertIs<DispatchOutcome.Completed>(outcome)
+        assertEquals(500, completed.status)
+    }
+
+    @Test
     fun `allowing middleware lets the handler run`() {
         GlobalRouteRegistry.middlewares["permissive"] = { MiddlewareResult(allowed = true) }
         registerRoute(RouteMethod.GET, "/guarded", { "ok" }, middlewares = listOf("permissive"))
