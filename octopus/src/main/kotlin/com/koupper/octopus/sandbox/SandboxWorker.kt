@@ -24,7 +24,11 @@ fun main(args: Array<String>) {
     val octopus = Octopus(app)
 
     val paramsMap = jacksonObjectMapper().readValue<Map<String, Any>>(paramsString)
-    val cliArgs = paramsMap.entries.joinToString(" ") { "${it.key}=${it.value}" }
+    val functionName = args.getOrNull(4)
+    val cliArgs = buildString {
+        if (!functionName.isNullOrBlank()) append("function=$functionName ")
+        append(paramsMap.entries.joinToString(" ") { "${it.key}=${it.value}" })
+    }.trim()
 
     octopus.runFromScriptFile<Any?>(
         context = context,
