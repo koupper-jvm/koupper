@@ -785,9 +785,17 @@ object FileJobDriver : ContextualJobDriver {
         files.forEach { file ->
             val processingFile = File(file.parent, "${file.name}.processing")
 
-            // Atomic claim via POSIX rename(2). If this returns false, the source
-            // no longer exists — another worker already renamed it. Skip silently.
-            if (!file.renameTo(processingFile)) return@forEach
+            val moved = try {
+                java.nio.file.Files.move(
+                    file.toPath(),
+                    processingFile.toPath(),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE
+                )
+                true
+            } catch (e: Exception) {
+                false
+            }
+            if (!moved) return@forEach
 
             fun moveToFailed() {
                 val target = File(failedDir, file.name)

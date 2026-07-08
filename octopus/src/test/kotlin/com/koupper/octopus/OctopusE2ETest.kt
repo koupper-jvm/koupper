@@ -59,7 +59,7 @@ class OctopusE2ETest : AnnotationSpec() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
             import com.koupper.shared.annotations.KoupperVersion
-            @KoupperVersion("6.5") @Export
+            @KoupperVersion("7.1") @Export
             val setup: () -> String = { "version-ok" }
         """.trimIndent())
         assertEquals("version-ok", result)
@@ -126,7 +126,7 @@ class OctopusE2ETest : AnnotationSpec() {
             @Export
             val setup: () -> String = { KOUPPER_VERSION }
         """.trimIndent())
-        assertTrue(result.startsWith("6."), "KOUPPER_VERSION should be 6.x: $result")
+        assertTrue(result.startsWith("7."), "KOUPPER_VERSION should be 7.x: $result")
     }
 
     @Test
@@ -135,7 +135,7 @@ class OctopusE2ETest : AnnotationSpec() {
             import com.koupper.shared.annotations.Export
             @Export
             val setup: () -> String = {
-                val home = env("HOME")
+                val home = env("HOME").takeIf { it.isNotEmpty() } ?: env("USERPROFILE")
                 if (home.isNotEmpty()) "env-ok" else "env-empty"
             }
         """.trimIndent())
@@ -259,7 +259,7 @@ class OctopusE2ETest : AnnotationSpec() {
     fun `should register scheduled job with rate`() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
-            import com.koupper.shared.annotations.Scheduled
+            import com.koupper.octopus.annotations.Scheduled
             @Scheduled(rate=3600000)
             @Export
             val setup_scheduled_test: () -> String = { "scheduled-ok" }
@@ -275,7 +275,7 @@ class OctopusE2ETest : AnnotationSpec() {
     fun `should not register same scheduled script twice`() {
         val script = """
             import com.koupper.shared.annotations.Export
-            import com.koupper.shared.annotations.Scheduled
+            import com.koupper.octopus.annotations.Scheduled
             @Scheduled(rate=3600000)
             @Export
             val setup_scheduled_dup_test: () -> String = { "scheduled-dup" }
@@ -297,7 +297,7 @@ class OctopusE2ETest : AnnotationSpec() {
     fun `should execute pipeline annotation`() {
         val result = octopus.runScript("""
             import com.koupper.shared.annotations.Export
-            import com.koupper.shared.annotations.Pipeline
+            import com.koupper.octopus.annotations.Pipeline
             @Pipeline(cron="0 0 * * *", chain="StageA,StageB", id="test-pipeline")
             @Export
             val setup_pipeline_test: () -> String = { "pipeline-trigger" }

@@ -21,12 +21,11 @@ object JwtAuth {
     private const val CLAIM_SCOPE = "scope"
     private const val CLAIM_SUB = "sub"
 
-    private val jwtSecret: String? by lazy {
-        System.getProperty("koupper.octopus.jwt.secret")
+    private val jwtSecret: String?
+        get() = System.getProperty("koupper.octopus.jwt.secret")
             ?: System.getenv("KOUPPER_OCTOPUS_JWT_SECRET")
             ?: System.getProperty("koupper.octopus.token")
             ?: System.getenv("KOUPPER_OCTOPUS_TOKEN")
-    }
 
     /** Returns true if JWT auth is configured (secret is present). */
     fun isEnabled(): Boolean = !jwtSecret.isNullOrBlank()

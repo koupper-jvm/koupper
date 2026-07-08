@@ -61,7 +61,7 @@ object KoupperTelemetry {
     }
 
     private val tracer: Tracer? by lazy {
-        openTelemetry?.getTracer(serviceName, "6.6.0")
+        openTelemetry?.getTracer(serviceName, "7.1.1")
     }
 
     /**

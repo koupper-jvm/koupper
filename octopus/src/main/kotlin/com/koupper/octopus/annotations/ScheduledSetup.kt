@@ -373,7 +373,7 @@ val setup: () -> Unit = {
 
         val workerTask = KouTask(
             id = java.util.UUID.randomUUID().toString(),
-            fileName = File(this.jlc.scriptPath!!).name,
+            fileName = this.jlc.scriptPath?.let { File(it).name } ?: this.jlc.functionName,
             functionName = this.jlc.functionName,
             params = paramValues,
             signature = functionArgTypeNames to (functionNameAndSignature[this.jlc.functionName]?.returnType ?: "Any"),

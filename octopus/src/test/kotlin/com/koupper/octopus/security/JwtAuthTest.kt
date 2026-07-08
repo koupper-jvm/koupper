@@ -5,13 +5,13 @@ import kotlin.test.*
 
 class JwtAuthTest : AnnotationSpec() {
 
-    @BeforeTest
+    @BeforeEach
     fun setup() {
         // Set a test secret for JWT generation/verification
         System.setProperty("koupper.octopus.jwt.secret", "test-secret-key-for-jwt-unit-tests")
     }
 
-    @AfterTest
+    @AfterEach
     fun teardown() {
         System.clearProperty("koupper.octopus.jwt.secret")
     }
