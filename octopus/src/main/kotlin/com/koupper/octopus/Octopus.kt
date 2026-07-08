@@ -53,9 +53,7 @@ val isRelativeScriptFile: (String) -> Boolean = {
 }
 
 data class ParsedParams(
-    val flags: Set<String>,
-    val params: Map<String, String>,
-    val positionals: List<String> = emptyList()
+    val flags: Set<String>, val params: Map<String, String>, val positionals: List<String> = emptyList()
 )
 
 @Suppress("UNCHECKED_CAST")
@@ -78,10 +76,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
     }
 
     override fun <T> runFromScriptFile(
-        context: String,
-        scriptPath: String,
-        params: String,
-        result: (value: T) -> Unit
+        context: String, scriptPath: String, params: String, result: (value: T) -> Unit
     ) {
         com.koupper.container.context = context
         com.koupper.os.scriptContext = context
@@ -92,24 +87,17 @@ class Octopus(private var container: Container) : ScriptExecutor {
             File(context, scriptPath).path
         }
 
-        val content = app.getInstance(FileHandler::class)
-            .load(resolvedPath)
-            .readText(Charsets.UTF_8)
+        val content = app.getInstance(FileHandler::class).load(resolvedPath).readText(Charsets.UTF_8)
 
         this.run(
-            context = context,
-            scriptPath = resolvedPath,
-            sentence = content,
-            params = this.parseArgs(params)
+            context = context, scriptPath = resolvedPath, sentence = content, params = this.parseArgs(params)
         ) { process: T ->
             result(process)
         }
     }
 
     override fun <T> runFromCallback(
-        callable: Callable,
-        koTask: KouTask,
-        result: (value: T) -> Unit
+        callable: Callable, koTask: KouTask, result: (value: T) -> Unit
     ) {
         com.koupper.container.context = ""
         com.koupper.os.scriptContext = koTask.context
@@ -166,11 +154,10 @@ class Octopus(private var container: Container) : ScriptExecutor {
             return
         }
 
-        val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence)
-            ?: run {
-                result(castTo<T>("[ERR_EXPORT_MISSING] No @Export entrypoint found. Add exactly one:\n  @Export\n  val setup: () -> String = { \"hello\" }"))
-                return
-            }
+        val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence) ?: run {
+            result(castTo<T>("[ERR_EXPORT_MISSING] No @Export entrypoint found. Add exactly one:\n  @Export\n  val setup: () -> String = { \"hello\" }"))
+            return
+        }
 
         if ("Export" !in annotations) {
             result(castTo<T>("No function annotated with @Export was found."))
@@ -205,9 +192,9 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 result(castTo<T>("[ERR_CANCELLED] Script interrupted by cancellation request"))
                 return
             }
-            
+
             GlobalLogger.log.error(e) { "Unhandled error during script execution" }
-            
+
             var rootCause = e
             while (rootCause.cause != null) {
                 rootCause = rootCause.cause!!
@@ -227,24 +214,18 @@ class Octopus(private var container: Container) : ScriptExecutor {
         val future = CompletableFuture<Any?>()
 
         runFromCallback(
-            Callable(callable, args),
-            kouTaskInfo
+            Callable(callable, args), kouTaskInfo
         ) { result: Any? ->
             future.complete(result)
         }
 
         val result = future.get()
 
-        @Suppress("UNCHECKED_CAST")
-        return result as O
+        @Suppress("UNCHECKED_CAST") return result as O
     }
 
     data class CallExecution<T>(
-        val index: Int,
-        val ok: Boolean,
-        val value: T? = null,
-        val error: Throwable? = null,
-        val durationMs: Long
+        val index: Int, val ok: Boolean, val value: T? = null, val error: Throwable? = null, val durationMs: Long
     )
 
     fun <T> callWithReport(
@@ -256,17 +237,11 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 try {
                     val value = callable(params)
                     CallExecution(
-                        index = idx,
-                        ok = true,
-                        value = value,
-                        durationMs = (System.nanoTime() - start) / 1_000_000
+                        index = idx, ok = true, value = value, durationMs = (System.nanoTime() - start) / 1_000_000
                     )
                 } catch (t: Throwable) {
                     CallExecution(
-                        index = idx,
-                        ok = false,
-                        error = t,
-                        durationMs = (System.nanoTime() - start) / 1_000_000
+                        index = idx, ok = false, error = t, durationMs = (System.nanoTime() - start) / 1_000_000
                     )
                 }
             }
@@ -393,16 +368,12 @@ class Octopus(private var container: Container) : ScriptExecutor {
     private fun mapToParsedParams(params: Map<String, Any>): ParsedParams {
         val stringParams = params.mapValues { (_, v) -> v?.toString() ?: "" }
         return ParsedParams(
-            flags = emptySet(),
-            params = stringParams,
-            positionals = emptyList()
+            flags = emptySet(), params = stringParams, positionals = emptyList()
         )
     }
 
     override fun <T> runScriptFiles(
-        context: String,
-        scripts: MutableMap<String, Map<String, Any>>,
-        result: (value: T, scriptName: String) -> Unit
+        context: String, scripts: MutableMap<String, Map<String, Any>>, result: (value: T, scriptName: String) -> Unit
     ) {
         scripts.forEach { (scriptPath, params) ->
             if (scriptPath.isNotEmpty()) {
@@ -427,10 +398,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 val parsed = if (params.isEmpty()) null else mapToParsedParams(params)
 
                 this.run(
-                    context = context,
-                    scriptPath = finalInitPath,
-                    sentence = scriptContent,
-                    params = parsed
+                    context = context, scriptPath = finalInitPath, sentence = scriptContent, params = parsed
                 ) { container: Container ->
                     result(castTo<T>(container), scriptName)
                 }
@@ -447,8 +415,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
      * are initialized after the providers they depend on.
      */
     private fun topologicalSort(
-        nodes: List<KClass<*>>,
-        dependencyMap: Map<KClass<*>, Set<KClass<*>>>
+        nodes: List<KClass<*>>, dependencyMap: Map<KClass<*>, Set<KClass<*>>>
     ): List<KClass<*>> {
         if (nodes.isEmpty()) return nodes
 
@@ -503,8 +470,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
             }
         }
 
-        val allFunctions = providers.flatMap { it.topLevelFunctions().values }
-            .filter { it.isNotBlank() }
+        val allFunctions = providers.flatMap { it.topLevelFunctions().values }.filter { it.isNotBlank() }
 
         val imports = mutableSetOf<String>()
         val bodies = mutableListOf<String>()
@@ -518,10 +484,10 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 if (trimmed.startsWith("import ")) {
                     imports.add(trimmed)
                 } else if (trimmed.isNotEmpty()) {
-                    bodies.add("    " + line) 
+                    bodies.add("    " + line)
                 }
             }
-            bodies.add("") 
+            bodies.add("")
         }
 
         val namespace = System.getProperty("koupper.scripting.namespace") ?: "koupper"
@@ -535,7 +501,8 @@ class Octopus(private var container: Container) : ScriptExecutor {
             "fun emit(text: String) = println(text)"
         )
 
-        providerPreamble = (imports.sorted() + "" + topLevelShortcuts + "" + "object $namespace {" + bodies + "}").joinToString("\n")
+        providerPreamble =
+            (imports.sorted() + "" + topLevelShortcuts + "" + "object $namespace {" + bodies + "}").joinToString("\n")
 
         providerPreambleVersion = koupperVersion
 
@@ -596,22 +563,27 @@ fun tokenize(input: String): List<String> {
                 inDoubleQuote = !inDoubleQuote
                 current.append(ch)
             }
+
             '{' -> {
                 if (!inDoubleQuote) braceDepth++
                 current.append(ch)
             }
+
             '}' -> {
                 if (!inDoubleQuote && braceDepth > 0) braceDepth--
                 current.append(ch)
             }
+
             '[' -> {
                 if (!inDoubleQuote) bracketDepth++
                 current.append(ch)
             }
+
             ']' -> {
                 if (!inDoubleQuote && bracketDepth > 0) bracketDepth--
                 current.append(ch)
             }
+
             ' ', '\t', '\n', '\r' -> {
                 if (!inDoubleQuote && braceDepth == 0 && bracketDepth == 0) {
                     flush()
@@ -619,6 +591,7 @@ fun tokenize(input: String): List<String> {
                     current.append(ch)
                 }
             }
+
             else -> {
                 current.append(ch)
             }
@@ -654,10 +627,7 @@ internal class SessionOutput(private val writer: java.io.BufferedWriter) {
                 ResponseMode.JSON -> {
                     writer.write(
                         daemonResponseJson(
-                            type = "print",
-                            requestId = requestId,
-                            level = level.name,
-                            message = text
+                            type = "print", requestId = requestId, level = level.name, message = text
                         )
                     )
                     writer.newLine()
@@ -689,7 +659,9 @@ internal class SessionOutput(private val writer: java.io.BufferedWriter) {
         }
     }
 
-    fun error(message: String, mode: ResponseMode = ResponseMode.LEGACY, requestId: String? = null, errorCode: String? = null) {
+    fun error(
+        message: String, mode: ResponseMode = ResponseMode.LEGACY, requestId: String? = null, errorCode: String? = null
+    ) {
         synchronized(lock) {
             when (mode) {
                 ResponseMode.LEGACY -> {
@@ -700,7 +672,11 @@ internal class SessionOutput(private val writer: java.io.BufferedWriter) {
                 }
 
                 ResponseMode.JSON -> {
-                    writer.write(daemonResponseJson(type = "error", requestId = requestId, error = message, errorCode = errorCode))
+                    writer.write(
+                        daemonResponseJson(
+                            type = "error", requestId = requestId, error = message, errorCode = errorCode
+                        )
+                    )
                     writer.newLine()
                     writer.flush()
                 }
