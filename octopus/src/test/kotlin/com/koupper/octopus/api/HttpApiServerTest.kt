@@ -12,12 +12,12 @@ class HttpApiServerTest : AnnotationSpec() {
     private val client = HttpClient.newHttpClient()
     private val baseUrl = "http://127.0.0.1:9997/api/v1"
 
-    @BeforeTest
+    @BeforeEach
     fun setup() {
         HttpApiServer.stop()
     }
 
-    @AfterTest
+    @AfterEach
     fun teardown() {
         HttpApiServer.stop()
     }

@@ -28,6 +28,7 @@ interface StreamResponse {
 
 class SseEmitter : StreamResponse {
     private var dataCallback: ((String) -> Unit)? = null
+
     private var closeCallback: (() -> Unit)? = null
     // handleStream registers callbacks AFTER the route handler returns the emitter,
     // so anything emitted in that gap must be buffered and replayed on registration.
