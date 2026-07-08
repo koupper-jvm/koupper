@@ -148,16 +148,25 @@ class Octopus(private var container: Container) : ScriptExecutor {
         result: (value: T) -> Unit,
     ) {
         val exportedDeclarations = extractExportedDeclarations(sentence)
-        if (exportedDeclarations.size > 1) {
-            val names = exportedDeclarations.joinToString(", ") { it.name }
-            result(castTo<T>("[ERR_EXPORT_MULTIPLE] Multiple @Export declarations found: $names. Use exactly one @Export entrypoint (recommended: setup)."))
-            return
-        }
-
-        val (exportedFunctionName, annotations) = extractExportedAnnotations(sentence) ?: run {
+        if (exportedDeclarations.isEmpty()) {
             result(castTo<T>("[ERR_EXPORT_MISSING] No @Export entrypoint found. Add exactly one:\n  @Export\n  val setup: () -> String = { \"hello\" }"))
             return
         }
+
+        val targetFunctionName = params?.params?.get("function") ?: params?.params?.get("f")
+        val selectedDecl = if (targetFunctionName != null) {
+            exportedDeclarations.firstOrNull { it.name == targetFunctionName } ?: run {
+                result(castTo<T>("[ERR_EXPORT_NOT_FOUND] Specified function '$targetFunctionName' not found in script @Export declarations: ${exportedDeclarations.joinToString { it.name }}"))
+                return
+            }
+        } else {
+            exportedDeclarations.firstOrNull { it.annotations["Export"]?.get("isDefault") == "true" }
+                ?: exportedDeclarations.firstOrNull { it.name == "setup" || it.name == "main" }
+                ?: exportedDeclarations.first()
+        }
+
+        val exportedFunctionName = selectedDecl.name
+        val annotations = selectedDecl.annotations
 
         if ("Export" !in annotations) {
             result(castTo<T>("No function annotated with @Export was found."))

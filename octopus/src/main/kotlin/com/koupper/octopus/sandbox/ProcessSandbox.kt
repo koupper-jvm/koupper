@@ -47,6 +47,7 @@ object ProcessSandbox {
         command.add(diParams.scriptContext)
         command.add(paramsFile.absolutePath)
         command.add(resultFile.absolutePath)
+        command.add(diParams.functionName)
 
         val builder = ProcessBuilder(command)
 

@@ -319,11 +319,6 @@ fun <T> buildSignatureResolvers(): Map<String, UnifiedResolver<T>> = buildMap {
                         "[ReflectionValidator] Warnings for ${diParams.scriptPath ?: diParams.functionName}: ${validation.warnings}"
                     }
                 }
-                if (validation.exportCount > 1) {
-                    @Suppress("UNCHECKED_CAST")
-                    res("[ERR_EXPORT_MULTIPLE] Multiple @Export fields detected via reflection: ${validation.exportNames.joinToString(", ")}. Use exactly one @Export entrypoint." as T)
-                    return@put
-                }
             }
         }
 
