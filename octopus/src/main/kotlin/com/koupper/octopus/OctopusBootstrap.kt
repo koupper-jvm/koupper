@@ -48,9 +48,7 @@ fun main() = runBlocking {
 
 
 fun listenForExternalCommands(
-    processManager: ScriptExecutor,
-    scope: CoroutineScope,
-    maxConnections: Int? = null
+    processManager: ScriptExecutor, scope: CoroutineScope, maxConnections: Int? = null
 ) {
     val host = runtimeOctopusHost()
     val port = runtimeOctopusPort()
@@ -71,361 +69,350 @@ fun listenForExternalCommands(
 
             scope.launch(Dispatchers.IO) {
                 clientSocket.use {
-                try {
-                    val reader = it.getInputStream().bufferedReader(Charsets.UTF_8)
-                    val writer = it.getOutputStream().bufferedWriter(Charsets.UTF_8)
-                    val sessionOutput = SessionOutput(writer)
-                    val sessionId = java.util.UUID.randomUUID().toString().take(8)
-                    val sessionLogger = app.createSingleton(LoggerCore::class)
-                    TerminalContext.set(TerminalIO(reader, writer))
-                    SessionStdoutBridge.bind(sessionOutput, ResponseMode.LEGACY, null)
-                    val firstLine = reader.readLine()?.trim()
+                    try {
+                        val reader = it.getInputStream().bufferedReader(Charsets.UTF_8)
+                        val writer = it.getOutputStream().bufferedWriter(Charsets.UTF_8)
+                        val sessionOutput = SessionOutput(writer)
+                        val sessionId = java.util.UUID.randomUUID().toString().take(8)
+                        val sessionLogger = app.createSingleton(LoggerCore::class)
+                        TerminalContext.set(TerminalIO(reader, writer))
+                        SessionStdoutBridge.bind(sessionOutput, ResponseMode.LEGACY, null)
+                        val firstLine = reader.readLine()?.trim()
 
-                    if (firstLine.isNullOrBlank() || firstLine == "null") return@launch
+                        if (firstLine.isNullOrBlank() || firstLine == "null") return@launch
 
-                    val requiredToken = runtimeOctopusToken()
-                    val (authenticated, command) = parseAuthenticatedCommand(firstLine, reader, requiredToken)
+                        val requiredToken = runtimeOctopusToken()
+                        val (authenticated, command) = parseAuthenticatedCommand(firstLine, reader, requiredToken)
 
-                    if (!authenticated) {
-                        DaemonMetrics.onUnauthorizedCommand()
-                        sessionLogger.warn { "\u26A0\uFE0F [session=$sessionId] Unauthorized command rejected." }
-                        sessionLogger.warn {
-                            structuredEvent(
-                                event = "octopus.auth.rejected",
-                                fields = mapOf(
-                                    "sessionId" to sessionId,
-                                    "remoteAddress" to it.inetAddress.hostAddress
-                                )
-                            )
-                        }
-                        sessionOutput.error("Unauthorized: invalid or missing token")
-                        return@launch
-                    }
-
-                    if (command.isNullOrBlank() || command == "null") return@launch
-
-                    // Extract token for scope validation (JWT mode only)
-                    val providedToken = if (firstLine.startsWith("AUTH::")) {
-                        firstLine.removePrefix("AUTH::").trim()
-                    } else null
-
-                    DaemonMetrics.onCommandReceived()
-
-                    sessionLogger.info { "\uD83D\uDCE5 [session=$sessionId] Command received in Octopus: $command" }
-
-                    val parsedCommand = parseIncomingCommand(command)
-                    if (parsedCommand == null) {
-                        DaemonMetrics.onInvalidCommand()
-                        sessionLogger.warn {
-                            structuredEvent(
-                                event = "octopus.command.invalid",
-                                fields = mapOf(
-                                    "sessionId" to sessionId,
-                                    "payload" to command
-                                )
-                            )
-                        }
-                        sessionOutput.error("Invalid command format")
-                        return@launch
-                    }
-
-                    // Scope validation for JWT tokens
-                    if (providedToken != null && !validateCommandScope(providedToken, parsedCommand.commandType)) {
-                        DaemonMetrics.onUnauthorizedCommand()
-                        sessionLogger.warn {
-                            structuredEvent(
-                                event = "octopus.auth.forbidden",
-                                fields = mapOf(
-                                    "sessionId" to sessionId,
-                                    "commandType" to parsedCommand.commandType,
-                                    "remoteAddress" to it.inetAddress.hostAddress
-                                )
-                            )
-                        }
-                        sessionOutput.error("Forbidden: insufficient scope for command '${parsedCommand.commandType}'")
-                        return@launch
-                    }
-
-                    SessionStdoutBridge.bind(sessionOutput, parsedCommand.mode, parsedCommand.requestId)
-
-                    val traceId = parsedCommand.requestId?.takeIf { it.isNotBlank() } ?: TraceContext.generate()
-                    TraceContext.set(traceId)
-
-                    when {
-                        parsedCommand.commandType == "CANCEL" -> {
-                            val cancelled = ActiveExecutions.cancel(parsedCommand.requestId)
-                            sessionOutput.result(
-                                "{\"ok\":${if (cancelled) "true" else "false"},\"requestId\":\"${parsedCommand.requestId ?: ""}\",\"cancelled\":${if (cancelled) "true" else "false"}}",
-                                parsedCommand.mode,
-                                parsedCommand.requestId
-                            )
-                        }
-
-                        parsedCommand.commandType == "UPDATING_CHECK" -> {
-                            checkForUpdates()
-                        }
-
-                        parsedCommand.commandType == "RELOAD_PROVIDERS" -> {
-                            val spm = com.koupper.providers.ServiceProviderManager()
-                            spm.reloadProvidersFromDirectory(System.getProperty("user.home") + "/.koupper/providers")
-                            
-                            // Clear container and re-register
-                            app.clear()
-                            
-                            // Re-initialize Octopus config
-                            val octopus = com.koupper.octopus.Octopus(app)
-                            octopus.registerBuildInServicesProvidersInContainer()
-                            
-                            sessionOutput.result(
-                                "{\"ok\":true,\"requestId\":\"${parsedCommand.requestId ?: ""}\",\"reloaded\":true}",
-                                parsedCommand.mode,
-                                parsedCommand.requestId
-                            )
-                        }
-
-                        parsedCommand.commandType == "HEALTH_CHECK" -> {
-                            val snapshot = DaemonMetrics.snapshot()
-                            val health = "{" + listOf(
-                                jsonField("status", "ok"),
-                                jsonField("uptimeMs", snapshot.uptimeMs.toString()),
-                                jsonField("activeConnections", snapshot.activeConnections.toString()),
-                                jsonField("totalConnections", snapshot.totalConnections.toString()),
-                                jsonField("totalCommands", snapshot.totalCommands.toString()),
-                                jsonField("totalScripts", snapshot.totalScripts.toString()),
-                                jsonField("successfulScripts", snapshot.successfulScripts.toString()),
-                                jsonField("failedScripts", snapshot.failedScripts.toString()),
-                                jsonField("unauthorizedCommands", snapshot.unauthorizedCommands.toString()),
-                                jsonField("invalidCommands", snapshot.invalidCommands.toString())
-                            ).joinToString(",") + "}"
-
-                            sessionLogger.info {
+                        if (!authenticated) {
+                            DaemonMetrics.onUnauthorizedCommand()
+                            sessionLogger.warn { "\u26A0\uFE0F [session=$sessionId] Unauthorized command rejected." }
+                            sessionLogger.warn {
                                 structuredEvent(
-                                    event = "octopus.health.request",
-                                    fields = mapOf(
-                                        "sessionId" to sessionId,
-                                        "requestId" to parsedCommand.requestId,
-                                        "mode" to parsedCommand.mode.name.lowercase()
+                                    event = "octopus.auth.rejected", fields = mapOf(
+                                        "sessionId" to sessionId, "remoteAddress" to it.inetAddress.hostAddress
                                     )
                                 )
                             }
-
-                            sessionOutput.result(health, parsedCommand.mode, parsedCommand.requestId)
+                            sessionOutput.error("Unauthorized: invalid or missing token")
+                            return@launch
                         }
 
-                        parsedCommand.commandType == "DEPLOY" -> {
-                            if (requiredToken.isNullOrBlank()) {
-                                sessionOutput.error(
-                                    "DEPLOY requires daemon auth token configuration",
+                        if (command.isNullOrBlank() || command == "null") return@launch
+
+                        // Extract token for scope validation (JWT mode only)
+                        val providedToken = if (firstLine.startsWith("AUTH::")) {
+                            firstLine.removePrefix("AUTH::").trim()
+                        } else null
+
+                        DaemonMetrics.onCommandReceived()
+
+                        sessionLogger.info { "\uD83D\uDCE5 [session=$sessionId] Command received in Octopus: $command" }
+
+                        val parsedCommand = parseIncomingCommand(command)
+                        if (parsedCommand == null) {
+                            DaemonMetrics.onInvalidCommand()
+                            sessionLogger.warn {
+                                structuredEvent(
+                                    event = "octopus.command.invalid", fields = mapOf(
+                                        "sessionId" to sessionId, "payload" to command
+                                    )
+                                )
+                            }
+                            sessionOutput.error("Invalid command format")
+                            return@launch
+                        }
+
+                        // Scope validation for JWT tokens
+                        if (providedToken != null && !validateCommandScope(providedToken, parsedCommand.commandType)) {
+                            DaemonMetrics.onUnauthorizedCommand()
+                            sessionLogger.warn {
+                                structuredEvent(
+                                    event = "octopus.auth.forbidden", fields = mapOf(
+                                        "sessionId" to sessionId,
+                                        "commandType" to parsedCommand.commandType,
+                                        "remoteAddress" to it.inetAddress.hostAddress
+                                    )
+                                )
+                            }
+                            sessionOutput.error("Forbidden: insufficient scope for command '${parsedCommand.commandType}'")
+                            return@launch
+                        }
+
+                        SessionStdoutBridge.bind(sessionOutput, parsedCommand.mode, parsedCommand.requestId)
+
+                        val traceId = parsedCommand.requestId?.takeIf { it.isNotBlank() } ?: TraceContext.generate()
+                        TraceContext.set(traceId)
+
+                        when {
+                            parsedCommand.commandType == "CANCEL" -> {
+                                val cancelled = ActiveExecutions.cancel(parsedCommand.requestId)
+                                sessionOutput.result(
+                                    "{\"ok\":${if (cancelled) "true" else "false"},\"requestId\":\"${parsedCommand.requestId ?: ""}\",\"cancelled\":${if (cancelled) "true" else "false"}}",
                                     parsedCommand.mode,
                                     parsedCommand.requestId
                                 )
-                                return@launch
                             }
 
-                            val deployContent = parsedCommand.scriptContent
-                            if (deployContent.isNullOrBlank()) {
-                                sessionOutput.error(
-                                    "DEPLOY payload is missing scriptContent",
+                            parsedCommand.commandType == "UPDATING_CHECK" -> {
+                                checkForUpdates()
+                            }
+
+                            parsedCommand.commandType == "RELOAD_PROVIDERS" -> {
+                                val spm = com.koupper.providers.ServiceProviderManager()
+                                spm.reloadProvidersFromDirectory(System.getProperty("user.home") + "/.koupper/providers")
+
+                                // Clear container and re-register
+                                app.clear()
+
+                                // Re-initialize Octopus config
+                                val octopus = com.koupper.octopus.Octopus(app)
+                                octopus.registerBuildInServicesProvidersInContainer()
+
+                                sessionOutput.result(
+                                    "{\"ok\":true,\"requestId\":\"${parsedCommand.requestId ?: ""}\",\"reloaded\":true}",
                                     parsedCommand.mode,
                                     parsedCommand.requestId
                                 )
-                                return@launch
                             }
 
-                            val deployBytes = deployContent.toByteArray(Charsets.UTF_8)
-                            val maxDeployBytes = runtimeDeployMaxBytes()
-                            if (deployBytes.size > maxDeployBytes) {
-                                sessionOutput.error(
-                                    "DEPLOY payload exceeds max size ($maxDeployBytes bytes)",
-                                    parsedCommand.mode,
-                                    parsedCommand.requestId
-                                )
-                                return@launch
+                            parsedCommand.commandType == "HEALTH_CHECK" -> {
+                                val snapshot = DaemonMetrics.snapshot()
+                                val health = "{" + listOf(
+                                    jsonField("status", "ok"),
+                                    jsonField("uptimeMs", snapshot.uptimeMs.toString()),
+                                    jsonField("activeConnections", snapshot.activeConnections.toString()),
+                                    jsonField("totalConnections", snapshot.totalConnections.toString()),
+                                    jsonField("totalCommands", snapshot.totalCommands.toString()),
+                                    jsonField("totalScripts", snapshot.totalScripts.toString()),
+                                    jsonField("successfulScripts", snapshot.successfulScripts.toString()),
+                                    jsonField("failedScripts", snapshot.failedScripts.toString()),
+                                    jsonField("unauthorizedCommands", snapshot.unauthorizedCommands.toString()),
+                                    jsonField("invalidCommands", snapshot.invalidCommands.toString())
+                                ).joinToString(",") + "}"
+
+                                sessionLogger.info {
+                                    structuredEvent(
+                                        event = "octopus.health.request", fields = mapOf(
+                                            "sessionId" to sessionId,
+                                            "requestId" to parsedCommand.requestId,
+                                            "mode" to parsedCommand.mode.name.lowercase()
+                                        )
+                                    )
+                                }
+
+                                sessionOutput.result(health, parsedCommand.mode, parsedCommand.requestId)
                             }
 
-                            val providedSha256 = parsedCommand.contentSha256?.lowercase()
-                            if (providedSha256.isNullOrBlank()) {
-                                sessionOutput.error(
-                                    "DEPLOY payload is missing contentSha256",
-                                    parsedCommand.mode,
-                                    parsedCommand.requestId
-                                )
-                                return@launch
-                            }
+                            parsedCommand.commandType == "DEPLOY" -> {
+                                if (requiredToken.isNullOrBlank()) {
+                                    sessionOutput.error(
+                                        "DEPLOY requires daemon auth token configuration",
+                                        parsedCommand.mode,
+                                        parsedCommand.requestId
+                                    )
+                                    return@launch
+                                }
 
-                            val calculatedSha256 = sha256Hex(deployBytes)
-                            if (providedSha256 != calculatedSha256) {
-                                sessionOutput.error(
-                                    "DEPLOY payload hash mismatch",
-                                    parsedCommand.mode,
-                                    parsedCommand.requestId
-                                )
-                                return@launch
-                            }
+                                val deployContent = parsedCommand.scriptContent
+                                if (deployContent.isNullOrBlank()) {
+                                    sessionOutput.error(
+                                        "DEPLOY payload is missing scriptContent",
+                                        parsedCommand.mode,
+                                        parsedCommand.requestId
+                                    )
+                                    return@launch
+                                }
 
-                            val deployDir = File(System.getProperty("user.home"), ".koupper/deployed")
-                            deployDir.mkdirs()
-                            val targetFileName = parsedCommand.scriptPath.substringAfterLast("/").substringAfterLast("\\")
-                                .ifBlank { "deployed.kts" }
-                            if (!deployScriptNameRegex.matches(targetFileName)) {
-                                sessionOutput.error(
-                                    "DEPLOY script name must be a safe .kts/.kt filename",
-                                    parsedCommand.mode,
-                                    parsedCommand.requestId
-                                )
-                                return@launch
-                            }
-                            val targetFile = File(deployDir, targetFileName)
-                            targetFile.writeBytes(deployBytes)
+                                val deployBytes = deployContent.toByteArray(Charsets.UTF_8)
+                                val maxDeployBytes = runtimeDeployMaxBytes()
+                                if (deployBytes.size > maxDeployBytes) {
+                                    sessionOutput.error(
+                                        "DEPLOY payload exceeds max size ($maxDeployBytes bytes)",
+                                        parsedCommand.mode,
+                                        parsedCommand.requestId
+                                    )
+                                    return@launch
+                                }
 
-                            DaemonMetrics.onScriptStarted()
-                            val deployStartedAt = System.nanoTime()
+                                val providedSha256 = parsedCommand.contentSha256?.lowercase()
+                                if (providedSha256.isNullOrBlank()) {
+                                    sessionOutput.error(
+                                        "DEPLOY payload is missing contentSha256",
+                                        parsedCommand.mode,
+                                        parsedCommand.requestId
+                                    )
+                                    return@launch
+                                }
 
-                            sessionLogger.info {
-                                "\uD83D\uDCE6 [session=$sessionId] Deploying script: $targetFileName params=${parsedCommand.params}"
-                            }
+                                val calculatedSha256 = sha256Hex(deployBytes)
+                                if (providedSha256 != calculatedSha256) {
+                                    sessionOutput.error(
+                                        "DEPLOY payload hash mismatch", parsedCommand.mode, parsedCommand.requestId
+                                    )
+                                    return@launch
+                                }
 
-                            try {
-                                processManager.runFromScriptFile(
-                                    deployDir.absolutePath,
-                                    targetFile.name,
-                                    parsedCommand.params
-                                ) { result: Any ->
-                                    System.out.flush()
-                                    val out = if (result is Unit) "" else result.toString()
-                                    DaemonMetrics.onScriptSucceeded()
+                                val deployDir = File(System.getProperty("user.home"), ".koupper/deployed")
+                                deployDir.mkdirs()
+                                val targetFileName =
+                                    parsedCommand.scriptPath.substringAfterLast("/").substringAfterLast("\\")
+                                        .ifBlank { "deployed.kts" }
+                                if (!deployScriptNameRegex.matches(targetFileName)) {
+                                    sessionOutput.error(
+                                        "DEPLOY script name must be a safe .kts/.kt filename",
+                                        parsedCommand.mode,
+                                        parsedCommand.requestId
+                                    )
+                                    return@launch
+                                }
+                                val targetFile = File(deployDir, targetFileName)
+                                targetFile.writeBytes(deployBytes)
+
+                                DaemonMetrics.onScriptStarted()
+                                val deployStartedAt = System.nanoTime()
+
+                                sessionLogger.info {
+                                    "\uD83D\uDCE6 [session=$sessionId] Deploying script: $targetFileName params=${parsedCommand.params}"
+                                }
+
+                                try {
+                                    processManager.runFromScriptFile(
+                                        deployDir.absolutePath, targetFile.name, parsedCommand.params
+                                    ) { result: Any ->
+                                        System.out.flush()
+                                        val out = if (result is Unit) "" else result.toString()
+                                        DaemonMetrics.onScriptSucceeded()
+                                        val durationMs = (System.nanoTime() - deployStartedAt) / 1_000_000
+                                        sessionLogger.info {
+                                            structuredEvent(
+                                                event = "octopus.deploy.completed", fields = mapOf(
+                                                    "sessionId" to sessionId,
+                                                    "requestId" to parsedCommand.requestId,
+                                                    "script" to targetFileName,
+                                                    "sizeBytes" to deployBytes.size,
+                                                    "sha256" to calculatedSha256,
+                                                    "durationMs" to durationMs,
+                                                    "status" to "ok"
+                                                )
+                                            )
+                                        }
+                                        sessionOutput.result(out, parsedCommand.mode, parsedCommand.requestId)
+                                    }
+                                } catch (e: Exception) {
+                                    DaemonMetrics.onScriptFailed()
                                     val durationMs = (System.nanoTime() - deployStartedAt) / 1_000_000
-                                    sessionLogger.info {
+                                    sessionLogger.error {
                                         structuredEvent(
-                                            event = "octopus.deploy.completed",
-                                            fields = mapOf(
+                                            event = "octopus.deploy.failed", fields = mapOf(
                                                 "sessionId" to sessionId,
                                                 "requestId" to parsedCommand.requestId,
                                                 "script" to targetFileName,
                                                 "sizeBytes" to deployBytes.size,
                                                 "sha256" to calculatedSha256,
                                                 "durationMs" to durationMs,
-                                                "status" to "ok"
+                                                "status" to "error",
+                                                "error" to (e.message ?: e.javaClass.name)
                                             )
                                         )
                                     }
-                                    sessionOutput.result(out, parsedCommand.mode, parsedCommand.requestId)
-                                }
-                            } catch (e: Exception) {
-                                DaemonMetrics.onScriptFailed()
-                                val durationMs = (System.nanoTime() - deployStartedAt) / 1_000_000
-                                sessionLogger.error {
-                                    structuredEvent(
-                                        event = "octopus.deploy.failed",
-                                        fields = mapOf(
-                                            "sessionId" to sessionId,
-                                            "requestId" to parsedCommand.requestId,
-                                            "script" to targetFileName,
-                                            "sizeBytes" to deployBytes.size,
-                                            "sha256" to calculatedSha256,
-                                            "durationMs" to durationMs,
-                                            "status" to "error",
-                                            "error" to (e.message ?: e.javaClass.name)
-                                        )
+                                    sessionOutput.error(
+                                        e.message ?: "Deploy execution failed",
+                                        parsedCommand.mode,
+                                        parsedCommand.requestId
                                     )
-                                }
-                                sessionOutput.error(
-                                    e.message ?: "Deploy execution failed",
-                                    parsedCommand.mode,
-                                    parsedCommand.requestId
-                                )
-                            } finally {
-                                System.out.flush()
-                                it.shutdownOutput()
-                            }
-                        }
-
-                        parsedCommand.scriptPath.endsWith(".kts") || parsedCommand.scriptPath.endsWith(".kt") -> {
-                            DaemonMetrics.onScriptStarted()
-                            val startedAt = System.nanoTime()
-                            val requestId = parsedCommand.requestId
-                            if (!requestId.isNullOrBlank()) {
-                                ActiveExecutions.register(requestId, parsedCommand.scriptPath)
-                            }
-
-                            try {
-                                sessionLogger.info {
-                                    "\uD83D\uDCDC [session=$sessionId] Executing script: ${parsedCommand.scriptPath} with params: ${parsedCommand.params}"
-                                }
-
-                                processManager.runFromScriptFile(
-                                    parsedCommand.context,
-                                    parsedCommand.scriptPath,
-                                    parsedCommand.params
-                                ) { result: Any ->
+                                } finally {
                                     System.out.flush()
+                                    it.shutdownOutput()
+                                }
+                            }
 
-                                    val out = when (result) {
-                                        is Unit -> ""
-                                        else -> result.toString()
+                            parsedCommand.scriptPath.endsWith(".kts") || parsedCommand.scriptPath.endsWith(".kt") -> {
+                                DaemonMetrics.onScriptStarted()
+                                val startedAt = System.nanoTime()
+                                val requestId = parsedCommand.requestId
+                                if (!requestId.isNullOrBlank()) {
+                                    ActiveExecutions.register(requestId, parsedCommand.scriptPath)
+                                }
+
+                                try {
+                                    sessionLogger.info {
+                                        "\uD83D\uDCDC [session=$sessionId] Executing script: ${parsedCommand.scriptPath} with params: ${parsedCommand.params}"
                                     }
 
-                                    DaemonMetrics.onScriptSucceeded()
+                                    processManager.runFromScriptFile(
+                                        parsedCommand.context, parsedCommand.scriptPath, parsedCommand.params
+                                    ) { result: Any ->
+                                        System.out.flush()
+
+                                        val out = when (result) {
+                                            is Unit -> ""
+                                            else -> result.toString()
+                                        }
+
+                                        DaemonMetrics.onScriptSucceeded()
+                                        val durationMs = (System.nanoTime() - startedAt) / 1_000_000
+                                        sessionLogger.info {
+                                            structuredEvent(
+                                                event = "octopus.script.completed", fields = mapOf(
+                                                    "sessionId" to sessionId,
+                                                    "requestId" to parsedCommand.requestId,
+                                                    "script" to parsedCommand.scriptPath,
+                                                    "durationMs" to durationMs,
+                                                    "status" to "ok"
+                                                )
+                                            )
+                                        }
+
+                                        sessionOutput.result(out, parsedCommand.mode, parsedCommand.requestId)
+                                    }
+                                } catch (e: Exception) {
+                                    DaemonMetrics.onScriptFailed()
                                     val durationMs = (System.nanoTime() - startedAt) / 1_000_000
-                                    sessionLogger.info {
+                                    sessionLogger.error {
                                         structuredEvent(
-                                            event = "octopus.script.completed",
-                                            fields = mapOf(
+                                            event = "octopus.script.failed", fields = mapOf(
                                                 "sessionId" to sessionId,
                                                 "requestId" to parsedCommand.requestId,
                                                 "script" to parsedCommand.scriptPath,
                                                 "durationMs" to durationMs,
-                                                "status" to "ok"
+                                                "status" to "error",
+                                                "error" to (e.message ?: e.javaClass.name)
                                             )
                                         )
                                     }
-
-                                    sessionOutput.result(out, parsedCommand.mode, parsedCommand.requestId)
-                                }
-                            } catch (e: Exception) {
-                                DaemonMetrics.onScriptFailed()
-                                val durationMs = (System.nanoTime() - startedAt) / 1_000_000
-                                sessionLogger.error {
-                                    structuredEvent(
-                                        event = "octopus.script.failed",
-                                        fields = mapOf(
-                                            "sessionId" to sessionId,
-                                            "requestId" to parsedCommand.requestId,
-                                            "script" to parsedCommand.scriptPath,
-                                            "durationMs" to durationMs,
-                                            "status" to "error",
-                                            "error" to (e.message ?: e.javaClass.name)
-                                        )
+                                    sessionOutput.error(
+                                        e.message ?: "Script execution failed",
+                                        parsedCommand.mode,
+                                        parsedCommand.requestId
                                     )
+                                } finally {
+                                    ActiveExecutions.unregister(requestId)
+                                    System.out.flush()
+                                    it.shutdownOutput()
                                 }
-                                sessionOutput.error(e.message ?: "Script execution failed", parsedCommand.mode, parsedCommand.requestId)
-                            } finally {
-                                ActiveExecutions.unregister(requestId)
-                                System.out.flush()
-                                it.shutdownOutput()
+                            }
+
+                            else -> {
+                                DaemonMetrics.onInvalidCommand()
+                                app.createSingleton(LoggerCore::class)
+                                    .info { "\u26A0\uFE0F  Invalid command format: $command" }
                             }
                         }
-
-                        else -> {
-                            DaemonMetrics.onInvalidCommand()
-                            app.createSingleton(LoggerCore::class)
-                                .info { "\u26A0\uFE0F  Invalid command format: $command" }
+                    } catch (e: Exception) {
+                        val traceMessage = e.message ?: e.toString()
+                        app.createSingleton(LoggerCore::class).error { "\u26A0\uFE0F Error: $traceMessage" }
+                        try {
+                            val writer = it.getOutputStream().bufferedWriter(Charsets.UTF_8)
+                            SessionOutput(writer).error(traceMessage, ResponseMode.LEGACY, null)
+                        } catch (_: Exception) {
                         }
+                    } finally {
+                        TraceContext.clear()
+                        SessionStdoutBridge.clear()
+                        TerminalContext.clear()
+                        DaemonMetrics.onConnectionClosed()
                     }
-                } catch (e: Exception) {
-                    val traceMessage = e.message ?: e.toString()
-                    app.createSingleton(LoggerCore::class)
-                        .error { "\u26A0\uFE0F Error: $traceMessage" }
-                    try {
-                        val writer = it.getOutputStream().bufferedWriter(Charsets.UTF_8)
-                        SessionOutput(writer).error(traceMessage, ResponseMode.LEGACY, null)
-                    } catch (_: Exception) {}
-                } finally {
-                    TraceContext.clear()
-                    SessionStdoutBridge.clear()
-                    TerminalContext.clear()
-                    DaemonMetrics.onConnectionClosed()
-                }
                 }
             }
         }
@@ -460,8 +447,9 @@ fun checkForUpdates(): Boolean {
     val info: Info = textJsonParser.toType()
 
     info.apps.forEach { project ->
-        if ((project.name == "octopus" && project.version != env("OCTOPUS_VERSION")) ||
-            (project.name == "koupper-installer" && project.version != env("KOUPPER_CLI_VERSION"))
+        if ((project.name == "octopus" && project.version != env("OCTOPUS_VERSION")) || (project.name == "koupper-installer" && project.version != env(
+                "KOUPPER_CLI_VERSION"
+            ))
         ) {
             print("AVAILABLE_UPDATES")
 
@@ -508,8 +496,7 @@ fun createDefaultConfiguration(container: Container = app): ScriptExecutor {
     appLogger.addAppender(
         AsyncAppender(
             RollingFileAppender(
-                dir = logsDir,
-                baseName = "octopus-system"
+                dir = logsDir, baseName = "octopus-system"
             )
         )
     )
