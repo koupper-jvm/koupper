@@ -213,7 +213,7 @@ class Octopus(private var container: Container) : ScriptExecutor {
                 return
             }
 
-            result(castTo<T>("[ERR_COMPILE] Script compilation failed: ${e.message}"))
+            result(castTo<T>("[ERR_COMPILE] Script compilation failed: ${e.stackTraceToString()}"))
         }
     }
 
