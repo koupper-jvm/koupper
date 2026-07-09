@@ -913,6 +913,21 @@
       ],
       "env": [],
       "docs": "https://koupper.com/docs/providers/lsp"
+    },
+    {
+      "id": "youtube",
+      "serviceProvider": "YoutubeTranscriptServiceProvider",
+      "description": "Fetches auto-generated transcripts from YouTube videos via the timedtext API.",
+      "bindings": [
+        {
+          "contract": "YoutubeTranscriptProvider",
+          "implementations": [
+            { "class": "YoutubeTimedTextClient" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/youtube"
     }
   ]
 }
