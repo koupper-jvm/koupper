@@ -15,7 +15,8 @@ class ExecutableJarBuilder(
     private val projectName: String,
     private val moduleVersion: String,
     private val packageName: String,
-    private val artifactType: String
+    private val artifactType: String,
+    private val cleanProject: Boolean = true
 ) : Module() {
     private val fileHandler = app.getInstance(FileHandler::class)
 
@@ -24,8 +25,21 @@ class ExecutableJarBuilder(
         builder.projectName,
         builder.version,
         builder.packageName,
-        builder.artifactType
+        builder.artifactType,
+        builder.cleanProject
     )
+
+    class Builder {
+        var context: String = ""
+        var projectName: String = ""
+        var version: String = ""
+        var packageName: String = ""
+        var artifactType: String = "script"
+        var cleanProject: Boolean = true
+        var scripts: Map<String, String> = emptyMap()
+
+        fun build() = ExecutableJarBuilder(this)
+    }
 
     companion object {
         inline fun build(config: Builder.() -> Unit) = Builder().apply(config).build().build()
@@ -49,11 +63,12 @@ class ExecutableJarBuilder(
         // <packageName>.Bootstrapping con fun main(), así que el mainClass
         // heredado del template ("server.SetupKt") debe apuntar ahí en su lugar.
         val targetPackageName = this.packageName
+        val mainClass = if (this.cleanProject) "$targetPackageName.BootstrappingKt" else "server.SetupKt"
         GradleConfigurator.configure {
             this.rootProjectName = projectName
             this.version = moduleVersion
             this.projectRootPath = projectRoot.absolutePath
-            this.mainClassFqcn = "$targetPackageName.BootstrappingKt"
+            this.mainClassFqcn = mainClass
         }
 
         // 4. Resolver process manager en libs/ (local-first, remote fallback)
@@ -63,7 +78,9 @@ class ExecutableJarBuilder(
         resolveAndCopyProcessManagerJar(context, libsDir, "octopus-$octopusVersion.jar")
 
         // 5. LIMPIAR el proyecto y crear scripts
-        cleanProjectAndCreateBootstrapping(projectRoot, normalizedType)
+        if (this.cleanProject) {
+            cleanProjectAndCreateBootstrapping(projectRoot, normalizedType)
+        }
 
         GlobalLogger.log.info { "Proyecto listo en: ${projectRoot.absolutePath}" }
     }
@@ -316,14 +333,4 @@ class ExecutableJarBuilder(
         }
     }
 
-    class Builder {
-        var context: String = ""
-        var projectName: String = "undefined"
-        var version: String = "0.0.0"
-        var packageName: String = ""
-        var artifactType: String = ""
-        var scripts: Map<String, String> = emptyMap()  // 👈 AGREGADO!
-
-        fun build() = ExecutableJarBuilder(this)
-    }
 }

@@ -73,28 +73,22 @@ class ModuleProcessor(private val context: String, private vararg val flags: Str
                     deployableScripts = self.scripts
                 }
             }
-
             "http" -> {
-                val awsModule = AWSAGHandlerBuilder.build {
+                ExecutableJarBuilder.build {
                     context = self.context
                     projectName = self.name
                     version = self.version
                     packageName = self.packageName
-                    deployableScripts = self.scripts
+                    artifactType = self.artifactType
+                    scripts = self.scripts
+                    cleanProject = false
                 }
-
+                
                 SetupGrizzlyConfigurator.configure {
                     context = self.context
                     packageName = self.packageName
                     projectName = self.name
                     version = self.version
-                }
-
-                ControllersBuilder.build {
-                    context = self.context
-                    packageName = self.packageName
-                    projectName = self.name
-                    registeredScripts = awsModule.registeredScripts
                 }
             }
 
