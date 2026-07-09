@@ -10,11 +10,6 @@ import kotlin.test.assertTrue
 class YoutubeTimedTextClientTest : AnnotationSpec() {
 
     @Test
-    fun `YoutubeTimedTextClient should implement YoutubeTranscriptProvider`() {
-        assertTrue { YoutubeTimedTextClient() is YoutubeTranscriptProvider }
-    }
-
-    @Test
     fun `getTranscript should extract text from timedtext XML response`() {
         val server = MockWebServer()
         val xml = """<?xml version="1.0" encoding="utf-8"?>
@@ -63,16 +58,19 @@ class YoutubeTimedTextClientTest : AnnotationSpec() {
 
     @Test
     fun `extractVideoId should handle youtu-be short URLs`() {
-        val client = YoutubeTimedTextClient()
         val server = MockWebServer()
         server.enqueue(MockResponse().setResponseCode(200).setBody(""))
         server.enqueue(MockResponse().setResponseCode(200).setBody(""))
         server.start()
-        // Just verify it doesn't throw
+
         YoutubeTimedTextClient(
             httpClient = OkHttpClient(),
             timedTextBaseUrl = server.url("").toString().trimEnd('/')
         ).getTranscript("https://youtu.be/dQw4w9WgXcQ")
+
+        val recordedRequest = server.takeRequest()
+        assertTrue(recordedRequest.path?.contains("v=dQw4w9WgXcQ") == true,
+            "Expected path to contain video ID 'dQw4w9WgXcQ' but got: ${recordedRequest.path}")
         server.shutdown()
     }
 }

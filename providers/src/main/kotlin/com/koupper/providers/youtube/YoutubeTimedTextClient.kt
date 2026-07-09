@@ -9,6 +9,11 @@ class YoutubeTimedTextClient(
     private val timedTextBaseUrl: String = "https://www.youtube.com"
 ) : YoutubeTranscriptProvider {
 
+    /**
+     * Fetches the transcript for a YouTube video URL.
+     * Tries Spanish captions first, falls back to English.
+     * Returns empty string if no captions are available or the URL is not a YouTube URL.
+     */
     override fun getTranscript(youtubeUrl: String): String {
         val videoId = extractVideoId(youtubeUrl) ?: return ""
         return fetchTimedText(videoId, "es").ifBlank { fetchTimedText(videoId, "en") }
@@ -30,7 +35,9 @@ class YoutubeTimedTextClient(
             .get()
             .build()
         return try {
-            val body = httpClient.newCall(request).execute().body?.string() ?: return ""
+            val body = httpClient.newCall(request).execute().use { resp ->
+                resp.body?.string() ?: return ""
+            }
             if (body.isBlank()) return ""
             val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder()
                 .parse(body.byteInputStream())
