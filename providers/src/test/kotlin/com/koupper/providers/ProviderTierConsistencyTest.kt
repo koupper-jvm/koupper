@@ -40,22 +40,23 @@ class ProviderTierConsistencyTest : ShouldSpec({
 
     should("EXPERIMENTAL providers are correctly marked") {
         val experimental = allProviders.filter { it.tier() == ProviderTier.EXPERIMENTAL }
-        experimental.size shouldBe 3
+        experimental.size shouldBe 4
         experimental.map { it::class.simpleName }.shouldContain("AILlmOpsServiceProvider")
         experimental.map { it::class.simpleName }.shouldContain("VisionServiceProvider")
         experimental.map { it::class.simpleName }.shouldContain("SpeechToTextServiceProvider")
+        experimental.map { it::class.simpleName }.shouldContain("YoutubeTranscriptServiceProvider")
     }
 
     should("COMMUNITY providers are the default when not explicitly overridden") {
         val communityProviders = allProviders.filter { it.tier() == ProviderTier.COMMUNITY }
         // Most providers should be COMMUNITY by default
-        communityProviders.size shouldBe (allProviders.size - coreProviders().size - 3) // 3 experimental
+        communityProviders.size shouldBe (allProviders.size - coreProviders().size - 4) // 4 experimental
     }
 
     should("tier counts are reasonable") {
         val tierCounts = allProviders.groupingBy { it.tier() }.eachCount()
         tierCounts[ProviderTier.CORE] shouldBe 5 // DB, File, Http, SSH, Logger
-        tierCounts[ProviderTier.EXPERIMENTAL] shouldBe 3
+        tierCounts[ProviderTier.EXPERIMENTAL] shouldBe 4
     }
 })
 
