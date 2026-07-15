@@ -4,6 +4,32 @@ All notable changes to the Koupper monorepo are documented here.
 Versioning follows the Octopus engine version (`build.gradle`).
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [7.2.0] - 2026-06-25
+
+### Added
+- **Multiple @Export declarations** with priority-based selection.
+- **YoutubeTranscriptProvider** SP for fetching YouTube video transcripts.
+- **RouterAnalyzer** for strongly-typed HTTP route analysis.
+- **PathParams** extraction from route patterns into `RequestContext`.
+- **Non-generic route methods** in `RuntimeRouterDsl`.
+- **CORS + ExceptionHandler DSL** blocks for global middleware.
+- **FileHandler** fs ops + `TextFileHandler` stateless file methods.
+- **Request context attributes** with native support for `PUT`, `PATCH`, `DELETE` methods.
+
+### Fixed
+- **Build**: `install.kts` uses `shadowJar` instead of removed `fatJar` task.
+- **Module-info**: Excluded from both optimized JAR and shadowJar to fix JPMS classloader issues.
+- **Script compilation**: Scripts compile against module-info-stripped JAR copy.
+- **SseEmitter buffering**: Events buffered until stream callbacks register.
+- **Sandbox params on Windows**: Parameter pass-through resolved for Windows hosts.
+- **OpenAI / DynamoDB**: Enhanced error handling and logging.
+- **OkHttp body leak**: Response body closed in `YoutubeTimedTextClient`.
+
+### Release alignment
+- `octopus 7.2.0` / `koupper-cli 7.2.0`
+
+---
+
 ## [7.1.1] - 2026-06-25
 
 ### Fixed
