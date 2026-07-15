@@ -271,6 +271,7 @@ class DynamoClientImpl private constructor(
             dynamoDbClient.updateItem(updateRequest)
         } catch (e: Exception) {
             println("Error updating item: ${e.message}")
+            throw e
         }
     }
 
@@ -286,6 +287,7 @@ class DynamoClientImpl private constructor(
             dynamoDbClient.deleteItem(deleteRequest)
         } catch (e: Exception) {
             println("Error deleting item: ${e.message}")
+            throw e
         }
     }
 

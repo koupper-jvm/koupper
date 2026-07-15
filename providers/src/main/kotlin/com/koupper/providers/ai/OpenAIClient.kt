@@ -57,9 +57,16 @@ class OpenAIClient(
         }
 
         val responseBody = response.asString() ?: ""
-        require(responseBody.isNotBlank()) { "Empty response from OpenAI API" }
+        require(responseBody.isNotBlank()) { "Empty response from OpenAI API (HTTP ${response.code()})" }
 
         val data = JSONFileHandlerImpl().read(responseBody).toType<Map<String, Any>>()
+
+        // Surface API-level errors (e.g. invalid key, quota, model not found)
+        if (data.containsKey("error")) {
+            val errMap = data["error"] as? Map<*, *>
+            val errMsg = errMap?.get("message")?.toString() ?: data["error"].toString()
+            throw Exception("OpenAI API error (HTTP ${response.code()}): $errMsg")
+        }
 
         // Extract model output
         val content = ((data["choices"] as? List<*>)?.firstOrNull() as? Map<*, *>)?.let { choice ->
@@ -67,7 +74,7 @@ class OpenAIClient(
             message?.get("content") as? String
         }
 
-        return content ?: "[No response from model]"
+        return content ?: throw Exception("OpenAI returned no content (HTTP ${response.code()}): $responseBody")
     }
 
     /**
