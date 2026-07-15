@@ -20,6 +20,7 @@ data class RegisteredRuntimeRoute(
     val middlewares: List<String>,
     val handler: Any,
     val inputType: java.lang.reflect.Type? = null,
+    val outputType: java.lang.reflect.Type? = null,
     val validationSchema: Any? = null
 )
 
