@@ -27,6 +27,10 @@ val listContentOfZippedFile: (String) -> List<String> = {
 interface FileHandler {
     fun load(filePath: String): File
 
+    fun load(baseDir: File, relative: String): File = File(baseDir, relative)
+
+    fun load(baseDir: String, relative: String): File = File(baseDir, relative)
+
     fun zipFile(filePath: String = "", targetPath: String = "N/A", filesToIgnore: List<String> = emptyList()): File
 
     fun unzipFile(filePath: String, targetPath: String = "N/A", filesToIgnore: List<String> = emptyList()): File
