@@ -95,48 +95,73 @@ class RuntimeRouterDsl {
     }
 
     inline fun <reified I> get(noinline block: RouteBuilder<I>.() -> Unit) {
-        registerWithType(com.koupper.shared.runtime.RouteMethod.GET, I::class.java, block)
+        registerWithType(com.koupper.shared.runtime.RouteMethod.GET, I::class.java, block = block)
     }
 
     inline fun <reified I> post(noinline block: RouteBuilder<I>.() -> Unit) {
-        registerWithType(com.koupper.shared.runtime.RouteMethod.POST, I::class.java, block)
+        registerWithType(com.koupper.shared.runtime.RouteMethod.POST, I::class.java, block = block)
     }
 
     inline fun <reified I> put(noinline block: RouteBuilder<I>.() -> Unit) {
-        registerWithType(com.koupper.shared.runtime.RouteMethod.PUT, I::class.java, block)
+        registerWithType(com.koupper.shared.runtime.RouteMethod.PUT, I::class.java, block = block)
     }
 
     inline fun <reified I> patch(noinline block: RouteBuilder<I>.() -> Unit) {
-        registerWithType(com.koupper.shared.runtime.RouteMethod.PATCH, I::class.java, block)
+        registerWithType(com.koupper.shared.runtime.RouteMethod.PATCH, I::class.java, block = block)
     }
 
     inline fun <reified I> delete(noinline block: RouteBuilder<I>.() -> Unit) {
-        registerWithType(com.koupper.shared.runtime.RouteMethod.DELETE, I::class.java, block)
+        registerWithType(com.koupper.shared.runtime.RouteMethod.DELETE, I::class.java, block = block)
+    }
+
+    @JvmName("getIO")
+    inline fun <reified I, reified O> get(noinline block: RouteBuilder<I>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.GET, I::class.java, O::class.java, block)
+    }
+
+    @JvmName("postIO")
+    inline fun <reified I, reified O> post(noinline block: RouteBuilder<I>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.POST, I::class.java, O::class.java, block)
+    }
+
+    @JvmName("putIO")
+    inline fun <reified I, reified O> put(noinline block: RouteBuilder<I>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.PUT, I::class.java, O::class.java, block)
+    }
+
+    @JvmName("patchIO")
+    inline fun <reified I, reified O> patch(noinline block: RouteBuilder<I>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.PATCH, I::class.java, O::class.java, block)
+    }
+
+    @JvmName("deleteIO")
+    inline fun <reified I, reified O> delete(noinline block: RouteBuilder<I>.() -> Unit) {
+        registerWithType(com.koupper.shared.runtime.RouteMethod.DELETE, I::class.java, O::class.java, block)
     }
 
     @JvmName("getAny")
     fun get(block: RouteBuilder<Any>.() -> Unit) {
-        registerWithType(com.koupper.shared.runtime.RouteMethod.GET, Any::class.java, block)
+        registerWithType(com.koupper.shared.runtime.RouteMethod.GET, Any::class.java, block = block)
     }
 
     @JvmName("postAny")
     fun post(block: RouteBuilder<Any>.() -> Unit) {
-        registerWithType(com.koupper.shared.runtime.RouteMethod.POST, Any::class.java, block)
+        registerWithType(com.koupper.shared.runtime.RouteMethod.POST, Any::class.java, block = block)
     }
 
     @JvmName("putAny")
     fun put(block: RouteBuilder<Any>.() -> Unit) {
-        registerWithType(com.koupper.shared.runtime.RouteMethod.PUT, Any::class.java, block)
+        registerWithType(com.koupper.shared.runtime.RouteMethod.PUT, Any::class.java, block = block)
     }
 
     @JvmName("patchAny")
     fun patch(block: RouteBuilder<Any>.() -> Unit) {
-        registerWithType(com.koupper.shared.runtime.RouteMethod.PATCH, Any::class.java, block)
+        registerWithType(com.koupper.shared.runtime.RouteMethod.PATCH, Any::class.java, block = block)
     }
 
     @JvmName("deleteAny")
     fun delete(block: RouteBuilder<Any>.() -> Unit) {
-        registerWithType(com.koupper.shared.runtime.RouteMethod.DELETE, Any::class.java, block)
+        registerWithType(com.koupper.shared.runtime.RouteMethod.DELETE, Any::class.java, block = block)
     }
 
     // ── Global router config (v7.2) ───────────────────────────────────────
@@ -150,7 +175,7 @@ class RuntimeRouterDsl {
     }
 
     @PublishedApi
-    internal fun <I> registerWithType(method: com.koupper.shared.runtime.RouteMethod, inputClass: Class<*>, block: RouteBuilder<I>.() -> Unit) {
+    internal fun <I> registerWithType(method: com.koupper.shared.runtime.RouteMethod, inputClass: Class<*>, outputClass: Class<*>? = null, block: RouteBuilder<I>.() -> Unit) {
         val builder = RouteBuilder<I>()
         builder.block()
         val fullPath = (currentPathPrefix + builder.path).replace("//", "/")
@@ -160,6 +185,7 @@ class RuntimeRouterDsl {
             middlewares = builder.middlewares,
             handler = builder.handler ?: throw IllegalStateException("Handler not defined for $fullPath"),
             inputType = if (inputClass != Any::class.java) inputClass else builder.inputType,
+            outputType = outputClass,
             validationSchema = builder.validationSchema
         ))
     }
