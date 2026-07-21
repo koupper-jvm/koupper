@@ -59,7 +59,7 @@ fun buildParamsJson(
 
         val v = params[key]
             ?: positionals.getOrNull(pos)?.also { pos++ }
-            ?: return@forEachIndexed
+            ?: ""
 
         out[key] = v
     }
@@ -83,6 +83,7 @@ object ScriptRunner {
 
         if (t.startsWith("{") || t.startsWith("[")) {
             if (t.contains("\\\"") || t.contains("\\\\")) {
+                if (runCatching { mapper.readTree(t); true }.getOrDefault(false)) return t
                 return t
                     .replace("\\\"", "\"")
                     .replace("\\\\", "\\")
@@ -295,22 +296,26 @@ object ScriptRunner {
             .filter { it.name == "invoke" }
             .toList()
 
-        val invoke = allInvokes.asSequence()
-            .filter { it.parameterCount == callArgs.size }
-            .sortedWith(
-                compareBy<java.lang.reflect.Method>(
-                    { m -> m.parameterTypes.count { it == Object::class.java || it == Any::class.java } },
-                    { m -> if (m.isBridge || m.isSynthetic) 1 else 0 }
-                )
-            )
-            .firstOrNull()
-            ?: allInvokes.asSequence()
-                .firstOrNull {
-                    it.parameterCount == callArgs.size + 1 &&
-                            it.parameterTypes.last().name == "kotlin.coroutines.Continuation"
-                }?.also { error("La función '${call.functionName}' es suspend (Continuation no soportado).") }
-            ?: error("No hay 'invoke' con aridad ${callArgs.size} en ${lambdaClass.name}")
+        val isSuspend = allInvokes.asSequence().any { 
+            it.parameterCount == callArgs.size + 1 && it.parameterTypes.last().name == "kotlin.coroutines.Continuation" 
+        }
 
+        val invoke = if (!isSuspend) {
+            allInvokes.asSequence()
+                .filter { it.parameterCount == callArgs.size }
+                .sortedWith(
+                    compareBy<java.lang.reflect.Method>(
+                        { m -> m.parameterTypes.count { it == Object::class.java || it == Any::class.java } },
+                        { m -> if (m.isBridge || m.isSynthetic) 1 else 0 }
+                    )
+                )
+                .firstOrNull()
+                ?: error("No hay 'invoke' con aridad ${callArgs.size} en ${lambdaClass.name}")
+        } else {
+            allInvokes.asSequence()
+                .filter { it.parameterCount == callArgs.size + 1 && it.parameterTypes.last().name == "kotlin.coroutines.Continuation" }
+                .firstOrNull() ?: error("Error resolviendo firma suspend para ${call.functionName}")
+        }
         for (i in callArgs.indices) {
             val v = callArgs[i]
             if (v is PendingJson) {
@@ -329,20 +334,24 @@ object ScriptRunner {
                 if (expectedClass != null) {
                     callArgs[i] = mapper.readValue(json, expectedClass)
                 } else {
-                    callArgs[i] = json
+                    val genericType = target.javaClass.genericInterfaces
+                        .asSequence()
+                        .filterIsInstance<java.lang.reflect.ParameterizedType>()
+                        .firstOrNull { it.rawType.typeName.startsWith("kotlin.jvm.functions.Function") }
+                        ?.actualTypeArguments
+                        ?.getOrNull(i)
+
+                    if (genericType != null) {
+                        val javaType = mapper.typeFactory.constructType(genericType)
+                        callArgs[i] = mapper.readValue(json, javaType)
+                    } else {
+                        callArgs[i] = json
+                    }
                 }
             }
         }
 
-        try {
-            invoke.isAccessible = true
-        } catch (_: Exception) {
-            try {
-                val ao = Class.forName("java.lang.reflect.AccessibleObject")
-                val m = ao.getMethod("trySetAccessible")
-                m.invoke(invoke)
-            } catch (_: Throwable) { }
-        }
+        com.koupper.shared.ensureAccessible(invoke)
 
         val oldCl = Thread.currentThread().contextClassLoader
         Thread.currentThread().contextClassLoader = lambdaClass.classLoader
@@ -356,7 +365,17 @@ object ScriptRunner {
 
         return monitor.track(meta) {
             try {
-                invoke.invoke(target, *callArgs.toTypedArray())
+                if (!isSuspend) {
+                    invoke.invoke(target, *callArgs.toTypedArray())
+                } else {
+                    // For suspend functions, we use runBlocking to bridge the gap.
+                    // This is a temporary solution until the entire executor is natively suspend.
+                    kotlinx.coroutines.runBlocking {
+                        kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn { cont: kotlin.coroutines.Continuation<Any?> ->
+                            invoke.invoke(target, *callArgs.toTypedArray(), cont)
+                        }
+                    }
+                }
             } finally {
                 Thread.currentThread().contextClassLoader = oldCl
             }
@@ -406,15 +425,7 @@ object ScriptRunner {
             }
         }
 
-        try {
-            invoke.isAccessible = true
-        } catch (_: Exception) {
-            try {
-                val ao = Class.forName("java.lang.reflect.AccessibleObject")
-                val m = ao.getMethod("trySetAccessible")
-                m.invoke(invoke)
-            } catch (_: Throwable) { }
-        }
+        com.koupper.shared.ensureAccessible(invoke)
 
         val meta = ExecutionMeta(
             exportId = exportIdFromSymbol(symbol),

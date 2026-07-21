@@ -180,6 +180,14 @@ interface TextFileHandler {
     fun bind(data: Map<String, String?>, content: StringBuilder): StringBuilder
 
     /**
+     * Appends a line at the end of a file, creating it if it doesn't exist.
+     *
+     * @property content the text to append.
+     * @property filePath the file path. Uses the global file if "undefined".
+     */
+    fun writeLine(content: String, filePath: String = "undefined")
+
+    /**
      * Remove the global file.
      */
     fun remove(): Boolean
@@ -193,5 +201,16 @@ interface TextFileHandler {
      * @return The file with placeholders replaced. If `overrideOriginal` is true, the file is updated, otherwise only the modified content is returned.
      */
     fun replacePlaceholders(placeholders: Map<String, String?>, filePath: String = "undefined", overrideOriginal: Boolean = false): File
+
+    // ── Stateless convenience methods (v7.2) ────────────────────────────────
+
+    /** Read entire file without the .using() ceremony. */
+    fun readText(path: String): String
+
+    /** Overwrite entire file, creating parent dirs if needed. */
+    fun writeText(path: String, content: String)
+
+    /** Append a line to a file, creating parent dirs if needed. */
+    fun appendText(path: String, content: String)
 
 }

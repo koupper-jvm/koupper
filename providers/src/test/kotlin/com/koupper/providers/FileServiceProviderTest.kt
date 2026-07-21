@@ -27,7 +27,7 @@ class FileServiceProviderTest : AnnotationSpec() {
     @Test
     fun `should bind the json file  handler impl`() {
         assertTrue {
-            app.getInstance(JSONFileHandler::class) is JSONFileHandlerImpl<*>
+            app.getInstance(JSONFileHandler::class) is JSONFileHandlerImpl
         }
     }
 }

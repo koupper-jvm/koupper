@@ -112,7 +112,33 @@ class TextFileHandlerImpl : TextFileHandler {
 
 
     override fun replaceMultipleLines(lines: Map<Int, String>, filePath: String, overrideOriginal: Boolean): File {
-        TODO("Not yet implemented")
+        if (this.globalFilePath == "undefined" && filePath == "undefined") {
+            throw Exception("It's necessary a file to do operations.")
+        }
+
+        val file = if (this.globalFilePath != "undefined") this.globalTargetFile else this.fileHandler.load(filePath)
+
+        val newContent = StringBuilder()
+        val existingLines = file.readLines()
+
+        for ((index, content) in existingLines.withIndex()) {
+            val lineNum = index + 1
+            val replacement = lines[lineNum]
+            if (replacement != null) {
+                newContent.append(replacement).append("\n")
+            } else {
+                newContent.append(content).append("\n")
+            }
+        }
+
+        return if (!overrideOriginal) {
+            val tmpFile = File(System.getProperty("java.io.tmpdir"), file.name)
+            tmpFile.writeText(newContent.toString())
+            tmpFile
+        } else {
+            file.printWriter().use { out -> out.print(newContent.toString()) }
+            file
+        }
     }
 
     override fun appendContentBefore(
@@ -297,6 +323,16 @@ class TextFileHandlerImpl : TextFileHandler {
         return content
     }
 
+    override fun writeLine(content: String, filePath: String) {
+        val file = when {
+            filePath != "undefined" -> File(filePath)
+            this.globalFilePath != "undefined" -> this.globalTargetFile
+            else -> throw Exception("It's necessary a file to do operations.")
+        }
+        file.parentFile?.mkdirs()
+        file.appendText(content + "\n", Charsets.UTF_8)
+    }
+
     override fun remove(): Boolean {
         return globalTargetFile.delete()
     }
@@ -364,5 +400,24 @@ class TextFileHandlerImpl : TextFileHandler {
         matchFound = false
 
         return matchingInfo
+    }
+
+    // ── Stateless convenience methods (v7.2) ────────────────────────────────
+
+    override fun readText(path: String): String {
+        val f = fileHandler.load(path)
+        return f.readText(Charsets.UTF_8)
+    }
+
+    override fun writeText(path: String, content: String) {
+        val f = fileHandler.load(path)
+        f.parentFile?.mkdirs()
+        f.writeText(content, Charsets.UTF_8)
+    }
+
+    override fun appendText(path: String, content: String) {
+        val f = fileHandler.load(path)
+        f.parentFile?.mkdirs()
+        f.appendText(content + "\n", Charsets.UTF_8)
     }
 }

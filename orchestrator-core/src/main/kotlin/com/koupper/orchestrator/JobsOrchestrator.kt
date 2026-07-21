@@ -269,6 +269,7 @@ object JobRunner {
                         return@map JobResult.Error("❌ Execution failed for job '${task.id}': ${e.message}", e)
                     }
 
+                    runCatching { res.resultFn?.invoke(execResult) }
                     res.ackFn?.invoke()
                     JobInfo(
                         configId = res.configName,
@@ -485,13 +486,7 @@ object JobRunner {
                         }
                     ?: error("❌ No se encontró método 'invoke' con aridad ${args.size} en ${lambdaClass.name}")
 
-                try { invoke.isAccessible = true } catch (_: Exception) {
-                    try {
-                        val ao = Class.forName("java.lang.reflect.AccessibleObject")
-                        val m  = ao.getMethod("trySetAccessible")
-                        m.invoke(invoke)
-                    } catch (_: Throwable) { /* ignore */ }
-                }
+                com.koupper.shared.ensureAccessible(invoke)
 
                 val result = invoke.invoke(value, *args.toTypedArray())
                 println("✅ Job result: $result")
@@ -501,7 +496,7 @@ object JobRunner {
             }
         } catch (e: Exception) {
             println("❌ Error ejecutando job compilado: ${e.message}")
-            e.printStackTrace()
+            GlobalLogger.log.error(e) { "Error executing compiled job: ${e.message}" }
             return null
         }
     }
@@ -512,7 +507,8 @@ sealed class JobResult {
         val configName: String?,
         val task: KouTask,
         val ackFn: (() -> Unit)? = null,
-        val releaseFn: (() -> Unit)? = null
+        val releaseFn: (() -> Unit)? = null,
+        val resultFn: ((Any?) -> Unit)? = null   // optional: persist result before ack
     ) : JobResult()
     data class Error(val message: String, val exception: Exception? = null) : JobResult()
 }
@@ -684,7 +680,8 @@ private object FileJobFS {
         failedDir(queue).listFiles { f -> f.isFile && f.extension.equals("json", true) }?.sortedBy { it.name } ?: emptyList()
 
     fun moveToFailed(queue: String, file: File) {
-        val target = File(failedDir(queue), file.name)
+        val targetName = file.name.removeSuffix(".processing")
+        val target = File(failedDir(queue), targetName)
         file.copyTo(target, overwrite = true)
         file.delete()
     }
@@ -782,16 +779,58 @@ object FileJobDriver : ContextualJobDriver {
             return results
         }
 
+        val failedDir = File(dir, ".failed").also { it.mkdirs() }
+        val doneDir   = File(dir, ".done").also { it.mkdirs() }
+
         files.forEach { file ->
-            try {
-                val task = JobSerializer.deserialize(file.readText())
-                if (!file.delete()) {
-                    results.add(JobResult.Error("⚠️ Could not delete processed job file: ${file.name}"))
-                }
-                results.add(JobResult.Ok(config.id, task))
+            val processingFile = File(file.parent, "${file.name}.processing")
+
+            val moved = try {
+                java.nio.file.Files.move(
+                    file.toPath(),
+                    processingFile.toPath(),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE
+                )
+                true
             } catch (e: Exception) {
-                results.add(JobResult.Error("❌ Failed to execute job from file '${file.name}': ${e.message}", e))
-                FileJobFS.moveToFailed(config.queue!!, file)
+                false
+            }
+            if (!moved) return@forEach
+
+            fun moveToFailed() {
+                val target = File(failedDir, file.name)
+                processingFile.copyTo(target, overwrite = true)
+                processingFile.delete()
+            }
+
+            try {
+                val task = JobSerializer.deserialize(processingFile.readText())
+                results.add(JobResult.Ok(
+                    configName = config.id,
+                    task = task,
+                    ackFn = {
+                        if (!processingFile.delete()) {
+                            println("⚠️ Could not delete processing file: ${processingFile.name}")
+                        }
+                    },
+                    releaseFn = ::moveToFailed,
+                    resultFn = { result ->
+                        runCatching {
+                            val serialized = when (result) {
+                                null -> null
+                                is String -> result
+                                else -> jacksonObjectMapper().writeValueAsString(result)
+                            }
+                            File(doneDir, "${task.id}.result.json")
+                                .writeText(jacksonObjectMapper().writeValueAsString(
+                                    mapOf("id" to task.id, "result" to serialized)
+                                ))
+                        }
+                    }
+                ))
+            } catch (e: Exception) {
+                results.add(JobResult.Error("❌ Failed to read job from file '${file.name}': ${e.message}", e))
+                moveToFailed()
             }
         }
 
@@ -1218,7 +1257,7 @@ object JobReplayer {
 
                     is JobResult.Error -> {
                         replayLogger.warn { res.message }
-                        res.exception?.printStackTrace()
+                        res.exception?.let { GlobalLogger.log.error(it) { "Job replay error: ${it.message}" } }
                     }
                 }
             }

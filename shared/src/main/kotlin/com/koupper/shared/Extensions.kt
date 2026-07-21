@@ -9,21 +9,23 @@ fun File.copyInputStreamToFile(inputStream: InputStream) {
     }
 }
 
-fun File.getProperty(propertyName: String) : String {
+fun File.getProperty(propertyName: String): String {
     var result = "undefined"
-
-    if (this.exists() && (".env" in this.name)) {
-        this.readLines().forEach { line ->
-            val trimmedLine = line.trim()
-            if (trimmedLine.isNotEmpty() && !trimmedLine.startsWith("#")) {
-                val parts = trimmedLine.split("=", limit = 2)
-                if (parts.size == 2 && parts[0].trim() == propertyName) {
-                    result = parts[1].trim().removeSurrounding("\"").removeSurrounding("'")
+    if (this.exists()) {
+        try {
+            this.readLines().forEach { line ->
+                val trimmedLine = line.trim()
+                if (trimmedLine.isNotEmpty() && !trimmedLine.startsWith("#")) {
+                    val parts = trimmedLine.split("=", limit = 2)
+                    if (parts.size == 2 && parts[0].trim() == propertyName) {
+                        result = parts[1].trim().removeSurrounding("\"").removeSurrounding("'")
+                    }
                 }
             }
+        } catch (e: Exception) {
+            // Silently ignore
         }
     }
-
     return result
 }
 

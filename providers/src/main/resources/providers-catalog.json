@@ -2,6 +2,23 @@
   "version": "1.0",
   "providers": [
     {
+      "id": "helloworld",
+      "serviceProvider": "HelloWorldServiceProvider",
+      "description": "Example Hello World provider for scaffolding demonstration.",
+      "bindings": [
+        {
+          "contract": "HelloWorldProvider",
+          "implementations": [
+            { "class": "HelloWorldImpl" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "HELLOWORLD_API_KEY", "required": false, "description": "Optional API key for demonstration." }
+      ],
+      "docs": "https://koupper.com/docs/providers/helloworld"
+    },
+    {
       "id": "db",
       "serviceProvider": "DBServiceProvider",
       "description": "Database connectors for PostgreSQL and SQLite sessions.",
@@ -83,6 +100,21 @@
         { "name": "LOGGER_TABLE_NAME", "required": true, "description": "Target table for log persistence." }
       ],
       "docs": "https://koupper.com/docs/providers/logger"
+    },
+    {
+      "id": "mcp-client",
+      "serviceProvider": "MCPClientServiceProvider",
+      "description": "MCP client provider for connecting to external MCP servers (HTTP or stdio transport) and calling their tools.",
+      "bindings": [
+        {
+          "contract": "MCPClientProvider",
+          "implementations": [
+            { "class": "LocalMCPClientProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/mcp-client"
     },
     {
       "id": "mcp",
@@ -566,7 +598,7 @@
     {
       "id": "vector-db",
       "serviceProvider": "VectorDbServiceProvider",
-      "description": "Vector storage and similarity query provider with local in-memory backend.",
+      "description": "Vector storage and similarity query provider with disk-persistent local backend.",
       "bindings": [
         {
           "contract": "VectorDbProvider",
@@ -577,6 +609,21 @@
       ],
       "env": [],
       "docs": "https://koupper.com/docs/providers/vector-db"
+    },
+    {
+      "id": "memory",
+      "serviceProvider": "MemoryServiceProvider",
+      "description": "High-level memory provider: remember(text), recall(query), persists to ~/.koupper/memory/ and writes memory.md.",
+      "bindings": [
+        {
+          "contract": "MemoryProvider",
+          "implementations": [
+            { "class": "LocalMemoryProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/memory"
     },
     {
       "id": "rss",
@@ -651,6 +698,236 @@
         { "name": "SSH_COMMAND_TIMEOUT_SECONDS", "required": false, "description": "SSH command/SCP timeout in seconds." }
       ],
       "docs": "https://koupper.com/docs/providers/ssh"
+    },
+    {
+      "id": "agent",
+      "serviceProvider": "AgentServiceProvider",
+      "description": "Agentic core: local LLM inference, MCP tool execution, agent orchestration and swarm coordination.",
+      "bindings": [
+        {
+          "contract": "EnvironmentProfiler",
+          "implementations": [{ "class": "LinuxEnvironmentProfiler" }]
+        },
+        {
+          "contract": "AgentBudget",
+          "implementations": []
+        },
+        {
+          "contract": "ToolExecutor",
+          "implementations": [{ "class": "MCPToolExecutor" }]
+        },
+        {
+          "contract": "InferenceEngine",
+          "implementations": [{ "class": "LlamaCppEngine" }]
+        },
+        {
+          "contract": "AgentOrchestrator",
+          "implementations": [{ "class": "DefaultAgentOrchestrator" }]
+        },
+        {
+          "contract": "SwarmCoordinator",
+          "implementations": [{ "class": "DefaultSwarmCoordinator" }]
+        }
+      ],
+      "env": [
+        { "name": "KOUPPER_LLM_MODEL_PATH", "required": false, "description": "Path to GGUF model file for local LLM inference." },
+        { "name": "KOUPPER_LLM_EXECUTABLE", "required": false, "description": "Path to llama-server binary." }
+      ],
+      "docs": "https://koupper.com/docs/providers/agent"
+    },
+    {
+      "id": "command-bridge",
+      "serviceProvider": "CommandBridgeServiceProvider",
+      "description": "File-based command channel for interactive agents. Watches a directory for *.response files written by the CLI or web UI and delivers them as commands to the agent loop.",
+      "bindings": [
+        {
+          "contract": "CommandBridgeProvider",
+          "implementations": [{ "class": "CommandBridgeProviderImpl" }]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/command-bridge"
+    },
+    {
+      "id": "web-reader",
+      "serviceProvider": "WebReaderServiceProvider",
+      "description": "Web page reader provider with JavaScript rendering, text extraction and screenshot via Playwright.",
+      "bindings": [
+        {
+          "contract": "WebReaderProvider",
+          "implementations": [
+            { "class": "PlaywrightWebReaderProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/web-reader"
+    },
+    {
+      "id": "pdf-reader",
+      "serviceProvider": "PDFReaderServiceProvider",
+      "description": "PDF document reader provider for text extraction, page splitting and metadata via Apache PDFBox.",
+      "bindings": [
+        {
+          "contract": "PDFReaderProvider",
+          "implementations": [
+            { "class": "PDFBoxReaderProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/pdf-reader"
+    },
+    {
+      "id": "web-search",
+      "serviceProvider": "WebSearchServiceProvider",
+      "description": "Web search provider using DuckDuckGo. Returns titles, URLs and snippets for a query. No API key required.",
+      "bindings": [
+        {
+          "contract": "WebSearchProvider",
+          "implementations": [
+            { "class": "DuckDuckGoSearchProvider" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/web-search"
+    },
+    {
+      "id": "telegram",
+      "serviceProvider": "TelegramServiceProvider",
+      "description": "Bidirectional Telegram channel for agent communication. Long-polls the Bot API for incoming messages and sends responses back to the user.",
+      "bindings": [
+        {
+          "contract": "TelegramChannelProvider",
+          "implementations": [{ "class": "TelegramChannelProviderImpl" }]
+        }
+      ],
+      "env": [
+        { "name": "KOUPPER_TELEGRAM_TOKEN",    "required": true,  "description": "Telegram Bot API token from BotFather." },
+        { "name": "KOUPPER_TELEGRAM_CHAT_IDS", "required": false, "description": "Comma-separated list of allowed chat IDs. Empty = accept all." }
+      ],
+      "docs": "https://koupper.com/docs/providers/telegram"
+    },
+    {
+      "id": "build",
+      "serviceProvider": "BuildServiceProvider",
+      "description": "Runs Gradle/npm builds and parses compiler output into structured errors for agent compile→fix→compile feedback loops.",
+      "bindings": [
+        {
+          "contract": "BuildProvider",
+          "implementations": [{ "class": "BuildProviderImpl" }]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/build"
+    },
+    {
+      "id": "speech-to-text",
+      "serviceProvider": "SpeechToTextServiceProvider",
+      "description": "Audio transcription provider with two backends: local whisper-cpp CLI (STT_MODE=local) or OpenAI/Groq Whisper API (STT_MODE=api, default).",
+      "bindings": [
+        {
+          "contract": "SpeechToTextProvider",
+          "implementations": [
+            { "class": "WhisperCliSpeechToText", "tag": "local" },
+            { "class": "WhisperApiSpeechToText", "tag": "api" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "STT_MODE", "required": false, "description": "Transcription backend: api (default) or local." },
+        { "name": "WHISPER_API_KEY", "required": false, "description": "API key for OpenAI or Groq. Required when STT_MODE=api." },
+        { "name": "WHISPER_API_URL", "required": false, "description": "Whisper API base URL. Default: https://api.openai.com. Use https://api.groq.com/openai for Groq." },
+        { "name": "WHISPER_MODEL", "required": false, "description": "Model identifier for the API backend (default: whisper-1)." },
+        { "name": "WHISPER_COMMAND", "required": false, "description": "whisper-cpp binary path or command name (default: whisper-cpp). Required when STT_MODE=local." },
+        { "name": "WHISPER_MODEL_PATH", "required": false, "description": "Absolute path to the GGML model file. Required when STT_MODE=local." }
+      ],
+      "docs": "https://koupper.com/docs/providers/speech-to-text"
+    },
+    {
+      "id": "media-downloader",
+      "serviceProvider": "MediaDownloaderServiceProvider",
+      "description": "Media download and audio extraction provider wrapping yt-dlp and ffmpeg for video acquisition and transcription pipelines.",
+      "bindings": [
+        {
+          "contract": "MediaDownloaderProvider",
+          "implementations": [
+            { "class": "YtDlpMediaDownloader" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "YTDLP_COMMAND", "required": false, "description": "yt-dlp binary path or command name (default: yt-dlp). Must be installed on the system." },
+        { "name": "FFMPEG_COMMAND", "required": false, "description": "ffmpeg binary path or command name (default: ffmpeg). Required only for audio extraction." }
+      ],
+      "docs": "https://koupper.com/docs/providers/media-downloader"
+    },
+    {
+      "id": "interactive-browser",
+      "serviceProvider": "InteractiveBrowserServiceProvider",
+      "description": "Interactive browser automation provider with persistent session, stealth anti-detection, human-like scroll/click, and element extraction via Playwright.",
+      "bindings": [
+        {
+          "contract": "InteractiveBrowserProvider",
+          "implementations": [
+            { "class": "PlaywrightInteractiveBrowser" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "BROWSER_USER_AGENT", "required": false, "description": "Custom User-Agent string sent to the browser. Defaults to a standard Chrome 125 Windows UA." },
+        { "name": "BROWSER_CHANNEL", "required": false, "description": "Playwright browser channel: chrome (default) or chromium. Use chromium if Chrome is not installed." },
+        { "name": "BROWSER_SESSION_DIR", "required": false, "description": "Default persistent profile directory. Passed explicitly to openSession() in scripts." }
+      ],
+      "docs": "https://koupper.com/docs/providers/interactive-browser"
+    },
+    {
+      "id": "vision",
+      "serviceProvider": "VisionServiceProvider",
+      "description": "Vision-capable LLM provider for image analysis (content type, summary, sentiment, relevance scoring) via any OpenAI-compatible vision API.",
+      "bindings": [
+        {
+          "contract": "VisionProvider",
+          "implementations": [
+            { "class": "OpenAICompatVisionProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "LLM_API_URL", "required": false, "description": "Base URL of the OpenAI-compatible vision API. Default: http://localhost:1234." },
+        { "name": "LLM_API_KEY", "required": false, "description": "API key for the vision LLM endpoint. Default: local." },
+        { "name": "LLM_MODEL", "required": false, "description": "Vision-capable model identifier. Default: gpt-4o." }
+      ],
+      "docs": "https://koupper.com/docs/providers/vision"
+    },
+    {
+      "id": "lsp",
+      "serviceProvider": "LspServiceProvider",
+      "description": "Language Server Protocol bridge — hover, go-to-definition, and diagnostics via any LSP server (Kotlin Language Server, typescript-language-server, etc.).",
+      "bindings": [
+        {
+          "contract": "LspBridgeProvider",
+          "implementations": [{ "class": "LspBridgeProviderImpl" }]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/lsp"
+    },
+    {
+      "id": "youtube",
+      "serviceProvider": "YoutubeTranscriptServiceProvider",
+      "description": "Fetches auto-generated transcripts from YouTube videos via the timedtext API.",
+      "bindings": [
+        {
+          "contract": "YoutubeTranscriptProvider",
+          "implementations": [
+            { "class": "YoutubeTimedTextClient" }
+          ]
+        }
+      ],
+      "env": [],
+      "docs": "https://koupper.com/docs/providers/youtube"
     }
   ]
 }

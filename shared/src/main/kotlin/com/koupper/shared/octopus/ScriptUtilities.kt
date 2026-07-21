@@ -40,7 +40,7 @@ fun extractExportedDeclarations(script: String): List<ExportedDeclaration> {
     )
 
     val singleAnn = Regex("""@([\w.]+)\s*(?:\(([^)]*)\))?""")
-    val argRegex = Regex("""(\w+)\s*=\s*("[^"]*"|'[^']*'|[^,\s)]+)""")
+    val posArgRegex = Regex("""(?:(\w+)\s*=\s*)?("[^"]*"|'[^']*'|[^,\s)]+)""")
 
     return declWithAnns.findAll(script).mapNotNull { m ->
         val annsBlock = m.groupValues[1]
@@ -58,10 +58,14 @@ fun extractExportedDeclarations(script: String): List<ExportedDeclaration> {
 
             val args = mutableMapOf<String, String>()
             if (rawArgs.isNotBlank()) {
-                for (a in argRegex.findAll(rawArgs)) {
-                    val key = a.groupValues[1]
+                var posIdx = 0
+                for (a in posArgRegex.findAll(rawArgs)) {
+                    val key = a.groupValues[1].takeIf { it.isNotBlank() } ?: "value"
                     val value = a.groupValues[2].trim('"', '\'')
-                    args[key] = value
+                    // Append positional index to avoid overwriting when key is always "value"
+                    val effectiveKey = if (key == "value" && posIdx > 0) "value$posIdx" else key
+                    args[effectiveKey] = value
+                    posIdx++
                 }
             }
             annMap[simple] = args
@@ -102,6 +106,39 @@ data class ExportFunctionSignature(
     val code: String = ""
 )
 
+/**
+ * Extracts the export function signature from a compiled script class using reflection.
+ * This is the preferred method — it reads the actual compiled types, not regex-guessed strings.
+ */
+fun reflectExportSignature(scriptClass: Class<*>, fieldName: String): ExportFunctionSignature? {
+    return try {
+        val field = scriptClass.declaredFields.firstOrNull { it.name == fieldName } ?: return null
+        field.isAccessible = true
+        val value = field.get(null) ?: field.get(scriptClass.getDeclaredConstructor().newInstance())
+        val funcClass = value.javaClass
+
+        // Kotlin function types implement kotlin.jvm.functions.FunctionN
+        val funcIface = funcClass.genericInterfaces.firstOrNull { it.typeName.startsWith("kotlin.jvm.functions.Function") }
+            ?: return null
+
+        val typeArgs = funcIface.typeName
+            .substringAfter('<').substringBeforeLast('>')
+            .split(",").map { it.trim() }
+
+        val paramTypes = if (typeArgs.size > 1) typeArgs.dropLast(1) else emptyList()
+        val returnType = typeArgs.lastOrNull() ?: "kotlin.Unit"
+
+        ExportFunctionSignature(
+            packageName = null,
+            imports = emptyMap(),
+            parameterTypes = paramTypes,
+            returnType = returnType
+        )
+    } catch (e: Exception) {
+        null
+    }
+}
+
 fun extractExportFunctionSignature(
     rawTypeName: String,
     signature: ExportFunctionSignature,
@@ -121,7 +158,10 @@ fun extractExportFunctionSignature(
         "Boolean" to Boolean::class.javaObjectType,
         "Short" to Short::class.javaObjectType,
         "Byte" to Byte::class.javaObjectType,
-        "Char" to Char::class.javaObjectType
+        "Char" to Char::class.javaObjectType,
+        "Map" to Map::class.java,
+        "List" to List::class.java,
+        "Set" to Set::class.java
     )
 
     builtIns[cleanType]?.let { return it }
@@ -148,47 +188,91 @@ fun extractExportFunctionSignature(
 }
 
 fun extractExportFunctionSignature(input: String): ExportFunctionSignature? {
-    val packageName = Regex(
-        """(?m)^\s*package\s+([A-Za-z_][\w.]*)\s*$"""
-    ).find(input)?.groupValues?.get(1)
-
-    val imports = linkedMapOf<String, String>()
-    val importRegex = Regex(
-        """(?m)^\s*import\s+([A-Za-z_][\w.]*)(?:\s+as\s+([A-Za-z_]\w*))?\s*$"""
-    )
-
-    for (m in importRegex.findAll(input)) {
-        val fqcn = m.groupValues[1]
-        val alias = m.groupValues[2].takeIf { it.isNotBlank() }
-        val simpleName = alias ?: fqcn.substringAfterLast('.')
-        imports[simpleName] = fqcn
+    // KSP metadata is the primary source of truth for compiled artifacts.
+    val metadata = KspMetadataReader.read()
+    if (metadata != null) {
+        val scriptPackage = Regex(
+            """(?m)^\s*package\s+([A-Za-z_][\w.]*)\s*$"""
+        ).find(input)?.groupValues?.get(1)
+        
+        val matchingExport = metadata.exports.find { export ->
+            scriptPackage == null || export.packageName == scriptPackage
+        }
+        
+        matchingExport?.let { export ->
+            val typeStr = export.type
+            val params = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
+                val generics = typeStr.substringAfter('<').substringBeforeLast('>')
+                val allTypes = splitTypesTopLevel(generics)
+                allTypes.dropLast(1)
+            } else {
+                emptyList()
+            }
+            val returnType = if (typeStr.startsWith("kotlin.jvm.functions.Function")) {
+                val generics = typeStr.substringAfter('<').substringBeforeLast('>')
+                val allTypes = splitTypesTopLevel(generics)
+                allTypes.lastOrNull() ?: "kotlin.Unit"
+            } else {
+                "kotlin.Unit"
+            }
+            
+            val imports = linkedMapOf<String, String>()
+            val importRegex = Regex(
+                """(?m)^\s*import\s+([A-Za-z_][\w.]*)(?:\s+as\s+([A-Za-z_]\w*))?\s*$"""
+            )
+            for (m in importRegex.findAll(input)) {
+                val fqcn = m.groupValues[1]
+                val alias = m.groupValues[2].takeIf { it.isNotBlank() }
+                val simpleName = alias ?: fqcn.substringAfterLast('.')
+                imports[simpleName] = fqcn
+            }
+            
+            return ExportFunctionSignature(
+                packageName = export.packageName,
+                imports = imports,
+                parameterTypes = params,
+                returnType = returnType,
+                code = input
+            )
+        }
     }
-
-    val exportMatch = Regex("""@(?:[\w.]*\.)?Export\b""").find(input) ?: return null
-    val tail = input.substring(exportMatch.range.first)
-
-    val sig = Regex(
-        """(?s)
-           (?:.*?@(?:[\w.]*\.)?Export\b.*?)
-           (?:\s*@[\w.]+(?:\([^()]*\))?\s*)*
-           \s*val\s+`?[\w$]+`?\s*:\s*
-           \((.*?)\)\s*->\s*
-           ([^=\{\n;]+)
-        """.trimIndent(),
-        setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.COMMENTS)
-    ).find(tail) ?: return null
-
-    val paramsRaw = sig.groupValues[1].trim()
-    val returnType = sig.groupValues[2].trim()
-    val params = splitTypesTopLevel(paramsRaw)
-
-    return ExportFunctionSignature(
-        packageName = packageName,
-        imports = imports,
-        parameterTypes = params,
-        returnType = returnType,
-        code = input
-    )
+    
+    // Fallback: parse signature from source code using regex (for dynamic .kts scripts)
+    val exportMatch = Regex(
+        """@Export\s*(?:\([^)]*\))?\s*(?:@\w+(?:\([^)]*\))?\s*)*val\s+(\w+)\s*:\s*\(([^)]*)\)\s*->\s*([^\s=]+)""",
+        RegexOption.DOT_MATCHES_ALL
+    ).find(input)
+    
+    if (exportMatch != null) {
+        val paramStr = exportMatch.groupValues[2].trim()
+        val paramTypes = if (paramStr.isBlank()) {
+            emptyList()
+        } else {
+            splitTypesTopLevel(paramStr)
+        }
+        val returnType = exportMatch.groupValues[3].trim()
+        
+        val imports = linkedMapOf<String, String>()
+        val importRegex = Regex(
+            """(?m)^\s*import\s+([A-Za-z_][\w.]*)(?:\s+as\s+([A-Za-z_]\w*))?\s*$"""
+        )
+        for (m in importRegex.findAll(input)) {
+            val fqcn = m.groupValues[1]
+            val alias = m.groupValues[2].takeIf { it.isNotBlank() }
+            val simpleName = alias ?: fqcn.substringAfterLast('.')
+            imports[simpleName] = fqcn
+        }
+        
+        return ExportFunctionSignature(
+            packageName = null,
+            imports = imports,
+            parameterTypes = paramTypes,
+            returnType = returnType,
+            code = input
+        )
+    }
+    
+    return null
 }
 
 fun resolveClassFromArgName(
@@ -212,7 +296,10 @@ fun resolveClassFromArgName(
         "Boolean" to Boolean::class.javaObjectType,
         "Short" to Short::class.javaObjectType,
         "Byte" to Byte::class.javaObjectType,
-        "Char" to Char::class.javaObjectType
+        "Char" to Char::class.javaObjectType,
+        "Map" to Map::class.java,
+        "List" to List::class.java,
+        "Set" to Set::class.java
     )
 
     builtIns[cleanType]?.let { return it }

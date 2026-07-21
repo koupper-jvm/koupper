@@ -1,6 +1,7 @@
 package com.koupper.octopus.modules.aws
 
 import com.koupper.container.app
+import com.koupper.logging.GlobalLogger
 import com.koupper.octopus.modifiers.GradleConfigurator
 import com.koupper.octopus.modules.prepareTemplateProject
 import com.koupper.octopus.modules.resolveAndCopyProcessManagerJar
@@ -42,16 +43,14 @@ class LambdaFunctionBuilder(
             this.projectRootPath = modelProject.absolutePath
         }
 
-        print("\u001B[38;5;155m\nRequesting an optimized process manager... \u001B[0m")
+        GlobalLogger.log.info { "Requesting an optimized process manager..." }
 
         val libsDir = File(modelProject, "libs")
         libsDir.mkdirs()
         val octopusVersion = env("OCTOPUS_VERSION", context, required = false, allowEmpty = true, default = "latest")
         resolveAndCopyProcessManagerJar(context, libsDir, "octopus-$octopusVersion.jar")
 
-        println("\u2713") 
-
-        println("\u001B[38;5;155mOptimized process manager located successfully.\u001B[0m")
+        GlobalLogger.log.info { "Optimized process manager located successfully." }
 
         locateScriptsInPackage(context, scripts, Paths.get(modelProject.absolutePath).absolutePathString(), this.packageName)
     }

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.assertContains
+import kotlin.test.assertFalse
 
 class OctopusTest : AnnotationSpec() {
     private lateinit var container: Container
@@ -145,7 +146,7 @@ class OctopusTest : AnnotationSpec() {
     }
 
     @Test
-    fun `should fail when script has multiple export declarations`() {
+    fun `should not reject multiple export declarations`() {
         val script = """
             @Export
             val setup: () -> String = { "one" }
@@ -163,9 +164,7 @@ class OctopusTest : AnnotationSpec() {
             message = result
         }
 
-        assertContains(message, "Multiple @Export declarations found")
-        assertContains(message, "setup")
-        assertContains(message, "runner")
+        assertFalse(message.contains("ERR_EXPORT_MULTIPLE"), "Multiple exports should no longer be rejected, got: $message")
     }
 
     @Test

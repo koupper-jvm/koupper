@@ -1,0 +1,49 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm'
+}
+
+group   = 'com.koupper'
+version = rootProject.version
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib"
+    implementation 'com.googlecode.lanterna:lanterna:3.1.1'
+    implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2'
+    implementation project(':container')
+    implementation project(':providers')
+
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit5"
+    testImplementation "io.kotest:kotest-runner-junit5:5.9.1"
+    testImplementation "io.kotest:kotest-assertions-core:5.9.1"
+    testImplementation "io.mockk:mockk:1.13.12"
+}
+
+tasks.register('fatJar', Jar) {
+    archiveBaseName      = 'koupper-monitor'
+    archiveClassifier    = ''
+    duplicatesStrategy   = DuplicatesStrategy.EXCLUDE
+    zip64                = true
+    manifest {
+        attributes 'Main-Class'             : 'com.koupper.monitor.MonitorAppKt'
+        attributes 'Implementation-Title'   : 'Koupper Monitor'
+        attributes 'Implementation-Version' : project.version
+    }
+    from sourceSets.main.output
+    from {
+        configurations.runtimeClasspath.collect { dep ->
+            dep.isDirectory() ? dep : zipTree(dep).matching {
+                exclude 'module-info.class'
+                exclude 'META-INF/versions/*/module-info.class'
+                exclude 'META-INF/*.SF'
+                exclude 'META-INF/*.DSA'
+                exclude 'META-INF/*.RSA'
+            }
+        }
+    }
+}
+
+build.dependsOn fatJar

@@ -4,9 +4,134 @@ All notable changes to the Koupper monorepo are documented here.
 Versioning follows the Octopus engine version (`build.gradle`).
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [7.2.0] - 2026-06-25
+
+### Added
+- **Multiple @Export declarations** with priority-based selection.
+- **YoutubeTranscriptProvider** SP for fetching YouTube video transcripts.
+- **RouterAnalyzer** for strongly-typed HTTP route analysis.
+- **PathParams** extraction from route patterns into `RequestContext`.
+- **Non-generic route methods** in `RuntimeRouterDsl`.
+- **CORS + ExceptionHandler DSL** blocks for global middleware.
+- **FileHandler** fs ops + `TextFileHandler` stateless file methods.
+- **Request context attributes** with native support for `PUT`, `PATCH`, `DELETE` methods.
+- **Dual-generic routing DSL** support for strongly-typed request/response handlers.
+
+### Fixed
+- **Build**: `install.kts` uses `shadowJar` instead of removed `fatJar` task.
+- **Release publish**: GitHub Actions install-asset workflow builds `:octopus:shadowJar` (community standalone install).
+- **Router defensive errors**: missing/invalid params return `400` (NPE / IndexOutOfBounds) instead of crashing the server; fatal handler errors are logged.
+- **Module-info**: Excluded from both optimized JAR and shadowJar to fix JPMS classloader issues.
+- **Script compilation**: Scripts compile against module-info-stripped JAR copy.
+- **SseEmitter buffering**: Events buffered until stream callbacks register.
+- **Sandbox params on Windows**: Parameter pass-through resolved for Windows hosts.
+- **OpenAI / DynamoDB**: Enhanced error handling and logging.
+- **OkHttp body leak**: Response body closed in `YoutubeTimedTextClient`.
+
+### Release alignment
+- `octopus 7.2.0` / `koupper-cli 7.2.0`
+- Community install via `install-standalone.kts` from GitHub Release `v7.2.0` (Windows / Linux / macOS).
+
+---
+
+## [7.1.1] - 2026-06-25
+
+### Fixed
+- **HTTP Router Body Parsing**: Fixed a critical bug in `readRequestBodyBytes` where it relied on `Content-Length` and failed on chunked encoding or missing headers, causing JSON mapping exceptions.
+- **Sandbox Parameter Pass-Through**: Removed `--` prefix from `SandboxWorker.kt` CLI args construction. The prefix caused key mismatch between `parseArgs` (stores `--key`) and `buildParamsJson` (looks up `key` without prefix), causing parameter loss in sandboxed script execution.
+- **Inline Data Class Deserialization**: Added Type generic fallback in `ScriptRunnerOrchestrator.kt` for inline data classes (e.g. `SalesReportCommand`). When `resolveClassFromArgName` returns null, uses `target.javaClass.genericInterfaces` → `FunctionN` to extract the generic Type and deserialize with Jackson.
+- **Generic-Aware Parameter Splitting**: Replaced naive `split(",")` with `splitTypesTopLevel()` in regex fallback path of `extractExportFunctionSignature()`. Types like `Map<String, Any?>` no longer split into 2 parameters.
+- **Multi-Annotation Regex Support**: Extended regex fallback to match `@Export` followed by other annotations (`@Scheduled`, `@Logger`, `@JobsListener`) before `val`.
+
+---
+
+## [7.1.0] - 2026-06-24
+
+### Added
+- **Enterprise-Grade HTTP Router Capabilities**: Added native parsing for `MultipartForm` bodies for binary file uploads without Grizzly classpath leakage.
+- **Global Exception Handling**: New `exceptionHandler { }` DSL block in the router to gracefully capture and format unhandled exceptions across all scripts and routes.
+- **Global CORS Config**: Native `cors { }` block in the router DSL to define allowed origins, methods, and headers at the registry level.
+
 ---
 
 ## [Unreleased]
+
+### Added
+- **Scripting DX**: Native namespaced shortcuts for Service Providers (`koupper.json()`, `koupper.dynamo()`, etc.).
+- **Octopus Sentinel**: Background project watcher for automatic dependency management (`koupper watch`).
+- **Dependency Contracts**: Service Providers now declare `externalDependencies()` for autonomous resolution.
+- `KHandler.execute()` is now a `suspend fun`, enabling native Structured Concurrency support.
+- `MCPClientProvider` / `MCPClientServiceProvider` — connects to external MCP servers via HTTP or stdio transport. Handles initialize handshake, tool discovery, and tool calls. Enables agents to use Playwright, GitHub, filesystem, and any MCP-compliant server as tools (prefix: `serverName.toolName`). Registered in container and catalog.
+- `LocalMCPServerProvider` rewritten to JSON-RPC 2.0 (MCP spec `2024-11-05`). Primary endpoint `POST /` handles `initialize`, `tools/list`, `tools/call`, `ping`, and notifications. Legacy `/mcp/tools` and `/mcp/call` preserved for backward compatibility.
+- `InferenceConfig` data class — configurable `maxTokens`, `temperature`, `topP`, `stream` for `LlamaServerSidecar` and `LlamaCppEngine`.
+- `koupper worker` CLI command — file-based job worker daemon. Polls queue directories atomically (POSIX `renameTo` claiming), executes agent scripts via `koupper run`, and streams output to `logs/<queue>/<jobId>.log`. Supports `--queues`, `--concurrency`, `--interval` flags.
+- `GrizzlyRuntimeRouterProvider.respond()` — detects HTML strings and serves with `text/html; charset=UTF-8` instead of `application/json`, enabling script-based HTML page serving.
+- `examples/agents/CortexAgent.kts` — reference agent using `InferenceEngine` SP with `TokenListener` streaming, MCP tool loop, and external MCP server discovery via `~/.koupper/mcp/servers.json`.
+- `examples/mcp/servers.json` — example configuration for external MCP servers (Playwright, GitHub, filesystem, Postgres).
+
+### Changed
+- **Logging Standardization**: Replaced all internal `println` and `printStackTrace` with structured `GlobalLogger` calls for professional JSONL observability.
+- **Auto-Import**: The `@Export` annotation import is now automatically injected into script preambles.
+- **Namespace Configurable**: The Scripting DX namespace is now configurable via `koupper.scripting.namespace` system property (defaults to `koupper`).
+
+### Fixed
+- **Windows Support**: Fixed `AgentServiceProvider` hang during startup on Windows machines by making environment profiling OS-aware.
+- `EnvironmentProfiler.calculateBudget()` — replaced hard `IllegalStateException` kill switch with graceful `LOW_END` tier degradation and a warning log. Machines without AVX2 or GPU no longer crash Octopus on startup.
+- `LlamaServerSidecar` — lazy initialization via `by lazy {}`. `KOUPPER_LLM_MODEL_PATH` is now validated only on first `predict()` call, not at container boot time.
+- `LlamaServerSidecar` SSE parser — skips events where the `content` node is `null` or the literal string `"null"`. Eliminates the spurious `null` token emitted at the start of every streaming response.
+- `AgentOrchestrator.runAgent()` — replaced hardcoded `ToolCall("hardware-checker", "execute")` stub with real JSON parsing of LLM response (`toolName`, `action`, `arguments` fields).
+- `DefaultToolExecutor` — removed fake simulation responses (`ls output: AgenticCore.kt`). Now performs real `java.io.File` operations for `read`, `exists`, and `list` actions.
+- `octopus/build.gradle` `optimized` task filter — replaced `contains('container')` (which captured `jersey-container-*`) with `matches("module-[0-9].*\.jar")` regex. Optimized JAR dropped from ~3.4MB with Grizzly leakage to 1.6MB with zero external class leakage.
+
+### Release alignment
+- `octopus 6.5.3` / `koupper-cli 4.8.0`
+
+---
+
+## [6.6.0] - 2026-06-24
+
+### Added
+- **SPI-only provider discovery** — `ServiceProviderManager` no longer falls back to a hardcoded list. External providers can now be contributed without editing core framework files. The Gradle task `generateServiceProviderSpi` produces the `META-INF/services` manifest at build time.
+- **Compile error source mapping** — when the provider preamble is injected, compilation error line numbers are adjusted by subtracting the preamble offset. Users see line numbers relative to their `.kts` file, not the augmented source.
+- **Cross-validation: regex vs reflection signatures** — the `@Export` resolver now compares regex-extracted parameter types with reflection-extracted types and logs a warning on mismatch. Reflection remains the primary source; this adds visibility into regex parsing edge cases.
+- **Prometheus `/metrics` endpoint** — lightweight HTTP server (JDK `HttpServer`) exposes `DaemonMetrics` in Prometheus text exposition format at `http://127.0.0.1:9999/metrics`. Eight runtime counters available: uptime, active connections, total commands, total scripts, successful/failed scripts, unauthorized/invalid commands.
+- **E2E harness expansion** — `OctopusE2ETest` now covers `@Scheduled` registration (with duplicate-skip guard) and `@Pipeline` execution path.
+- **Provider tier system** — ServiceProviders are now classified into `CORE` (>80% test coverage, exception-safe, schema-typed), `COMMUNITY` (default, basic tests), and `EXPERIMENTAL` (no test gate, excluded from fatJar by default). Tier is declared via `ServiceProvider.tier()`. `ServiceProviderManager.listProvidersByTier()` enables CI gates per tier.
+- **JWT authentication with scopes** — `security/JwtAuth.kt` supports HMAC256-signed tokens with scope-based access control (`koupper:read`, `koupper:execute`, `koupper:admin`). Backward-compatible with legacy static tokens via auto-detection.
+- **HTTP REST API** — JDK `HttpServer` on port 9997 exposes `POST /api/v1/run`, `GET /api/v1/health`, `GET /api/v1/status`, `GET /api/v1/jobs`. CORS + JWT auth integrated.
+- **Script sandboxing** — `ScriptSandbox.kt` enforces execution timeout (default 5min), intercepts `System.exit()` via `SecurityManager`, and provides thread isolation. Disabled by default; enable with `koupper.scripting.sandbox=true`.
+- **OpenTelemetry tracing** — `KoupperTelemetry.kt` creates spans, propagates W3C context, and instruments `@Export` resolver. Added `io.opentelemetry:opentelemetry-*:1.40.0` dependencies.
+- **JWT authentication with scoped authorization** — `OctopusProtocol` now supports JWT tokens (HMAC256) alongside legacy static tokens. Three scopes: `koupper:read` (HEALTH_CHECK), `koupper:execute` (RUN, DEPLOY), `koupper:admin` (WATCH, CANCEL). New `security/JwtAuth.kt` utility for generation, verification, and scope checking.
+- **HTTP REST API** — lightweight HTTP server (JDK `HttpServer`) on port 9997 provides REST endpoints: `POST /api/v1/run` (execute script), `GET /api/v1/health` (health check), `GET /api/v1/status` (daemon metrics), `GET /api/v1/jobs` (list queues). CORS-enabled. JWT auth on protected endpoints.
+- **OpenTelemetry tracing** — `KoupperTelemetry.kt` provides automatic span creation around script execution with W3C trace context propagation. Configurable via `KOUPPER_TELEMETRY_ENABLED` and `KOUPPER_TELEMETRY_SERVICE`. Exports spans to stdout by default; supports OTLP via standard OTEL environment variables.
+- **gRPC bidirectional streaming** — `JobQueueGrpcServer` and `JobQueueGrpcClient` enable real-time job dispatch and status updates over gRPC. Proto definition in `octopus/src/main/proto/job_queue.proto`. Server runs on port 9996. Client features automatic reconnection with 5-second backoff. Port 9997 is REST API, 9998 is Octopus socket, 9999 is Prometheus.
+- **KSP/PSI annotation processing** — replaces regex-based `@Export`/`@Scheduled`/`@Pipeline` extraction with Kotlin Symbol Processing (KSP). New `:annotation-processor` module with `KoupperSymbolProcessor` generates `koupper-exports.json` at compile time. `KspMetadataReader` consumes this JSON at runtime. `extractExportFunctionSignature` now requires KSP metadata exclusively; regex fallback removed in PR #173. ~40 lines of legacy regex parsing deleted.
+
+### Changed
+- `ServiceProviderManager.listProviders()` now throws `IllegalStateException` with an actionable message when the SPI file is missing or empty, instead of silently falling back to a hardcoded list.
+
+### Release alignment
+- `octopus 6.6.0` / `koupper-cli 4.8.0`
+
+---
+
+## [6.5.3] - 2026-05-24
+
+### Added
+- Migration note for unified `@Export` annotation path in `docs/migrations/2026-05-export-annotation-path.md`.
+- Maintenance branches logic to the `develop` workflow for cleaner `gitignore` and IDE state management.
+
+### Changed
+- **BREAKING**: Moved `@Export` annotation from `com.koupper.octopus.annotations` to `com.koupper.shared.annotations` to support unified classpath resolution.
+- Updated all internal scripts, examples, and CLI templates to use the new `com.koupper.shared.annotations.Export` path.
+- Refactored `koupper-cli` command handlers for jobs, modules, and scripts to generate code with the updated annotation path.
+
+### Fixed
+- Fixed `gitignore` missing patterns for `bin/` directories in Gradle submodules and template projects.
+- Rescued missing bootstrap fixes from `main` back into `develop` in the root workspace repository.
+
+### Release alignment
+- `octopus 6.5.0` / `koupper-cli 4.8.0`
 
 ---
 

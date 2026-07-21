@@ -1,9 +1,14 @@
 package com.koupper.os
 
 import com.koupper.shared.getProperty
+import com.koupper.logging.LoggerFactory
 import java.io.File
 
 val envs = mutableListOf<String>()
+private val logger = LoggerFactory.get("Koupper-OS")
+
+/** Set by the Octopus runtime when executing a script (the script's working directory). */
+var scriptContext: String? = null
 
 fun env(
     variableName: String,
@@ -16,20 +21,42 @@ fun env(
     val sysEnv = System.getenv()
     var value: String? = if (sysEnv.containsKey(variableName)) sysEnv[variableName] else null
 
-    val globalEnvFile = System.getProperty("GLOBAL_ENV_FILE")
+    val globalEnvFileRaw = System.getProperty("GLOBAL_ENV_FILE")
         ?: System.getenv("GLOBAL_ENV_FILE")
 
+    val globalEnvFile = globalEnvFileRaw?.trim()?.removeSurrounding("\"")?.removeSurrounding("'")
+
+    if (globalEnvFileRaw != null) {
+        logger.debug { "Found GLOBAL_ENV_FILE variable: '$globalEnvFileRaw'" }
+        logger.debug { "Cleaned path: '$globalEnvFile'" }
+    }
+
     if (value == null && !globalEnvFile.isNullOrBlank()) {
-        val fromGlobal = File(globalEnvFile).getProperty(variableName)
-        value = if (fromGlobal != "undefined") fromGlobal else null
+        val file = File(globalEnvFile)
+        if (file.exists()) {
+            val fromGlobal = file.getProperty(variableName)
+            value = if (fromGlobal != "undefined") fromGlobal else null
+            if (value != null) {
+                logger.debug { "Variable '$variableName' found in GLOBAL_ENV_FILE." }
+            }
+        } else {
+            logger.warn { "GLOBAL_ENV_FILE at '$globalEnvFile' DOES NOT EXIST." }
+        }
     }
 
     if (value == null) {
-        val fromDotEnv = try {
-            File("${if (context != null) context + File.separator else ""}.env").getProperty(variableName)
-        } catch (_: Exception) { "undefined" }
-
-        value = if (fromDotEnv != "undefined") fromDotEnv else null
+        // explicit context > scriptContext (set by Octopus per script run) > JVM cwd
+        val searchRoot = context?.takeIf { it.isNotBlank() }
+            ?: scriptContext?.takeIf { it.isNotBlank() }
+            ?: "."
+        val startDir = File(searchRoot)
+        val fromDotEnv = generateSequence(startDir.canonicalFile) { it.parentFile }
+            .mapNotNull { dir ->
+                runCatching { File(dir, ".env").getProperty(variableName).takeIf { it != "undefined" } }
+                    .getOrNull()
+            }
+            .firstOrNull()
+        value = fromDotEnv
     }
 
     if (value == null) {

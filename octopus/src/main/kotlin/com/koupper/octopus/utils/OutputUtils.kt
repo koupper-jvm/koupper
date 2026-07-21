@@ -1,5 +1,6 @@
 package com.koupper.octopus.utils
 
+import com.koupper.logging.GlobalLogger
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 
@@ -27,7 +28,7 @@ fun <R> captureOutputWithConfig(
 
         outputStream.toString("UTF-8")
     } catch (e: Exception) {
-        e.printStackTrace()
+        GlobalLogger.log.error(e) { "Unhandled error capturing output" }
         outputStream.toString("UTF-8")
     } finally {
         if (destination == "console") {

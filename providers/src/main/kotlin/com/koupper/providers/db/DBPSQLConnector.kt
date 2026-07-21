@@ -9,11 +9,11 @@ import java.sql.Statement
 
 class DBPSQLConnector : DBConnector, Setup() {
     private lateinit var pool: HikariDBPool
-    private val host = env("DB_HOST")
-    private val port = env("DB_PORT")
-    private val database = env("DB_DATABASE")
-    private val userName = env("DB_USERNAME")
-    private val password = env("DB_PASSWORD")
+    private val host: String get() = env("DB_HOST")
+    private val port: String get() = env("DB_PORT")
+    private val database: String get() = env("DB_DATABASE")
+    private val userName: String get() = env("DB_USERNAME")
+    private val password: String get() = env("DB_PASSWORD")
 
     override suspend fun session(): DBSession {
         val config = Json.obj(

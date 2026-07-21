@@ -1,6 +1,7 @@
 package com.koupper.octopus.modules
 
 import com.koupper.container.app
+import com.koupper.logging.GlobalLogger
 import com.koupper.octopus.modifiers.GradleConfigurator
 import com.koupper.os.env
 import com.koupper.providers.files.FileHandler
@@ -14,7 +15,8 @@ class ExecutableJarBuilder(
     private val projectName: String,
     private val moduleVersion: String,
     private val packageName: String,
-    private val artifactType: String
+    private val artifactType: String,
+    private val cleanProject: Boolean = true
 ) : Module() {
     private val fileHandler = app.getInstance(FileHandler::class)
 
@@ -23,8 +25,21 @@ class ExecutableJarBuilder(
         builder.projectName,
         builder.version,
         builder.packageName,
-        builder.artifactType
+        builder.artifactType,
+        builder.cleanProject
     )
+
+    class Builder {
+        var context: String = ""
+        var projectName: String = ""
+        var version: String = ""
+        var packageName: String = ""
+        var artifactType: String = "script"
+        var cleanProject: Boolean = true
+        var scripts: Map<String, String> = emptyMap()
+
+        fun build() = ExecutableJarBuilder(this)
+    }
 
     companion object {
         inline fun build(config: Builder.() -> Unit) = Builder().apply(config).build().build()
@@ -40,14 +55,20 @@ class ExecutableJarBuilder(
         try {
             File("${context}${File.separator}model-project.zip").delete()
         } catch (e: Exception) {
-            println("⚠️ No se pudo eliminar el zip temporal: ${e.message}")
+            GlobalLogger.log.error(e) { "No se pudo eliminar el zip temporal: ${e.message}" }
         }
 
-        // 3. Configurar Gradle con el nombre y versión del proyecto
+        // 3. Configurar Gradle con el nombre, versión y entrypoint del proyecto.
+        // cleanProjectAndCreateBootstrapping() (paso 5) borra server/ y crea
+        // <packageName>.Bootstrapping con fun main(), así que el mainClass
+        // heredado del template ("server.SetupKt") debe apuntar ahí en su lugar.
+        val targetPackageName = this.packageName
+        val mainClass = if (this.cleanProject) "$targetPackageName.BootstrappingKt" else "server.SetupKt"
         GradleConfigurator.configure {
             this.rootProjectName = projectName
             this.version = moduleVersion
             this.projectRootPath = projectRoot.absolutePath
+            this.mainClassFqcn = mainClass
         }
 
         // 4. Resolver process manager en libs/ (local-first, remote fallback)
@@ -57,9 +78,11 @@ class ExecutableJarBuilder(
         resolveAndCopyProcessManagerJar(context, libsDir, "octopus-$octopusVersion.jar")
 
         // 5. LIMPIAR el proyecto y crear scripts
-        cleanProjectAndCreateBootstrapping(projectRoot, normalizedType)
+        if (this.cleanProject) {
+            cleanProjectAndCreateBootstrapping(projectRoot, normalizedType)
+        }
 
-        println("✅ Proyecto listo en: ${projectRoot.absolutePath}")
+        GlobalLogger.log.info { "Proyecto listo en: ${projectRoot.absolutePath}" }
     }
 
     private fun cleanProjectAndCreateBootstrapping(projectRoot: File, normalizedType: String) {
@@ -69,14 +92,14 @@ class ExecutableJarBuilder(
             throw IllegalStateException("Model project missing src/main/kotlin")
         }
 
-        println("🧹 LIMPIANDO PROYECTO - Eliminando solo io.mp, server, http.controllers")
-        println("📂 projectRoot: ${projectRoot.absolutePath}")
+        GlobalLogger.log.info { "LIMPIANDO PROYECTO - Eliminando solo io.mp, server, http.controllers" }
+        GlobalLogger.log.info { "projectRoot: ${projectRoot.absolutePath}" }
 
         // 1. Buscar Bootstrapping.kt original (está en io/mp/)
         val originalBootstrapping = findFileByName(kotlinRoot.toFile(), "Bootstrapping.kt")
             ?: throw IllegalStateException("Bootstrapping.kt not found in model project")
 
-        println("🔍 Bootstrapping original encontrado en: ${originalBootstrapping.absolutePath}")
+        GlobalLogger.log.info { "Bootstrapping original encontrado en: ${originalBootstrapping.absolutePath}" }
 
         // 2. Leer y preparar el nuevo contenido
         val originalContent = originalBootstrapping.readText(Charsets.UTF_8)
@@ -94,20 +117,20 @@ class ExecutableJarBuilder(
         // 3. Buscar y respaldar temporalmente la carpeta extensions (si existe)
         val extensionsBackup = backupExtensions(kotlinRoot.toFile())
 
-        // 4. ELIMINAR SOLO LAS CARPETAS ESPECÍFICAS (NO TODO)
-        println("🗑️ Eliminando carpetas no deseadas:")
+        // 4. Delete only specific folders (not everything)
+        GlobalLogger.log.info { "Eliminando carpetas no deseadas:" }
 
         // Lista de carpetas a eliminar (solo las que están en la raíz de kotlin)
         val foldersToDelete = listOf("io", "http", "server")
 
         kotlinRoot.toFile().listFiles()?.forEach { file ->
             if (file.isDirectory && file.name in foldersToDelete) {
-                println("   Eliminando carpeta: ${file.name}")
+                GlobalLogger.log.info { "   Eliminando carpeta: ${file.name}" }
                 file.deleteRecursively()
             } else if (file.isFile) {
-                println("   Conservando archivo: ${file.name}")
+                GlobalLogger.log.info { "   Conservando archivo: ${file.name}" }
             } else if (file.isDirectory && file.name !in foldersToDelete) {
-                println("   Conservando carpeta: ${file.name}")
+                GlobalLogger.log.info { "   Conservando carpeta: ${file.name}" }
             }
         }
 
@@ -131,7 +154,7 @@ class ExecutableJarBuilder(
         }
 
         targetBootstrapping.writeText(newBootstrappingContent, Charsets.UTF_8)
-        println("✅ Bootstrapping creado en: ${targetBootstrapping.absolutePath}")
+        GlobalLogger.log.info { "Bootstrapping creado en: ${targetBootstrapping.absolutePath}" }
 
         // 8. Limpiar directorios vacíos (opcional)
         cleanupEmptyDirectories(Paths.get(projectRoot.toString(), "src", "main"))
@@ -143,7 +166,7 @@ class ExecutableJarBuilder(
 
         val tempDir = File(System.getProperty("java.io.tmpdir"), "ext_${System.currentTimeMillis()}")
         extensionsDir.copyRecursively(tempDir, overwrite = true)
-        println("📦 Extensions respaldadas temporalmente en: ${tempDir.absolutePath}")
+        GlobalLogger.log.info { "Extensions respaldadas temporalmente en: ${tempDir.absolutePath}" }
         return tempDir
     }
 
@@ -151,7 +174,7 @@ class ExecutableJarBuilder(
         val extensionsDir = File(kotlinRoot, EXTENSIONS_FOLDER_NAME)
         backup.copyRecursively(extensionsDir, overwrite = true)
         backup.deleteRecursively()
-        println("✅ Extensions restauradas en: ${extensionsDir.absolutePath}")
+        GlobalLogger.log.info { "Extensions restauradas en: ${extensionsDir.absolutePath}" }
     }
 
     private fun cleanupEmptyDirectories(path: Path) {
@@ -162,7 +185,7 @@ class ExecutableJarBuilder(
                 try {
                     if (Files.list(dir).count() == 0L) {
                         Files.delete(dir)
-                        println("📁 Directorio vacío eliminado: ${dir.toAbsolutePath()}")
+                        GlobalLogger.log.info { "Directorio vacío eliminado: ${dir.toAbsolutePath()}" }
                     }
                 } catch (e: Exception) {
                     // Ignorar errores al limpiar
@@ -310,14 +333,4 @@ class ExecutableJarBuilder(
         }
     }
 
-    class Builder {
-        var context: String = ""
-        var projectName: String = "undefined"
-        var version: String = "0.0.0"
-        var packageName: String = ""
-        var artifactType: String = ""
-        var scripts: Map<String, String> = emptyMap()  // 👈 AGREGADO!
-
-        fun build() = ExecutableJarBuilder(this)
-    }
 }

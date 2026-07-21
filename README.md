@@ -32,6 +32,7 @@ Tech tags:
 - Getting started: https://koupper.com/getting-started.html
 - Command reference: https://koupper.com/commands/
 - Provider catalog: https://koupper.com/providers/
+- Agentic Core: https://koupper.com/agentic-core/
 
 ## Quick install (standalone, no repo clone)
 
@@ -118,18 +119,27 @@ Expected result:
 
 - **Kotlin-first, type-safe scripts** instead of ad-hoc shell glue.
 - **Production-grade Web Engine**: Powered by Grizzly NIO for high-concurrency APIs.
-- **Provider-first architecture** for cloud, infra, and workflow capabilities.
-- **Declarative Security**: Use `@Auth` and `@Authorize` annotations that work across scripts and HTTP routes.
+- **Provider-first architecture** with tier classification (CORE / COMMUNITY / EXPERIMENTAL).
+- **Declarative Security**: JWT auth with scopes (`koupper:read`, `koupper:execute`, `koupper:admin`) + `@Auth`/`@Authorize` annotations.
+- **HTTP REST API** (port 9997): Run scripts, health checks, status, job queues via JDK `HttpServer`.
+- **gRPC Bidirectional Streaming** (port 9996): Real-time job dispatch and status updates.
+- **Prometheus Metrics** (port 9999): Runtime observability in exposition format.
+- **OpenTelemetry Tracing**: Automatic span creation with W3C context propagation.
+- **Script Sandboxing**: Process Isolation via JVM ProcessBuilder, timeout enforcement, `System.exit()` interception, thread isolation.
+- **Real-Time Streaming**: Server-Sent Events (SSE) out-of-the-box for logging long-running background tasks to frontend clients.
+- **Hot-Reloading**: Dynamic plugin and provider reloading via custom `URLClassLoader` and `koupper reload` CLI without Daemon restarts.
+- **KSP Annotation Processing**: Compiler-accurate `@Export`/`@Scheduled`/`@Pipeline` extraction (no regex guessing).
 - **Local-first developer workflow** with production hardening paths.
 - **Predictable runtime contract** (`@Export` single entrypoint + pipeline orchestration).
 
 ## Typical use cases
 
-- **High-performance HTTP APIs**: Backed by Grizzly and Jersey filters.
+- **High-performance HTTP APIs**: Backed by Grizzly, featuring native Multipart parsing, CORS support, and Global Exception Handling.
 - **Script-driven backend workers** and async jobs.
 - **Deployment orchestration** and infra workflows.
 - **Operational automations** (GitHub, Docker, SSH, notifications, queue ops).
-- **AI/LLM pipelines** with typed script inputs.
+- **AI-Native Agents**: Build 100% local autonomous agents with the built-in **Agentic Core** and ReAct loop.
+- **LLM pipelines** with typed script inputs and structured output validation.
 
 ## Documentation hierarchy
 

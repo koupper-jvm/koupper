@@ -13,4 +13,11 @@ class SenderServiceProvider : ServiceProvider() {
             SenderHtmlEmail()
         })
     }
+
+    override fun topLevelFunctions(): Map<String, String> = mapOf(
+        "mailing" to """
+            import com.koupper.providers.mailing.Sender
+            fun mailing(): Sender = com.koupper.container.app.getInstance(Sender::class)
+        """.trimIndent()
+    )
 }

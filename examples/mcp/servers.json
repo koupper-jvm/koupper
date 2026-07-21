@@ -1,0 +1,29 @@
+[
+  {
+    "name": "playwright",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["@playwright/mcp", "--headless"]
+  },
+  {
+    "name": "filesystem",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home"]
+  },
+  {
+    "name": "github",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "env": {
+      "GITHUB_PERSONAL_ACCESS_TOKEN": "your-token-here"
+    }
+  },
+  {
+    "name": "postgres",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+  }
+]

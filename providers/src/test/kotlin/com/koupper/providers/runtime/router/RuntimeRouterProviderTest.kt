@@ -1,6 +1,7 @@
 package com.koupper.providers.runtime.router
 
 import io.kotest.core.spec.style.AnnotationSpec
+import com.koupper.shared.runtime.GlobalRouteRegistry
 import java.net.ServerSocket
 import java.net.URI
 import java.net.http.HttpClient
@@ -10,6 +11,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RuntimeRouterProviderTest : AnnotationSpec() {
+
+    @Before
+    fun clearRegistry() {
+        GlobalRouteRegistry.routes.clear()
+    }
 
     private fun freePort(): Int = ServerSocket(0).use { it.localPort }
 

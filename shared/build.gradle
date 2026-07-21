@@ -11,6 +11,16 @@ application {
 version = '1.0.0'
 group = 'com.koupper'
 
+dependencies {
+    implementation "com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0"
+    implementation "com.fasterxml.jackson.core:jackson-databind:2.17.0"
+    implementation "com.fasterxml.jackson.core:jackson-annotations:2.17.0"
+    implementation "io.opentelemetry:opentelemetry-api:1.40.0"
+    implementation "io.opentelemetry:opentelemetry-sdk:1.40.0"
+    implementation "io.opentelemetry:opentelemetry-sdk-trace:1.40.0"
+    implementation "io.opentelemetry:opentelemetry-exporter-logging:1.40.0"
+}
+
 jar {
     manifest {
         attributes 'Main-Class': 'com.koupper.shared.ExtensionsKt'

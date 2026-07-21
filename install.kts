@@ -3,7 +3,7 @@ import java.io.FileDescriptor
 import java.io.FileOutputStream
 import java.io.PrintStream
 import java.net.URL
-import java.util.Locale
+import java.util.*
 import java.util.zip.ZipInputStream
 import kotlin.system.exitProcess
 
@@ -85,6 +85,21 @@ fun downloadAndExtractRepoZip(repo: String, branch: String, targetDir: File): Fi
 
 fun ensureCachedRepo(cacheRoot: File, cacheName: String, repo: String, branch: String): File {
     val cacheDir = File(cacheRoot, cacheName)
+    
+    // 🔥 LOCAL-FIRST: Detect if we are running from a local monorepo
+    val currentDir = File(".").absoluteFile
+    val localKoupper = if (currentDir.name == "koupper") currentDir else File(currentDir, "koupper")
+    val localCli = if (currentDir.name == "koupper-cli") currentDir else File(currentDir, "koupper-cli")
+
+    if (cacheName == "koupper" && localKoupper.exists() && File(localKoupper, "gradlew").exists()) {
+        println("🔥 [LOCAL_DEV] Using local Koupper sources from ${localKoupper.absolutePath}")
+        return localKoupper
+    }
+    if (cacheName == "koupper-cli" && localCli.exists() && File(localCli, "gradlew").exists()) {
+        println("🔥 [LOCAL_DEV] Using local Koupper-CLI sources from ${localCli.absolutePath}")
+        return localCli
+    }
+
     val marker = File(cacheDir, ".source")
 
     if (!cacheRoot.exists()) cacheRoot.mkdirs()
@@ -280,7 +295,7 @@ val cliCompilation = ProcessBuilder(
 
 cliCompilation.waitFor()
 
-val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "$gradleCmd :octopus:fatJar -x test")
+val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "$gradleCmd :octopus:shadowJar -x test")
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
     .apply {

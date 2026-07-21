@@ -12,4 +12,16 @@ class AwsServiceProvider: ServiceProvider() {
             DynamoClient::class, { DynamoClientImpl() }
         )
     }
+
+    override fun externalDependencies() = listOf(
+        "software.amazon.awssdk:dynamodb:2.25.10",
+        "software.amazon.awssdk:netty-nio-client:2.25.10"
+    )
+
+    override fun topLevelFunctions(): Map<String, String> = mapOf(
+        "dynamo" to """
+            import com.koupper.providers.aws.dynamo.DynamoClient
+            fun dynamo(): DynamoClient = com.koupper.container.app.getInstance(DynamoClient::class)
+        """.trimIndent()
+    )
 }

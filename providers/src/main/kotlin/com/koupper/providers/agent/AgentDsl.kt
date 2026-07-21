@@ -1,0 +1,93 @@
+package com.koupper.providers.agent
+
+import com.fasterxml.jackson.annotation.JsonInclude
+
+/**
+ * Marks the Koupper Agent DSL.
+ */
+@DslMarker
+annotation class AgentDsl
+
+@AgentDsl
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class AgentConfig(
+    val name: String,
+    val role: RoleConfig,
+    val tools: List<String>,
+    val task: TaskConfig<*>,
+    // String? instead of Any? — makes dispatchToQueue serialization deterministic.
+    // Jackson can't round-trip Any? without @JsonTypeInfo; callers always pass JSON strings.
+    val contextFromPrevious: String? = null
+)
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class RoleConfig(
+    val identity: String,
+    val goal: String,
+    val instructions: String
+)
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class TaskConfig<T : Any>(
+    val outputSchema: Class<T>,
+    val prompt: String
+)
+
+// --- DSL Builders ---
+
+@AgentDsl
+class AgentBuilder {
+    var name: String = "anonymous-agent"
+    private var roleConfig: RoleConfig? = null
+    private val toolsList = mutableListOf<String>()
+    var taskConfig: TaskConfig<*>? = null
+    var contextFromPrevious: String? = null
+
+    fun role(block: RoleBuilder.() -> Unit) {
+        roleConfig = RoleBuilder().apply(block).build()
+    }
+
+    fun tools(block: ToolsBuilder.() -> Unit) {
+        toolsList.addAll(ToolsBuilder().apply(block).build())
+    }
+
+    inline fun <reified T : Any> task(block: TaskBuilder<T>.() -> Unit) {
+        taskConfig = TaskBuilder(T::class.java).apply(block).build()
+    }
+
+    fun build(): AgentConfig {
+        requireNotNull(roleConfig) { "Agent role must be defined via role { ... }" }
+        requireNotNull(taskConfig) { "Agent task must be defined via task<T> { ... }" }
+        return AgentConfig(name, roleConfig!!, toolsList, taskConfig!!, contextFromPrevious)
+    }
+}
+
+@AgentDsl
+class RoleBuilder {
+    var identity: String = ""
+    var goal: String = ""
+    var instructions: String = ""
+
+    fun build() = RoleConfig(identity, goal, instructions)
+}
+
+@AgentDsl
+class ToolsBuilder {
+    private val tools = mutableListOf<String>()
+    fun use(providerName: String) { tools.add(providerName) }
+    fun build() = tools
+}
+
+@AgentDsl
+class TaskBuilder<T : Any>(private val schema: Class<T>) {
+    var prompt: String = ""
+
+    fun build() = TaskConfig(schema, prompt)
+}
+
+/**
+ * Entry point for the Koupper Agentic DSL.
+ */
+fun agent(block: AgentBuilder.() -> Unit): AgentConfig {
+    return AgentBuilder().apply(block).build()
+}

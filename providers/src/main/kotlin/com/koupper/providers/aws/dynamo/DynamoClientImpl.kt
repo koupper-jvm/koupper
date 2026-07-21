@@ -143,7 +143,7 @@ class DynamoClientImpl private constructor(
     }
 
     override fun insertItem(tableName: String, jsonItem: String) {
-        val mapper = JSONFileHandlerImpl<Map<String, Any?>>()
+        val mapper = JSONFileHandlerImpl()
         val item: Map<String, Any?> = mapper.read(jsonItem).toType()
         insertItem(tableName, item)
     }
@@ -271,6 +271,7 @@ class DynamoClientImpl private constructor(
             dynamoDbClient.updateItem(updateRequest)
         } catch (e: Exception) {
             println("Error updating item: ${e.message}")
+            throw e
         }
     }
 
@@ -286,6 +287,7 @@ class DynamoClientImpl private constructor(
             dynamoDbClient.deleteItem(deleteRequest)
         } catch (e: Exception) {
             println("Error deleting item: ${e.message}")
+            throw e
         }
     }
 
@@ -411,7 +413,7 @@ class DynamoClientImpl private constructor(
         if (cursor.isNullOrEmpty()) return null
 
         val payload = cursor.mapValues { convertAttributeValue(it.value) }
-        val json = JSONFileHandlerImpl<Map<String, Any?>>().toJsonString(payload)
+        val json = JSONFileHandlerImpl().toJson(payload)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray(Charsets.UTF_8))
     }
 
@@ -419,7 +421,7 @@ class DynamoClientImpl private constructor(
         if (base64.isNullOrBlank()) return null
 
         val decoded = String(Base64.getUrlDecoder().decode(base64), Charsets.UTF_8)
-        val map = JSONFileHandlerImpl<Map<String, Any?>>().read(decoded).toType<Map<String, Any?>>()
+        val map = JSONFileHandlerImpl().read(decoded).toType<Map<String, Any?>>()
         return map.mapValues { (_, value) -> value?.let(::processValue) ?: AttributeValue.builder().nul(true).build() }
     }
 
