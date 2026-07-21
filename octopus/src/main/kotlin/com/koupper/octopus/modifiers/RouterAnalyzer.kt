@@ -10,9 +10,9 @@ class RouterAnalyzer {
         moduleDir: File,
         port: Int = 0,
         outputFileName: String = "controllers.json"
-    ) {
+    ): List<Map<String, Any?>> {
         val srcRoot = File(moduleDir, "src/main/kotlin")
-        if (!srcRoot.exists()) return
+        if (!srcRoot.exists()) return emptyList()
 
         val routerFiles = srcRoot
             .walkTopDown()
@@ -20,7 +20,7 @@ class RouterAnalyzer {
             .filter { isRouterFile(it.readText()) }
             .toList()
 
-        if (routerFiles.isEmpty()) return
+        if (routerFiles.isEmpty()) return emptyList()
 
         val handlerGenerics = mutableMapOf<String, Pair<String, String>>()
         val handlerRegex = Regex("""(?s)class\s+([A-Za-z_]\w*).*?(?::|implements)\s*KHandler\s*<\s*([^,]+)\s*,\s*([^>]+)\s*>""")
@@ -37,8 +37,6 @@ class RouterAnalyzer {
                 }
             }
 
-        val allControllersData = mutableListOf<Map<String, Any?>>()
-
         val routersData = routerFiles
             .map { routerFile ->
                 val content = routerFile.readText()
@@ -54,10 +52,11 @@ class RouterAnalyzer {
             .filter { (it["endpoints"] as List<*>).isNotEmpty() }
             .toList()
 
-        if (routersData.isEmpty()) return
+        if (routersData.isEmpty()) return emptyList()
 
         val monitor = app.getInstance(com.koupper.shared.monitoring.ExecutionMonitor::class)
         monitor.reportPayload("routers", routersData)
+        return routersData
     }
 
     private fun isRouterFile(content: String): Boolean {
@@ -118,9 +117,16 @@ class RouterAnalyzer {
                 }
             }
 
+            val scriptRef = Regex("""\bscript\s*\{\s*::([A-Za-z_]\w*)""")
+                .find(bodyContent)?.groupValues?.get(1)
+
             val functionRegex = Regex("""\bfun\s+([A-Za-z_]\w*)\s*\(""")
             val functionMatch = functionRegex.find(bodyContent)
             val functionName = functionMatch?.groupValues?.get(1) ?: "anonymous"
+
+            if (handlerName == "UnknownHandler") {
+                handlerName = scriptRef ?: functionName
+            }
 
             results.add(
                 mapOf(

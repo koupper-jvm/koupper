@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Fixed
+- **`koupper module` V7 DX**: show RuntimeRouter routes + `@Export` symbols; detect octopus from Gradle; skip noisy script compile during module scan; quiet `[DEBUG] Compiling` via `koupper.scripting.quiet`.
 - **Job worker sourceType**: `::fn.asJob()` from compiled modules now routes as `compiled` (`.kt` sources are not Kotlin scripts). Worker accepts legacy uppercase `SCRIPT`/`COMPILED` and treats legacy `SCRIPT` + module `.kt` payloads as compiled.
 - **CORS Allow-Origin**: echo a single matching request `Origin` (or `*`) instead of joining the allow-list with commas, which browsers reject.
 

@@ -2,15 +2,12 @@ package com.koupper.octopus.process
 
 import com.koupper.configurations.utilities.ANSIColors.ANSI_CYAN
 import com.koupper.configurations.utilities.ANSIColors.ANSI_GREEN
-import com.koupper.configurations.utilities.ANSIColors.ANSI_RED
 import com.koupper.configurations.utilities.ANSIColors.ANSI_RESET
 import com.koupper.configurations.utilities.ANSIColors.ANSI_YELLOW_229
 import com.koupper.container.app
 import com.koupper.octopus.modifiers.ControllersAnalyzer
 import com.koupper.octopus.modifiers.RouterAnalyzer
-import com.koupper.octopus.modules.validateScript
 import com.koupper.orchestrator.config.JobConfig
-import com.koupper.shared.monitoring.ExecutionMonitor
 import com.koupper.shared.octopus.extractExportFunctionSignature
 import java.io.File
 
@@ -32,13 +29,16 @@ class ModuleAnalyzer(private val context: String) : Process {
 
         val version = getVersionFrom(baseDir)
         val basePackage = detectProjectBasePackage(baseDir) ?: "❌ Not found"
+        val octopusDep = detectOctopusDependency(baseDir)
 
         val handlers = discoverHandlers(baseDir)
-        val handlersStatus = if (handlers.khandlerNames.isNotEmpty() || handlers.awsRequestHandlerNames.isNotEmpty()) "✔️" else "❌"
+        val exports = discoverExports(baseDir)
+        val handlersStatus = if (handlers.khandlerNames.isNotEmpty() || handlers.awsRequestHandlerNames.isNotEmpty()) "✔️" else "—"
 
         val port = runCatching { extractServerPort(baseDir)?.toInt() }.getOrNull()
         ControllersAnalyzer().analyzeControllers(baseDir, port = port ?: 0)
-        RouterAnalyzer().analyzeRouters(baseDir, port = port ?: 0)
+        val routers = RouterAnalyzer().analyzeRouters(baseDir, port = port ?: 0)
+        val routeCount = routers.sumOf { (it["endpoints"] as? List<*>)?.size ?: 0 }
 
         val info = buildString {
             appendLine("${ANSI_CYAN}📦 Module Setup Info:${ANSI_RESET}")
@@ -46,30 +46,46 @@ class ModuleAnalyzer(private val context: String) : Process {
             appendLine("  ${ANSI_YELLOW_229}- Type${ANSI_RESET}          : $type")
             appendLine("  ${ANSI_YELLOW_229}- Version${ANSI_RESET}       : $version")
             appendLine("  ${ANSI_YELLOW_229}- Base package${ANSI_RESET}  : $basePackage")
+            appendLine("  ${ANSI_YELLOW_229}- Octopus${ANSI_RESET}       : ${octopusDep ?: "not declared in build.gradle / libs"}")
             appendLine("")
-            appendLine("  ${ANSI_YELLOW_229}- Handlers${ANSI_RESET}      : $handlersStatus")
-            appendLine("      • Total source files       : ${handlers.sourceFiles.size}")
-            appendLine("      • KHandler impls           : ${handlers.khandlerNames.size}")
-            appendLine("      • AWS RequestHandler impls : ${handlers.awsRequestHandlerNames.size}")
-            appendLine("")
-
-            appendLine("  🗂️ Module Structure:")
-            appendLine("")
-
-            if (handlers.khandlerNames.isEmpty() && handlers.awsRequestHandlerNames.isEmpty()) {
-                appendLine("      ${ANSI_RED}No supported handlers found${ANSI_RESET}")
-            } else {
-                if (handlers.khandlerNames.isNotEmpty()) {
-                    appendLine("      ${ANSI_YELLOW_229}KHandler:${ANSI_RESET}")
-                    handlers.khandlerNames.sorted().forEach { n ->
-                        appendLine("        ✔️ ${ANSI_GREEN}$n${ANSI_RESET}")
+            appendLine("  ${ANSI_YELLOW_229}- Routes (V7)${ANSI_RESET}  : ${if (routeCount > 0) "✔️ $routeCount endpoint(s)" else "❌"}")
+            if (routers.isNotEmpty()) {
+                routers.forEach { router ->
+                    val name = router["controller"]?.toString() ?: "unknown"
+                    val endpoints = (router["endpoints"] as? List<*>).orEmpty()
+                    appendLine("      • $name (${endpoints.size})")
+                    endpoints.forEach { ep ->
+                        val m = ep as? Map<*, *> ?: return@forEach
+                        val method = m["method"]?.toString() ?: "?"
+                        val path = m["path"]?.toString() ?: "?"
+                        val handler = m["handler"]?.toString() ?: "?"
+                        appendLine("          ${ANSI_GREEN}$method${ANSI_RESET} $path  → $handler")
                     }
                 }
-                if (handlers.awsRequestHandlerNames.isNotEmpty()) {
-                    appendLine("      ${ANSI_YELLOW_229}AWS RequestHandler:${ANSI_RESET}")
-                    handlers.awsRequestHandlerNames.sorted().forEach { n ->
-                        appendLine("        ✔️ ${ANSI_GREEN}$n${ANSI_RESET}")
-                    }
+            }
+            appendLine("")
+            appendLine("  ${ANSI_YELLOW_229}- Exports (@Export)${ANSI_RESET}: ${if (exports.isNotEmpty()) "✔️ ${exports.size}" else "—"}")
+            exports.sorted().take(30).forEach { n ->
+                appendLine("      • ${ANSI_GREEN}$n${ANSI_RESET}")
+            }
+            if (exports.size > 30) appendLine("      … +${exports.size - 30} more")
+            appendLine("")
+            appendLine("  ${ANSI_YELLOW_229}- Legacy handlers${ANSI_RESET}: $handlersStatus")
+            appendLine("      • KHandler impls           : ${handlers.khandlerNames.size}")
+            appendLine("      • AWS RequestHandler impls : ${handlers.awsRequestHandlerNames.size}")
+
+            if (handlers.khandlerNames.isNotEmpty()) {
+                appendLine("")
+                appendLine("      ${ANSI_YELLOW_229}KHandler:${ANSI_RESET}")
+                handlers.khandlerNames.sorted().forEach { n ->
+                    appendLine("        ✔️ ${ANSI_GREEN}$n${ANSI_RESET}")
+                }
+            }
+            if (handlers.awsRequestHandlerNames.isNotEmpty()) {
+                appendLine("")
+                appendLine("      ${ANSI_YELLOW_229}AWS RequestHandler:${ANSI_RESET}")
+                handlers.awsRequestHandlerNames.sorted().forEach { n ->
+                    appendLine("        ✔️ ${ANSI_GREEN}$n${ANSI_RESET}")
                 }
             }
         }
@@ -77,7 +93,9 @@ class ModuleAnalyzer(private val context: String) : Process {
         val data = mapOf(
             "folders" to folders,
             "files" to files,
-            "more_info" to info
+            "more_info" to info,
+            "routers" to routers,
+            "exports" to exports
         )
 
         app.getInstance(com.koupper.shared.monitoring.ExecutionMonitor::class).reportPayload("module-analysis", data)
@@ -187,6 +205,7 @@ class ModuleAnalyzer(private val context: String) : Process {
         val result = mutableListOf<Map<String, Any?>>()
         val handlerRegex = Regex("class\\s+\\w+\\s*:\\s*(Setup|RequestHandler<.*>)")
         val controllerRegex = Regex("@Path\\(")
+        val routerRegex = Regex("""\b(RuntimeRouterDsl|registerRouter\s*\{|\b(get|post|put|delete|patch)\s*<)""")
         val dirs = baseDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
 
         dirs.forEach { dir ->
@@ -200,6 +219,7 @@ class ModuleAnalyzer(private val context: String) : Process {
             if (allFiles.any { it.extension in listOf("yml", "yaml", "json") }) tags.add("[cfg]")
             if (kotlinFiles.any { handlerRegex.containsMatchIn(it.readText()) }) tags.add("[hndlrs]")
             if (kotlinFiles.any { controllerRegex.containsMatchIn(it.readText()) }) tags.add("[ctrls]")
+            if (kotlinFiles.any { routerRegex.containsMatchIn(it.readText()) }) tags.add("[router]")
 
             if (tags.isNotEmpty()) {
                 result.add(mapOf("folder" to dir.name, "tags" to tags.toList()))
@@ -235,9 +255,12 @@ class ModuleAnalyzer(private val context: String) : Process {
             }
 
             if (file.extension in listOf("kt", "kts")) {
-                val validation = validateScript(file.path)
-                if (validation.isSuccess) {
-                    extractExportFunctionSignature(file.readText())?.let { sig ->
+                val text = runCatching { file.readText() }.getOrNull().orEmpty()
+                if (Regex("""%[A-Z][A-Z0-9_]*%""").containsMatchIn(text)) {
+                    tags.add("[template]")
+                } else {
+                    // Signature-only: do not compile/eval here (avoids noisy module scans).
+                    extractExportFunctionSignature(text)?.let { sig ->
                         tags.add("[script]")
                         signature = "(${sig.parameterTypes.joinToString(", ")}) -> ${sig.returnType}"
                     }
@@ -250,6 +273,34 @@ class ModuleAnalyzer(private val context: String) : Process {
         }
 
         return files
+    }
+
+    private fun discoverExports(baseDir: File): List<String> {
+        val src = File(baseDir, "src/main/kotlin")
+        if (!src.exists()) return emptyList()
+        val exportRegex = Regex("""@Export\s+(?:@[A-Za-z_][\w.]*\s*)*(?:val|fun)\s+([A-Za-z_]\w*)""")
+        return src.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .flatMap { file ->
+                exportRegex.findAll(file.readText()).map { it.groupValues[1] }
+            }
+            .distinct()
+            .toList()
+    }
+
+    private fun detectOctopusDependency(baseDir: File): String? {
+        val libsJar = File(baseDir, "libs").listFiles { f ->
+            f.isFile && f.name.startsWith("octopus-") && f.name.endsWith(".jar")
+        }?.maxByOrNull { it.lastModified() }
+        if (libsJar != null) {
+            return "${libsJar.name} (libs/)"
+        }
+
+        val buildText = readGradleBuildFile(baseDir) ?: return null
+        val coord = Regex("""com\.koupper:octopus:([^\s"'\\)]+)""")
+            .find(buildText)?.groupValues?.get(1)
+            ?: return null
+        return "com.koupper:octopus:$coord (gradle)"
     }
 
     private fun getVersionFrom(moduleDir: File): String {
