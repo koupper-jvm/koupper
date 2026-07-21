@@ -15,9 +15,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **CORS + ExceptionHandler DSL** blocks for global middleware.
 - **FileHandler** fs ops + `TextFileHandler` stateless file methods.
 - **Request context attributes** with native support for `PUT`, `PATCH`, `DELETE` methods.
+- **Dual-generic routing DSL** support for strongly-typed request/response handlers.
 
 ### Fixed
 - **Build**: `install.kts` uses `shadowJar` instead of removed `fatJar` task.
+- **Release publish**: GitHub Actions install-asset workflow builds `:octopus:shadowJar` (community standalone install).
+- **Router defensive errors**: missing/invalid params return `400` (NPE / IndexOutOfBounds) instead of crashing the server; fatal handler errors are logged.
 - **Module-info**: Excluded from both optimized JAR and shadowJar to fix JPMS classloader issues.
 - **Script compilation**: Scripts compile against module-info-stripped JAR copy.
 - **SseEmitter buffering**: Events buffered until stream callbacks register.
@@ -27,6 +30,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Release alignment
 - `octopus 7.2.0` / `koupper-cli 7.2.0`
+- Community install via `install-standalone.kts` from GitHub Release `v7.2.0` (Windows / Linux / macOS).
 
 ---
 

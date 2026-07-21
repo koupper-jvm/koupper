@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v6.5.0)'
+        description: 'Release tag (e.g. v7.2.0)'
         required: true
         type: string
 
@@ -28,7 +28,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: koupper-jvm/koupper-cli
-          ref: develop
+          # Community releases ship CLI from main (keep main synced with develop before tagging).
+          ref: main
           path: koupper-cli
 
       - name: Setup Java 17
@@ -61,7 +62,8 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew :octopus:fatJar -x test
+          # fatJar was removed in v7; shadowJar is the standalone runtime artifact
+          ./gradlew :octopus:shadowJar -x test
 
       - name: Build standalone CLI jar
         shell: bash
@@ -78,7 +80,10 @@ jobs:
           DIST_DIR="${RUNNER_TEMP}/koupper-dist"
           mkdir -p "${DIST_DIR}"
 
-          OCTOPUS_JAR=$(ls octopus/build/libs/*.jar | grep -vE 'sources|javadoc' | head -n1)
+          OCTOPUS_JAR=$(ls octopus/build/libs/*-all.jar 2>/dev/null | head -n1 || true)
+          if [[ -z "${OCTOPUS_JAR}" ]]; then
+            OCTOPUS_JAR=$(ls octopus/build/libs/*.jar | grep -vE 'sources|javadoc|optimized' | head -n1)
+          fi
           CLI_JAR=$(ls koupper-cli/build/libs/*.jar | grep -vE 'sources|javadoc' | head -n1)
 
           cp "${OCTOPUS_JAR}" "${DIST_DIR}/octopus.jar"
