@@ -14,6 +14,8 @@ private const val SCRIPT_WARNINGS_PROPERTY = "koupper.scripting.showWarnings"
 private const val SCRIPT_WARNINGS_ENV = "KOUPPER_SCRIPT_WARNINGS"
 private const val SCRIPT_NOISY_WARNINGS_PROPERTY = "koupper.scripting.showNoisyWarnings"
 private const val SCRIPT_NOISY_WARNINGS_ENV = "KOUPPER_SCRIPT_NOISY_WARNINGS"
+private const val SCRIPT_QUIET_PROPERTY = "koupper.scripting.quiet"
+private const val SCRIPT_QUIET_ENV = "KOUPPER_SCRIPTING_QUIET"
 
 private fun runtimeFlag(propertyName: String, envName: String, default: Boolean): Boolean {
     val fromProperty = System.getProperty(propertyName)?.trim()
@@ -21,6 +23,12 @@ private fun runtimeFlag(propertyName: String, envName: String, default: Boolean)
     val raw = fromProperty?.takeIf { it.isNotBlank() } ?: fromEnv?.takeIf { it.isNotBlank() } ?: return default
 
     return raw.equals("true", ignoreCase = true) || raw == "1" || raw.equals("yes", ignoreCase = true)
+}
+
+private fun isScriptingQuiet(sourceName: String? = null): Boolean {
+    if (runtimeFlag(SCRIPT_QUIET_PROPERTY, SCRIPT_QUIET_ENV, default = false)) return true
+    val name = sourceName.orEmpty().replace('\\', '/')
+    return name.contains("/.koupper/helpers/") || name.endsWith("/list.kts") || name == "list.kts"
 }
 
 private fun shouldDisplayWarning(diagnostic: ScriptDiagnostic): Boolean {
@@ -281,15 +289,19 @@ class ScriptingHostBackend(
         tempFile.writeText(code)
         val source = tempFile.toScriptSource()
 
+        fun debug(msg: String) {
+            if (!isScriptingQuiet(scriptSourceName)) println(msg)
+        }
+
         // Try to retrieve a previously compiled script (same content = same bytecode).
         // Check: 1) in-process cache, 2) disk cache, 3) compile fresh.
         val compiled: CompiledScript = compiledScriptCache[cacheKey]?.also {
-            println("[DEBUG] Loading $scriptSourceName from in-process cache")
+            debug("[DEBUG] Loading $scriptSourceName from in-process cache")
         } ?: loadFromDisk(cacheKey)?.also {
             compiledScriptCache[cacheKey] = it
-            println("[DEBUG] Loading $scriptSourceName from disk cache")
+            debug("[DEBUG] Loading $scriptSourceName from disk cache")
         } ?: run {
-            println("[DEBUG] Compiling $scriptSourceName with JVM target 17")
+            debug("[DEBUG] Compiling $scriptSourceName with JVM target 17")
             val compileResult = runBlocking { host.compiler(source, compilationConfig) }
 
             compileResult.reports
