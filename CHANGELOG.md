@@ -4,6 +4,12 @@ All notable changes to the Koupper monorepo are documented here.
 Versioning follows the Octopus engine version (`build.gradle`).
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Job worker sourceType**: `::fn.asJob()` from compiled modules now routes as `compiled` (`.kt` sources are not Kotlin scripts). Worker accepts legacy uppercase `SCRIPT`/`COMPILED` and treats legacy `SCRIPT` + module `.kt` payloads as compiled.
+- **CORS Allow-Origin**: echo a single matching request `Origin` (or `*`) instead of joining the allow-list with commas, which browsers reject.
+
 ## [7.2.0] - 2026-06-25
 
 ### Added
