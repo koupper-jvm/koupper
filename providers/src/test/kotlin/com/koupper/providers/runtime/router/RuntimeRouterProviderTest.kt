@@ -2,12 +2,14 @@ package com.koupper.providers.runtime.router
 
 import io.kotest.core.spec.style.AnnotationSpec
 import com.koupper.shared.runtime.GlobalRouteRegistry
+import com.koupper.shared.runtime.resolveCorsAllowOrigin
 import java.net.ServerSocket
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class RuntimeRouterProviderTest : AnnotationSpec() {
@@ -15,14 +17,16 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
     @Before
     fun clearRegistry() {
         GlobalRouteRegistry.routes.clear()
+        GlobalRouteRegistry.corsConfig = null
     }
 
     private fun freePort(): Int = ServerSocket(0).use { it.localPort }
 
-    private fun get(url: String): HttpResponse<String> {
+    private fun get(url: String, origin: String? = null): HttpResponse<String> {
         val client = HttpClient.newHttpClient()
-        val request = HttpRequest.newBuilder(URI(url)).GET().build()
-        return client.send(request, HttpResponse.BodyHandlers.ofString())
+        val builder = HttpRequest.newBuilder(URI(url)).GET()
+        if (origin != null) builder.header("Origin", origin)
+        return client.send(builder.build(), HttpResponse.BodyHandlers.ofString())
     }
 
     private fun post(url: String, body: String): HttpResponse<String> {
@@ -32,6 +36,48 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
             .header("Content-Type", "application/json")
             .build()
         return client.send(request, HttpResponse.BodyHandlers.ofString())
+    }
+
+    @Test
+    fun `resolveCorsAllowOrigin returns star for wildcard or empty`() {
+        assertEquals("*", resolveCorsAllowOrigin(listOf("*"), "https://igly.mx"))
+        assertEquals("*", resolveCorsAllowOrigin(emptyList(), "https://igly.mx"))
+        assertEquals("*", resolveCorsAllowOrigin(null, null))
+    }
+
+    @Test
+    fun `resolveCorsAllowOrigin echoes matching origin and rejects others`() {
+        val allowed = listOf("http://localhost:3000", "https://igly.mx")
+        assertEquals("https://igly.mx", resolveCorsAllowOrigin(allowed, "https://igly.mx"))
+        assertNull(resolveCorsAllowOrigin(allowed, "https://evil.example"))
+        assertNull(resolveCorsAllowOrigin(allowed, null))
+    }
+
+    @Test
+    fun `CORS allow-list echoes single Origin header`() {
+        val port = freePort()
+        val provider = GrizzlyRuntimeRouterProvider()
+        provider.registerRouter {
+            cors {
+                allowedOrigins = listOf("http://localhost:3000", "https://igly.mx")
+            }
+            get<String> {
+                path { "/cors-ok" }
+                script { { "ok" } }
+            }
+        }
+        provider.start(port)
+        try {
+            val allowed = get("http://127.0.0.1:$port/cors-ok", origin = "https://igly.mx")
+            assertEquals(200, allowed.statusCode())
+            assertEquals("https://igly.mx", allowed.headers().firstValue("Access-Control-Allow-Origin").orElse(null))
+
+            val denied = get("http://127.0.0.1:$port/cors-ok", origin = "https://evil.example")
+            assertEquals(200, denied.statusCode())
+            assertTrue(denied.headers().firstValue("Access-Control-Allow-Origin").isEmpty)
+        } finally {
+            provider.stop()
+        }
     }
 
     @Test
