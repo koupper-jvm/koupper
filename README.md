@@ -33,6 +33,7 @@ Tech tags:
 - Command reference: https://koupper.com/commands/
 - Provider catalog: https://koupper.com/providers/
 - Agentic Core: https://koupper.com/agentic-core/
+- Using Octopus in apps / Maven Local / Lambda: [`docs/USING_OCTOPUS_AS_DEPENDENCY.md`](docs/USING_OCTOPUS_AS_DEPENDENCY.md)
 
 ## Quick install (standalone, no repo clone)
 
@@ -77,6 +78,79 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\.koupper\logs" | Out-Null
 - End user install (`install-standalone.kts`): no repository clone, installs from latest release assets into `~/.koupper`.
 - Developer install (`install.kts`): clone the repository and build/install from source in your local workspace.
 - Both modes install runtime files under `~/.koupper`; the difference is where binaries/templates come from (release assets vs local source build).
+
+## Artifacts: SO daemon vs Maven dependency vs Lambda
+
+Koupper produces **different JARs for different jobs**. Do not mix them up.
+
+| Artifact | Gradle task | Typical size | Used for |
+|---|---|---|---|
+| **Runtime fat JAR** (`octopus-*-all.jar`) | `:octopus:shadowJar` | ~300MB | OS install → `~/.koupper/libs/octopus.jar` (CLI daemon) |
+| **Library JAR** (`optimized`) | `:octopus:publishToMavenLocal` | ~2MB | App dependency `com.koupper:octopus:<version>` |
+| **Your service JAR** | your project's `jar` / shadow | varies | AWS Lambda / deployable API |
+
+### Publish Octopus to Maven Local (apps / Lambda consumers)
+
+From a clone of this repo (or the workspace `koupper/` folder):
+
+```bash
+cd koupper
+./gradlew :octopus:publishToMavenLocal -x test
+```
+
+Windows:
+
+```powershell
+cd koupper
+.\gradlew.bat :octopus:publishToMavenLocal -x test
+```
+
+This publishes the **optimized** artifact to:
+
+`~/.m2/repository/com/koupper/octopus/<version>/`
+
+In your application (`build.gradle` / `build.gradle.kts`):
+
+```gradle
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    implementation("com.koupper:octopus:7.2.0")
+}
+```
+
+Then refresh Gradle / rebuild the app. Quizztea API, auth-service, and igly-comms all consume Octopus this way.
+
+### AWS Lambda packaging
+
+Koupper does **not** upload a Lambda zip by itself. The flow is:
+
+1. Publish Octopus to Maven Local (command above) — or resolve it from a shared Maven repo if you publish one.
+2. In **your** service project, declare `implementation("com.koupper:octopus:<version>")`.
+3. Build **your** deployable (fat JAR / zip) with your Lambda handler (`RequestHandler`, router bootstrap, etc.).
+4. Deploy that service artifact to AWS Lambda.
+
+The SO daemon JAR (`~/.koupper/libs/octopus.jar`) is for local/CLI execution only — it is not the Lambda package.
+
+### Rebuild the SO daemon JAR from source
+
+```bash
+./gradlew :octopus:shadowJar -x test
+# copy octopus/build/libs/octopus-*-all.jar → ~/.koupper/libs/octopus.jar
+```
+
+Also rebuild/install the CLI:
+
+```bash
+cd ../koupper-cli
+./gradlew jar -x test
+# copy build/libs/koupper-cli-*.jar → ~/.koupper/libs/koupper-cli.jar
+```
+
+Or use the maintainer workspace installer (`install-workspace.kts` / `scripts/setup/install.*`) which builds and places both.
 
 ## Developer/maintainer workspace install
 
