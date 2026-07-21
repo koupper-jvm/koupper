@@ -152,14 +152,28 @@ class RouteDispatcher {
                 return DispatchOutcome.Completed(status, finalOutput, explicitContentType, explicitHeaders)
             } catch (e: IllegalArgumentException) {
                 return DispatchOutcome.Completed(400, mapOf("error" to "Invalid input format", "detail" to (e.message ?: "")))
+            } catch (e: NullPointerException) {
+                return DispatchOutcome.Completed(
+                    400,
+                    mapOf("error" to "Missing required parameter or value", "detail" to (e.message ?: "Null reference"))
+                )
+            } catch (e: IndexOutOfBoundsException) {
+                return DispatchOutcome.Completed(
+                    400,
+                    mapOf("error" to "Index out of bounds", "detail" to (e.message ?: ""))
+                )
             } catch (e: Throwable) {
                 val root = e.cause ?: e
+                System.err.println("=== [KOUPPER V7 ROUTER EXCEPTION] ===")
+                root.printStackTrace()
                 val handler = GlobalRouteRegistry.exceptionHandler
                 return if (handler != null) {
                     try {
                         val res = handler(root)
                         DispatchOutcome.Completed(res.statusCode, res.body, res.contentType, res.headers)
                     } catch (e2: Throwable) {
+                        System.err.println("=== [KOUPPER V7 EXCEPTION HANDLER CRASHED] ===")
+                        e2.printStackTrace()
                         DispatchOutcome.Completed(500, mapOf("error" to "Error in exception handler", "type" to e2.javaClass.name))
                     }
                 } else {

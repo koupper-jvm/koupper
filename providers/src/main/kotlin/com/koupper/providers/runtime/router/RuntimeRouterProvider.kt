@@ -62,14 +62,20 @@ class SseEmitter : StreamResponse {
 }
 
 data class RequestContext(
-    val method: String, 
-    val path: String, 
-    val body: String, 
-    val headers: Map<String, List<String>>,
-    val queryParams: Map<String, List<String>>,
+    val method: String,
+    val path: String,
+    val body: String,
+    val headers: Map<String, List<String>> = emptyMap(),
+    val queryParams: Map<String, List<String>> = emptyMap(),
     val pathParams: Map<String, String> = emptyMap(),
     val attributes: MutableMap<String, Any> = mutableMapOf()
-)
+) {
+    fun queryParam(name: String): String? = try {
+        queryParams[name]?.firstOrNull()
+    } catch (_: NullPointerException) {
+        null
+    }
+}
 
 interface RuntimeRouterProvider {
     fun registerMiddleware(name: String, middleware: (RequestContext) -> MiddlewareResult)
