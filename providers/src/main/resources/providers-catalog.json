@@ -583,16 +583,55 @@
     {
       "id": "templates",
       "serviceProvider": "TemplateServiceProvider",
-      "description": "Template rendering provider.",
+      "description": "Template rendering provider with pluggable loaders (classpath default, S3 optional).",
       "bindings": [
         {
           "contract": "TemplateProvider",
           "implementations": [
             { "class": "PebbleTemplateProvider" }
           ]
+        },
+        {
+          "contract": "TemplateLoader",
+          "implementations": [
+            { "class": "ClasspathTemplateLoader" },
+            { "class": "S3TemplateLoader" },
+            { "class": "CachedTemplateLoader" }
+          ]
         }
       ],
-      "env": [],
+      "env": [
+        {
+          "name": "TEMPLATES_DRIVER",
+          "required": false,
+          "description": "Template source driver: classpath (default) or s3."
+        },
+        {
+          "name": "TEMPLATES_S3_BUCKET",
+          "required": false,
+          "description": "S3 bucket for templates when TEMPLATES_DRIVER=s3."
+        },
+        {
+          "name": "TEMPLATES_S3_REGION",
+          "required": false,
+          "description": "AWS region for template bucket (default us-east-1)."
+        },
+        {
+          "name": "TEMPLATES_S3_PREFIX",
+          "required": false,
+          "description": "Optional key prefix prepended to template paths."
+        },
+        {
+          "name": "TEMPLATES_CACHE_ENABLED",
+          "required": false,
+          "description": "Cache loaded templates in memory (default true for s3, false for classpath)."
+        },
+        {
+          "name": "TEMPLATES_CACHE_TTL_SECONDS",
+          "required": false,
+          "description": "Template cache TTL in seconds (default 300)."
+        }
+      ],
       "docs": "https://koupper.com/docs/providers/templates"
     },
     {
