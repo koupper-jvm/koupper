@@ -237,6 +237,12 @@ fun runDoctorAndExit() {
         check("~/.koupper exists", koupperHome.exists()),
         check("CLI jar (~/.koupper/libs/koupper-cli.jar)", File(libsDirectory, "koupper-cli.jar").exists()),
         check("Octopus jar (~/.koupper/libs/octopus.jar)", File(libsDirectory, "octopus.jar").exists()),
+        check(
+            "Octopus API in mavenLocal (com.koupper:octopus-api)",
+            File("${System.getProperty("user.home")}${File.separator}.m2${File.separator}repository${File.separator}com${File.separator}koupper${File.separator}octopus-api")
+                .listFiles()
+                ?.any { dir -> File(dir, "octopus-api-${dir.name}.jar").exists() } == true
+        ),
         check("Template directory (~/.koupper/templates/model-project)", modelTemplateDirectory.exists()),
         check("Template settings.gradle", File(modelTemplateDirectory, "settings.gradle").exists()),
         check("Providers catalog (~/.koupper/catalog/providers.json)", File(catalogDirectory, "providers.json").exists()),
@@ -295,7 +301,7 @@ val cliCompilation = ProcessBuilder(
 
 cliCompilation.waitFor()
 
-val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "$gradleCmd :octopus:shadowJar -x test")
+val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "$gradleCmd :octopus:shadowJar :octopus:publishToMavenLocal -x test")
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
     .apply {
