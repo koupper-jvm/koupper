@@ -15,8 +15,8 @@
 
 Koupper is a Kotlin scripting runtime + CLI for teams that want fast iteration and production-grade execution in the same model.
 
-> **Current release:** [v7.2.0](https://github.com/koupper-jvm/koupper/releases/tag/v7.2.0) · **Docs:** [koupper.com](https://koupper.com/)  
-> **Distribution:** GitHub Releases (not Maven Central).
+> **Current release:** [v7.2.0](https://github.com/koupper-jvm/koupper/releases/tag/v7.2.0) (next: **7.2.1** ships `octopus-api` → mavenLocal) · **Docs:** [koupper.com](https://koupper.com/)  
+> **Distribution:** GitHub Releases (not Maven Central). Install also places `com.koupper:octopus-api` in **mavenLocal** for Gradle modules.
 
 ## Quick install (standalone, no repo clone)
 
@@ -44,7 +44,15 @@ kotlinc -script install-standalone.kts -- --doctor
 kotlinc -script .\install-standalone.kts -- --doctor
 ```
 
-The standalone installer downloads signed release assets (`koupper-cli.jar`, `octopus.jar`, `model-project.zip`, `providers.json`) and verifies them with `SHA256SUMS`.
+The standalone installer downloads signed release assets (`koupper-cli.jar`, `octopus.jar` fat runtime, `octopus-api.jar` light compile jar, `model-project.zip`, `providers.json`) and verifies them with `SHA256SUMS`.
+
+- **Runtime:** `~/.koupper/libs/octopus.jar` (daemon / `koupper run`)
+- **Compile (Gradle):** `com.koupper:octopus-api:<version>` via `mavenLocal()` after install
+
+```gradle
+repositories { mavenLocal(); mavenCentral() }
+dependencies { implementation("com.koupper:octopus-api:7.2.1") }
+```
 
 If `koupper module <name>` fails with `.../.koupper/helpers/list.kts` on an older local install, create the missing runtime folders once and rerun:
 

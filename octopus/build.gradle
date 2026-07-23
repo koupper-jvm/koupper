@@ -82,10 +82,12 @@ tasks.register('optimized', Jar) {
         filtered.collect { it.isDirectory() ? it : zipTree(it) }
     })
 
-    archiveBaseName = 'octopus'
+    // Light compile classpath for consumers (mavenLocal / release asset octopus-api.jar).
+    // Not the fat runtime — that is shadowJar → ~/.koupper/libs/octopus.jar.
+    archiveBaseName = 'octopus-api'
     archiveVersion = project.version.toString()
 
-    doLast { println 'Octopus generated.' }
+    doLast { println 'Octopus API (optimized) jar generated.' }
 
     preserveFileTimestamps = false
     reproducibleFileOrder = true
@@ -125,9 +127,13 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             groupId = project.group
-            artifactId = 'octopus'
+            artifactId = 'octopus-api'
             version = project.version
             artifact tasks.named('optimized')
+            pom {
+                name = 'Koupper Octopus API'
+                description = 'Lightweight Octopus API jar for compiling Koupper modules (not the fat runtime daemon jar).'
+            }
         }
     }
 
