@@ -177,6 +177,36 @@ fun safeCopy(source: File, target: File, title: String) {
     }
 }
 
+/** Install light API jar into ~/.m2 as com.koupper:octopus-api:<version> (not the fat runtime). */
+fun installOctopusApiToMavenLocal(apiJar: File, version: String, userHome: File) {
+    val cleanVersion = version.removePrefix("v")
+    val repoDir = File(
+        userHome,
+        ".m2/repository/com/koupper/octopus-api/$cleanVersion"
+    )
+    repoDir.mkdirs()
+    val jarTarget = File(repoDir, "octopus-api-$cleanVersion.jar")
+    val pomTarget = File(repoDir, "octopus-api-$cleanVersion.pom")
+    safeCopy(apiJar, jarTarget, "octopus-api jar (mavenLocal)")
+    pomTarget.writeText(
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project xmlns="http://maven.apache.org/POM/4.0.0"
+                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.koupper</groupId>
+          <artifactId>octopus-api</artifactId>
+          <version>$cleanVersion</version>
+          <packaging>jar</packaging>
+          <name>Koupper Octopus API</name>
+          <description>Lightweight Octopus API for compiling Koupper modules. Runtime daemon uses ~/.koupper/libs/octopus.jar.</description>
+        </project>
+        """.trimIndent() + "\n"
+    )
+    println("[OK] mavenLocal: com.koupper:octopus-api:$cleanVersion -> ${jarTarget.absolutePath}")
+}
+
 fun writeShims(binDirectory: File, libsDirectory: File, userHomePath: String) {
     val bashShim = """
 #!/bin/bash
@@ -233,14 +263,24 @@ fun runDoctor(
     catalogDirectory: File,
     binDirectory: File,
     helpersDirectory: File,
-    logsDirectory: File
+    logsDirectory: File,
+    userHome: File,
+    versionHint: String? = null
 ): Boolean {
+    val mavenApiOk = if (!versionHint.isNullOrBlank()) {
+        val v = versionHint.removePrefix("v")
+        File(userHome, ".m2/repository/com/koupper/octopus-api/$v/octopus-api-$v.jar").exists()
+    } else {
+        File(userHome, ".m2/repository/com/koupper/octopus-api").listFiles()
+            ?.any { dir -> File(dir, "octopus-api-${dir.name}.jar").exists() } == true
+    }
     val checks = listOf(
         "~/.koupper exists" to koupperHome.exists(),
         "Helpers directory (~/.koupper/helpers)" to (helpersDirectory.exists() && helpersDirectory.isDirectory),
         "Logs directory (~/.koupper/logs)" to (logsDirectory.exists() && logsDirectory.isDirectory),
         "CLI jar (~/.koupper/libs/koupper-cli.jar)" to File(libsDirectory, "koupper-cli.jar").exists(),
-        "Octopus jar (~/.koupper/libs/octopus.jar)" to File(libsDirectory, "octopus.jar").exists(),
+        "Octopus runtime jar (~/.koupper/libs/octopus.jar)" to File(libsDirectory, "octopus.jar").exists(),
+        "Octopus API in mavenLocal (com.koupper:octopus-api)" to mavenApiOk,
         "Template settings.gradle" to File(templatesDirectory, "model-project/settings.gradle").exists(),
         "Providers catalog (~/.koupper/catalog/providers.json)" to File(catalogDirectory, "providers.json").exists(),
         "Bin shim (~/.koupper/bin/koupper)" to File(binDirectory, "koupper").exists(),
@@ -272,7 +312,9 @@ if (options.doctor) {
         catalogDirectory,
         binDirectory,
         helpersDirectory,
-        logsDirectory
+        logsDirectory,
+        userHome,
+        options.version
     )
     if (!ok) exitProcess(1)
     println("[OK] Standalone install looks healthy.")
@@ -291,7 +333,14 @@ val releaseJson = httpGetText(releaseEndpoint)
 val tag = parseTagName(releaseJson)
 val assets = parseAssetUrls(releaseJson)
 
-val required = listOf("koupper-cli.jar", "octopus.jar", "model-project.zip", "providers.json", "SHA256SUMS")
+val required = listOf(
+    "koupper-cli.jar",
+    "octopus.jar",
+    "octopus-api.jar",
+    "model-project.zip",
+    "providers.json",
+    "SHA256SUMS"
+)
 val missing = required.filterNot { assets.containsKey(it) }
 if (missing.isNotEmpty()) {
     fail("Release $tag is missing required assets: ${missing.joinToString(", ")}")
@@ -332,8 +381,9 @@ listOf(libsDirectory, templatesDirectory, catalogDirectory, binDirectory, helper
 }
 
 safeCopy(File(releaseCache, "koupper-cli.jar"), File(libsDirectory, "koupper-cli.jar"), "CLI jar")
-safeCopy(File(releaseCache, "octopus.jar"), File(libsDirectory, "octopus.jar"), "Octopus jar")
+safeCopy(File(releaseCache, "octopus.jar"), File(libsDirectory, "octopus.jar"), "Octopus runtime jar")
 safeCopy(File(releaseCache, "providers.json"), File(catalogDirectory, "providers.json"), "providers catalog")
+installOctopusApiToMavenLocal(File(releaseCache, "octopus-api.jar"), tag, userHome)
 
 val templateDir = File(templatesDirectory, "model-project")
 unzip(File(releaseCache, "model-project.zip"), templateDir)
@@ -355,3 +405,4 @@ writeShims(binDirectory, libsDirectory, userHome.absolutePath)
 
 println("[OK] Koupper standalone install completed from release $tag at ${Instant.now()}")
 println("[PATH] Add ${binDirectory.absolutePath} to your PATH if needed")
+println("[GRADLE] modules: repositories { mavenLocal() }; implementation(\"com.koupper:octopus-api:${tag.removePrefix("v")}\")")

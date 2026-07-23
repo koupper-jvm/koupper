@@ -57,13 +57,13 @@ jobs:
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Build octopus runtime jar
+      - name: Build octopus runtime + API jars
         shell: bash
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          # fatJar was removed in v7; shadowJar is the standalone runtime artifact
-          ./gradlew :octopus:shadowJar -x test
+          # shadowJar = fat runtime (~/.koupper/libs); optimized = light octopus-api (mavenLocal)
+          ./gradlew :octopus:shadowJar :octopus:optimized -x test
 
       - name: Build standalone CLI jar
         shell: bash
@@ -82,11 +82,18 @@ jobs:
 
           OCTOPUS_JAR=$(ls octopus/build/libs/*-all.jar 2>/dev/null | head -n1 || true)
           if [[ -z "${OCTOPUS_JAR}" ]]; then
-            OCTOPUS_JAR=$(ls octopus/build/libs/*.jar | grep -vE 'sources|javadoc|optimized' | head -n1)
+            OCTOPUS_JAR=$(ls octopus/build/libs/*.jar | grep -vE 'sources|javadoc|octopus-api|optimized' | head -n1)
+          fi
+          OCTOPUS_API_JAR=$(ls octopus/build/libs/octopus-api-*.jar 2>/dev/null | grep -vE 'sources|javadoc' | head -n1 || true)
+          if [[ -z "${OCTOPUS_API_JAR}" ]]; then
+            echo "octopus-api jar not found after :octopus:optimized" >&2
+            ls -la octopus/build/libs/ >&2 || true
+            exit 1
           fi
           CLI_JAR=$(ls koupper-cli/build/libs/*.jar | grep -vE 'sources|javadoc' | head -n1)
 
           cp "${OCTOPUS_JAR}" "${DIST_DIR}/octopus.jar"
+          cp "${OCTOPUS_API_JAR}" "${DIST_DIR}/octopus-api.jar"
           cp "${CLI_JAR}" "${DIST_DIR}/koupper-cli.jar"
           cp "providers/src/main/resources/providers-catalog.json" "${DIST_DIR}/providers.json"
 
@@ -95,7 +102,7 @@ jobs:
 
           (
             cd "${DIST_DIR}"
-            sha256sum koupper-cli.jar octopus.jar model-project.zip providers.json > SHA256SUMS
+            sha256sum koupper-cli.jar octopus.jar octopus-api.jar model-project.zip providers.json > SHA256SUMS
           )
 
           python - <<'PY'
@@ -108,7 +115,7 @@ jobs:
           tag = os.environ["RELEASE_TAG"]
           repo = os.environ["GITHUB_REPOSITORY"]
 
-          assets = ["koupper-cli.jar", "octopus.jar", "model-project.zip", "providers.json", "SHA256SUMS"]
+          assets = ["koupper-cli.jar", "octopus.jar", "octopus-api.jar", "model-project.zip", "providers.json", "SHA256SUMS"]
           payload = {
               "schemaVersion": 1,
               "channel": "stable",
@@ -148,6 +155,7 @@ jobs:
           files: |
             ${{ steps.package.outputs.dist_dir }}/koupper-cli.jar
             ${{ steps.package.outputs.dist_dir }}/octopus.jar
+            ${{ steps.package.outputs.dist_dir }}/octopus-api.jar
             ${{ steps.package.outputs.dist_dir }}/model-project.zip
             ${{ steps.package.outputs.dist_dir }}/providers.json
             ${{ steps.package.outputs.dist_dir }}/SHA256SUMS
