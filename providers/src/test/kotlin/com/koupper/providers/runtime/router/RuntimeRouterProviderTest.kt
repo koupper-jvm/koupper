@@ -18,6 +18,7 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
     fun clearRegistry() {
         GlobalRouteRegistry.routes.clear()
         GlobalRouteRegistry.corsConfig = null
+        GlobalRouteRegistry.afterRequestHook = null
     }
 
     private fun freePort(): Int = ServerSocket(0).use { it.localPort }
@@ -196,5 +197,72 @@ class RuntimeRouterProviderTest : AnnotationSpec() {
     fun `stop can be called when server is not running`() {
         val provider = GrizzlyRuntimeRouterProvider()
         provider.stop() // should not throw
+    }
+
+    @Test
+    fun `afterRequestHook is called with status and positive durationMs on successful request`() {
+        val port = freePort()
+        val provider = GrizzlyRuntimeRouterProvider()
+        var capturedStatus = -1
+        var capturedDuration = -1L
+
+        GlobalRouteRegistry.afterRequestHook = { status, durationMs ->
+            capturedStatus = status
+            capturedDuration = durationMs
+        }
+
+        provider.registerRouter {
+            get<String> {
+                path { "/hook-test" }
+                script { { "ok" } }
+            }
+        }
+        provider.start(port)
+        try {
+            val response = get("http://127.0.0.1:$port/hook-test")
+            assertEquals(200, response.statusCode())
+            assertEquals(200, capturedStatus)
+            assertTrue(capturedDuration >= 0, "Expected durationMs >= 0, got $capturedDuration")
+        } finally {
+            provider.stop()
+        }
+    }
+
+    @Test
+    fun `afterRequestHook receives 404 status for unknown route`() {
+        val port = freePort()
+        val provider = GrizzlyRuntimeRouterProvider()
+        var capturedStatus = -1
+
+        GlobalRouteRegistry.afterRequestHook = { status, _ -> capturedStatus = status }
+
+        provider.start(port)
+        try {
+            get("http://127.0.0.1:$port/does-not-exist")
+            assertEquals(404, capturedStatus)
+        } finally {
+            provider.stop()
+        }
+    }
+
+    @Test
+    fun `afterRequestHook is not called when hook is null`() {
+        val port = freePort()
+        val provider = GrizzlyRuntimeRouterProvider()
+        GlobalRouteRegistry.afterRequestHook = null
+
+        provider.registerRouter {
+            get<String> {
+                path { "/no-hook" }
+                script { { "fine" } }
+            }
+        }
+        provider.start(port)
+        try {
+            val response = get("http://127.0.0.1:$port/no-hook")
+            assertEquals(200, response.statusCode()) // must not throw
+        } finally {
+            provider.stop()
+        }
     }
 }
