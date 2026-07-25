@@ -27,6 +27,7 @@ class GrizzlyRuntimeRouterProviderTest : AnnotationSpec() {
     @Before
     fun clearRegistry() {
         GlobalRouteRegistry.routes.clear()
+        GlobalRouteRegistry.afterRequestHook = null
     }
 
     // Mock handlers

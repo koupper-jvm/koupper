@@ -55,4 +55,6 @@ object GlobalRouteRegistry {
     var corsConfig: CorsConfig? = null
     var exceptionHandler: ((Throwable) -> WebResponse)? = null
     val currentRequest = ThreadLocal<Any>()
+    /** Called after each completed (non-streaming) request. Receives (statusCode, durationMs). */
+    var afterRequestHook: ((statusCode: Int, durationMs: Long) -> Unit)? = null
 }

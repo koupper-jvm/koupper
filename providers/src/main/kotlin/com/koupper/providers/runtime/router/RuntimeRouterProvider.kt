@@ -422,6 +422,7 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
             headersMap[name] = request.getHeaders(name).toList()
         }
 
+        val startMs = System.currentTimeMillis()
         val outcome = dispatcher.dispatch(DispatchRequest(
             method = request.method.methodString,
             path = request.requestURI,
@@ -433,7 +434,10 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
 
         when (outcome) {
             is DispatchOutcome.Stream -> handleStream(response, outcome.stream)
-            is DispatchOutcome.Completed -> respond(response, outcome.status, outcome.payload, outcome.contentType, outcome.headers)
+            is DispatchOutcome.Completed -> {
+                respond(response, outcome.status, outcome.payload, outcome.contentType, outcome.headers)
+                GlobalRouteRegistry.afterRequestHook?.invoke(outcome.status, System.currentTimeMillis() - startMs)
+            }
         }
     }
 
