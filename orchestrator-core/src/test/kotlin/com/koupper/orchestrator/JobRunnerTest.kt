@@ -133,6 +133,25 @@ class JobRunnerTest : AnnotationSpec() {
         assertTrue(!ackCalled, "ackFn must NOT be called when execution fails")
     }
 
+    @Test
+    fun `compiled failure releases and does not ack`() {
+        var ackCalled = false
+        var releaseCalled = false
+        val task = makeTask(sourceType = "compiled", scriptPath = null, packageName = "com.missing")
+        val ok = JobResult.Ok(
+            configName = "cfg",
+            task = task,
+            ackFn = { ackCalled = true },
+            releaseFn = { releaseCalled = true }
+        )
+
+        val mapped = simulateRunPendingJobs(listOf(ok), { _, _, _ -> "unused" }, "default")
+
+        assertTrue(mapped.any { it is JobResult.Error }, "compiled failure must surface as JobResult.Error")
+        assertTrue(releaseCalled, "releaseFn must run so file jobs go to .failed, not .done")
+        assertTrue(!ackCalled, "ackFn must NOT run when runCompiled fails")
+    }
+
     // -------------------------------------------------------------------------
     // JobResult.Ok — new fields have defaults (backwards compat)
     // -------------------------------------------------------------------------
