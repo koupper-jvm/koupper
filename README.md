@@ -15,12 +15,14 @@
 
 Koupper is a Kotlin scripting runtime + CLI for teams that want fast iteration and production-grade execution in the same model.
 
-> **Current release:** [v7.2.0](https://github.com/koupper-jvm/koupper/releases/tag/v7.2.0) (next: **7.2.1** ships `octopus-api` → mavenLocal) · **Docs:** [koupper.com](https://koupper.com/)  
+> **Current release:** [v7.2.1](https://github.com/koupper-jvm/koupper/releases/tag/v7.2.1) · **Docs:** [koupper.com](https://koupper.com/)  
 > **Distribution:** GitHub Releases (not Maven Central). Install also places `com.koupper:octopus-api` in **mavenLocal** for Gradle modules.
 
 ## Quick install (standalone, no repo clone)
 
 Prerequisites: Java 17+ and Kotlin compiler (`kotlinc`) on your `PATH`.
+
+Same command for **first install** and **upgrade** (`--force` replaces jars + republishes mavenLocal):
 
 ```bash
 curl -L -o install-standalone.kts https://github.com/koupper-jvm/koupper/releases/latest/download/install-standalone.kts
