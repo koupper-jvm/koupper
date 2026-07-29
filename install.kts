@@ -336,11 +336,20 @@ println("${icon("📦", "[*] ")}Deploying artifacts...")
 
 val cliJarSource = File(cliProjectDir, "build/libs").listFiles()
     ?.filter { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
-    ?.maxByOrNull { it.length() }
+    ?.maxByOrNull { it.lastModified() }
 
-val octopusJarSource = File("octopus/build/libs").listFiles()
-    ?.filter { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
-    ?.maxByOrNull { it.length() }
+// Prefer shadow fat runtime (octopus-*-all.jar). Never pick octopus-api (mavenLocal light jar)
+// or an older fat jar that happens to be slightly larger by byte count.
+val octopusLibs = File("octopus/build/libs").listFiles()
+    ?.filter {
+        it.extension == "jar" &&
+            !it.name.contains("javadoc") &&
+            !it.name.contains("sources") &&
+            !it.name.startsWith("octopus-api")
+    }
+val octopusShadow = octopusLibs?.filter { it.name.endsWith("-all.jar") }.orEmpty()
+val octopusJarSource = (if (octopusShadow.isNotEmpty()) octopusShadow else octopusLibs.orEmpty())
+    .maxByOrNull { it.lastModified() }
 
 if (cliJarSource == null || octopusJarSource == null) {
     println("\u001B[31m❌ Artifacts not found after compilation. Expected Jars in build/libs.\u001B[0m")
