@@ -537,7 +537,9 @@ object JobRunner {
         } catch (e: Exception) {
             println("❌ Error ejecutando job compilado: ${e.message}")
             GlobalLogger.log.error(e) { "Error executing compiled job: ${e.message}" }
-            return null
+            // Must rethrow: returning null made runPendingJobs treat failures as success,
+            // ack the job, and write .done — silently dropping work (e.g. DB writes).
+            throw e
         }
     }
 }
@@ -766,15 +768,40 @@ object JobRetry {
 
 object JobDisplayer {
     fun showStatus(context: String, configId: String? = null): String {
-        val config = JobConfig.loadOrFail(context, configId)
-        val metrics = JobMetricsCollector.collect(context, config)
+        // CLI used to interpolate null as the string "null"; treat that as no filter.
+        val effectiveConfigId = configId?.takeUnless { it.isBlank() || it.equals("null", ignoreCase = true) }
+        val loaded = JobConfig.loadOrFail(context, effectiveConfigId)
+        // loadOrFail wraps entries in JobConfiguration.configurations; the wrapper itself
+        // has defaults driver=file / queue=default and must not be counted as a queue.
+        val configs = loaded.configurations.orEmpty()
+        if (configs.isEmpty()) {
+            return buildString {
+                appendLine()
+                appendLine("   📊 Job System Metrics")
+                appendLine("   ─────────────────────────────")
+                appendLine("   Pending: 0")
+                appendLine("   In Flight: 0")
+                appendLine("   ⚠️  No job configurations matched (check jobs.json / --configId).")
+            }
+        }
+
+        val metrics = configs.map { JobMetricsCollector.collect(context, it) }
+        val pending = metrics.sumOf { it.pending }
+        // For file/redis/db drivers the second field is failed count; for SQS it is in-flight.
+        val secondary = metrics.sumOf { it.inFlight ?: 0 }
+        val secondaryLabel = if (configs.any { it.driver.equals("sqs", ignoreCase = true) }) "In Flight" else "Failed"
 
         return buildString {
             appendLine()
             appendLine("   📊 Job System Metrics")
             appendLine("   ─────────────────────────────")
-            appendLine("   Pending: ${metrics.pending}")
-            appendLine("   In Flight: ${metrics.inFlight ?: 0}")
+            appendLine("   Pending: $pending")
+            appendLine("   $secondaryLabel: $secondary")
+            if (configs.size > 1) {
+                configs.zip(metrics).forEach { (cfg, m) ->
+                    appendLine("   · ${cfg.id ?: cfg.queue}: pending=${m.pending}, ${secondaryLabel.lowercase()}=${m.inFlight ?: 0}")
+                }
+            }
         }
     }
 }
