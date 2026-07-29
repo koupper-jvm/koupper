@@ -49,12 +49,7 @@ kotlinc -script .\install-standalone.kts -- --doctor
 The standalone installer downloads signed release assets (`koupper-cli.jar`, `octopus.jar` fat runtime, `octopus-api.jar` light compile jar, `model-project.zip`, `providers.json`) and verifies them with `SHA256SUMS`.
 
 - **Runtime:** `~/.koupper/libs/octopus.jar` (daemon / `koupper run`)
-- **Compile (Gradle):** `com.koupper:octopus-api:<version>` via `mavenLocal()` after install
-
-```gradle
-repositories { mavenLocal(); mavenCentral() }
-dependencies { implementation("com.koupper:octopus-api:7.2.1") }
-```
+- **Compile (Gradle):** see [Use in a Gradle / Maven project](#use-in-a-gradle--maven-project) (`com.koupper:octopus-api` via mavenLocal)
 
 If `koupper module <name>` fails with `.../.koupper/helpers/list.kts` on an older local install, create the missing runtime folders once and rerun:
 
@@ -80,6 +75,23 @@ Tech tags:
 
 `kotlin` `scripting` `automation` `octopus-runtime` `provider-first` `jobs` `deploy`
 
+## Use in a Gradle / Maven project
+
+After install, the light compile jar is in **mavenLocal** as `com.koupper:octopus-api` (do **not** put `~/.koupper/libs/octopus.jar` on the compile classpath — that fat jar is only the OS daemon).
+
+```gradle
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    implementation("com.koupper:octopus-api:7.2.1")
+}
+```
+
+Upgrade Koupper anytime by re-running the standalone installer with `--force` (see above), then bump the dependency version if needed.
+
 ## Start here
 
 - Public docs site: https://koupper.com/
@@ -87,6 +99,7 @@ Tech tags:
 - Command reference: https://koupper.com/commands/
 - Provider catalog: https://koupper.com/providers/
 - Agentic Core: https://koupper.com/agentic-core/
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Installation modes
 
@@ -252,14 +265,17 @@ Recommended reading path:
 
 ## Contributing
 
-- Core contribution flow and maintainer docs: [koupper-workspace/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/MAINTAINER_GUIDE.md)
-- Documentation governance rules: [koupper-workspace/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/DOCUMENTATION_STANDARD.md)
-- Public docs source: [koupper-jvm/koupper-docs](https://github.com/koupper-jvm/koupper-docs)
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full contract. Short version:
 
-## Maintainer docs in this repo
+| Who | Branch | Merge to | Ships how |
+|-----|--------|----------|-----------|
+| Engine / CLI features | `feature/*` or `fix/*` from **`develop`** | PR → **`develop`** | Maintainer cuts tag **`vX.Y.Z`** on `koupper` (GitHub Release assets) |
+| Docs | `docs/*` from **`develop`** | PR → **`develop`**, then **`develop` → `main`** | Push to **`main`** auto-deploys to [koupper.com](https://koupper.com/) |
+| End users | — | — | Re-run `install-standalone.kts -- --force`; bump `octopus-api` in Gradle if needed |
 
-- Maintainer index: [koupper-workspace/docs/MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/MAINTAINER_GUIDE.md)
-- Documentation ownership standard: [koupper-workspace/docs/DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/DOCUMENTATION_STANDARD.md)
+- Maintainer playbooks: [MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/MAINTAINER_GUIDE.md)
+- Docs governance: [DOCUMENTATION_STANDARD.md](https://github.com/koupper-jvm/koupper-workspace/blob/develop/docs/DOCUMENTATION_STANDARD.md)
+- Release scripts: [koupper-workspace/scripts/release](https://github.com/koupper-jvm/koupper-workspace/tree/develop/scripts/release)
 
 ## License
 
