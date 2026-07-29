@@ -36,6 +36,46 @@ private var enableDebugMode: Boolean = false
 
 fun enableDebugMode() { enableDebugMode = true }
 
+/**
+ * Normalize job sourceType to canonical lowercase values used by the worker.
+ * Accepts legacy uppercase (`SCRIPT` / `COMPILED`) and aliases.
+ */
+fun normalizeJobSourceType(sourceType: String?): String =
+    when (sourceType?.trim()?.lowercase()) {
+        "compiled", "class", "classpath" -> "compiled"
+        "script", "kts", "source" -> "script"
+        else -> "script"
+    }
+
+fun isCompiledJobSource(sourceType: String?): Boolean =
+    normalizeJobSourceType(sourceType) == "compiled"
+
+/**
+ * Decide sourceType for a JVM property reference (`::fn.asJob(...)`).
+ * Module `.kt` sources must run as compiled classes — they are not valid Kotlin scripts
+ * (package declarations fail with "Expecting an element").
+ */
+internal fun resolvePropertyJobSourceType(scriptPath: String?): String {
+    val path = scriptPath?.trim().orEmpty()
+    return when {
+        path.endsWith(".kts", ignoreCase = true) -> "script"
+        else -> "compiled"
+    }
+}
+
+/** True for module `.kt` paths (not `.kts` scripts). */
+internal fun isModuleKotlinSourcePath(scriptPath: String?): Boolean {
+    val path = scriptPath?.trim().orEmpty()
+    return path.endsWith(".kt", ignoreCase = true) && !path.endsWith(".kts", ignoreCase = true)
+}
+
+/**
+ * Worker routing: prefer explicit sourceType, but treat legacy `SCRIPT` + module `.kt`
+ * payloads as compiled so already-queued jobs still run.
+ */
+fun shouldRunJobAsCompiled(sourceType: String?, scriptPath: String?): Boolean =
+    isCompiledJobSource(sourceType) || isModuleKotlinSourcePath(scriptPath)
+
 private fun readEnvOrGlobalFile(name: String): String? {
     val fromEnv = System.getenv(name)?.trim()?.takeIf { it.isNotEmpty() }
     if (fromEnv != null) return fromEnv
@@ -251,7 +291,7 @@ object JobRunner {
                     val taskContext = task.context?.takeIf { it.isNotBlank() } ?: context
 
                     val execResult = try {
-                        if (task.sourceType == "compiled") {
+                        if (shouldRunJobAsCompiled(task.sourceType, task.scriptPath)) {
                             println("[job-worker] branch=compiled job=${task.id} fn=${task.functionName}")
                             runCompiled(taskContext, task)
                         } else {
@@ -497,7 +537,9 @@ object JobRunner {
         } catch (e: Exception) {
             println("❌ Error ejecutando job compilado: ${e.message}")
             GlobalLogger.log.error(e) { "Error executing compiled job: ${e.message}" }
-            return null
+            // Must rethrow: returning null made runPendingJobs treat failures as success,
+            // ack the job, and write .done — silently dropping work (e.g. DB writes).
+            throw e
         }
     }
 }
@@ -726,15 +768,40 @@ object JobRetry {
 
 object JobDisplayer {
     fun showStatus(context: String, configId: String? = null): String {
-        val config = JobConfig.loadOrFail(context, configId)
-        val metrics = JobMetricsCollector.collect(context, config)
+        // CLI used to interpolate null as the string "null"; treat that as no filter.
+        val effectiveConfigId = configId?.takeUnless { it.isBlank() || it.equals("null", ignoreCase = true) }
+        val loaded = JobConfig.loadOrFail(context, effectiveConfigId)
+        // loadOrFail wraps entries in JobConfiguration.configurations; the wrapper itself
+        // has defaults driver=file / queue=default and must not be counted as a queue.
+        val configs = loaded.configurations.orEmpty()
+        if (configs.isEmpty()) {
+            return buildString {
+                appendLine()
+                appendLine("   📊 Job System Metrics")
+                appendLine("   ─────────────────────────────")
+                appendLine("   Pending: 0")
+                appendLine("   In Flight: 0")
+                appendLine("   ⚠️  No job configurations matched (check jobs.json / --configId).")
+            }
+        }
+
+        val metrics = configs.map { JobMetricsCollector.collect(context, it) }
+        val pending = metrics.sumOf { it.pending }
+        // For file/redis/db drivers the second field is failed count; for SQS it is in-flight.
+        val secondary = metrics.sumOf { it.inFlight ?: 0 }
+        val secondaryLabel = if (configs.any { it.driver.equals("sqs", ignoreCase = true) }) "In Flight" else "Failed"
 
         return buildString {
             appendLine()
             appendLine("   📊 Job System Metrics")
             appendLine("   ─────────────────────────────")
-            appendLine("   Pending: ${metrics.pending}")
-            appendLine("   In Flight: ${metrics.inFlight ?: 0}")
+            appendLine("   Pending: $pending")
+            appendLine("   $secondaryLabel: $secondary")
+            if (configs.size > 1) {
+                configs.zip(metrics).forEach { (cfg, m) ->
+                    appendLine("   · ${cfg.id ?: cfg.queue}: pending=${m.pending}, ${secondaryLabel.lowercase()}=${m.inFlight ?: 0}")
+                }
+            }
         }
     }
 }
@@ -1329,7 +1396,8 @@ fun KProperty0<*>.asJob(vararg args: Any?): KouTask {
     val sourceSnapshot = readTextOrNull(finalScriptPathContent.path)
     val artifactSha256 = if (finalScriptPathContent.exists() && finalScriptPathContent.isFile) sha256Of(finalScriptPathContent) else "unknown"
     val artifactUri: String? = null
-    val finalSourceType = if (finalScriptPathContent.exists()) "SCRIPT" else "COMPILED"
+    // Property refs come from loaded JVM classes. Module .kt files are not scripts.
+    val finalSourceType = resolvePropertyJobSourceType(finalScriptPath)
 
     return KouTask(
         id = UUID.randomUUID().toString(),
@@ -1365,8 +1433,9 @@ inline fun <reified T, reified R> ((T) -> R).asJob(
         R::class.qualifiedName ?: "kotlin.Any"
     )
 
+    val normalizedSourceType = normalizeJobSourceType(sourceType)
     val sourceSnapshot: String? =
-        if (sourceType == "script") readTextOrNull(scriptPath) else null
+        if (normalizedSourceType == "script") readTextOrNull(scriptPath) else null
 
     val contextVersion = "unknown"
 
@@ -1378,7 +1447,7 @@ inline fun <reified T, reified R> ((T) -> R).asJob(
         signature = signature,
         scriptPath = scriptPath,
         packageName = packageName,
-        sourceType = sourceType,
+        sourceType = normalizedSourceType,
         contextVersion = contextVersion,
         sourceSnapshot = sourceSnapshot,
         artifactUri = artifactUri,

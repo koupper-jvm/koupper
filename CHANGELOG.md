@@ -4,6 +4,16 @@ All notable changes to the Koupper monorepo are documented here.
 Versioning follows the Octopus engine version (`build.gradle`).
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **`GlobalRouteRegistry.afterRequestHook`**: optional `(statusCode: Int, durationMs: Long) -> Unit` callback invoked after every completed (non-streaming) HTTP request. Enables structured response logging and MDC cleanup from the application layer without patching the router. Set it once in your server setup; `null` by default (zero overhead when unused).
+
+### Fixed
+- **`koupper module` V7 DX**: show RuntimeRouter routes + `@Export` symbols; detect octopus from Gradle; skip noisy script compile during module scan; quiet `[DEBUG] Compiling` via `koupper.scripting.quiet`.
+- **Job worker sourceType**: `::fn.asJob()` from compiled modules now routes as `compiled` (`.kt` sources are not Kotlin scripts). Worker accepts legacy uppercase `SCRIPT`/`COMPILED` and treats legacy `SCRIPT` + module `.kt` payloads as compiled.
+- **CORS Allow-Origin**: echo a single matching request `Origin` (or `*`) instead of joining the allow-list with commas, which browsers reject.
+
 ## [7.2.0] - 2026-06-25
 
 ### Added

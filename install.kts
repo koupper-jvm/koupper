@@ -237,6 +237,12 @@ fun runDoctorAndExit() {
         check("~/.koupper exists", koupperHome.exists()),
         check("CLI jar (~/.koupper/libs/koupper-cli.jar)", File(libsDirectory, "koupper-cli.jar").exists()),
         check("Octopus jar (~/.koupper/libs/octopus.jar)", File(libsDirectory, "octopus.jar").exists()),
+        check(
+            "Octopus API in mavenLocal (com.koupper:octopus-api)",
+            File("${System.getProperty("user.home")}${File.separator}.m2${File.separator}repository${File.separator}com${File.separator}koupper${File.separator}octopus-api")
+                .listFiles()
+                ?.any { dir -> File(dir, "octopus-api-${dir.name}.jar").exists() } == true
+        ),
         check("Template directory (~/.koupper/templates/model-project)", modelTemplateDirectory.exists()),
         check("Template settings.gradle", File(modelTemplateDirectory, "settings.gradle").exists()),
         check("Providers catalog (~/.koupper/catalog/providers.json)", File(catalogDirectory, "providers.json").exists()),
@@ -295,7 +301,7 @@ val cliCompilation = ProcessBuilder(
 
 cliCompilation.waitFor()
 
-val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "$gradleCmd :octopus:shadowJar -x test")
+val octopusCompilation = ProcessBuilder(if (isWindows) "cmd" else "bash", if (isWindows) "/c" else "-c", "$gradleCmd :octopus:shadowJar :octopus:publishToMavenLocal -x test")
     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
     .redirectError(ProcessBuilder.Redirect.INHERIT)
     .apply {
@@ -330,11 +336,20 @@ println("${icon("📦", "[*] ")}Deploying artifacts...")
 
 val cliJarSource = File(cliProjectDir, "build/libs").listFiles()
     ?.filter { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
-    ?.maxByOrNull { it.length() }
+    ?.maxByOrNull { it.lastModified() }
 
-val octopusJarSource = File("octopus/build/libs").listFiles()
-    ?.filter { it.extension == "jar" && !it.name.contains("javadoc") && !it.name.contains("sources") }
-    ?.maxByOrNull { it.length() }
+// Prefer shadow fat runtime (octopus-*-all.jar). Never pick octopus-api (mavenLocal light jar)
+// or an older fat jar that happens to be slightly larger by byte count.
+val octopusLibs = File("octopus/build/libs").listFiles()
+    ?.filter {
+        it.extension == "jar" &&
+            !it.name.contains("javadoc") &&
+            !it.name.contains("sources") &&
+            !it.name.startsWith("octopus-api")
+    }
+val octopusShadow = octopusLibs?.filter { it.name.endsWith("-all.jar") }.orEmpty()
+val octopusJarSource = (if (octopusShadow.isNotEmpty()) octopusShadow else octopusLibs.orEmpty())
+    .maxByOrNull { it.lastModified() }
 
 if (cliJarSource == null || octopusJarSource == null) {
     println("\u001B[31m❌ Artifacts not found after compilation. Expected Jars in build/libs.\u001B[0m")

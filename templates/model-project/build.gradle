@@ -17,8 +17,8 @@ def kotlinTestVersion = '2.0.21'
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
 
-    // Koupper Core (Optimized from mavenLocal)
-    implementation("com.koupper:octopus:6.5.3")
+    // Koupper compile API (from mavenLocal after install / upgrade)
+    implementation("com.koupper:octopus-api:7.2.1")
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
     implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0"

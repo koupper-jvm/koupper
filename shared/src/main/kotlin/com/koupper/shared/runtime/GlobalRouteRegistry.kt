@@ -31,6 +31,21 @@ data class CorsConfig(
 )
 
 /**
+ * Resolve the value for `Access-Control-Allow-Origin`.
+ *
+ * Browsers require a single origin (or `*`), never a comma-joined list.
+ * When a concrete allow-list is configured, echo the request Origin only if it matches.
+ *
+ * @return header value, or `null` when the request Origin is not allowed (omit the header).
+ */
+fun resolveCorsAllowOrigin(allowedOrigins: List<String>?, requestOrigin: String?): String? {
+    val allowed = allowedOrigins.orEmpty().map { it.trim() }.filter { it.isNotEmpty() }
+    if (allowed.isEmpty() || allowed.any { it == "*" }) return "*"
+    if (requestOrigin.isNullOrBlank()) return null
+    return if (allowed.any { it == requestOrigin }) requestOrigin else null
+}
+
+/**
  * Shared Registry for the Web Server.
  * This is the SINGLE point of truth for the entire JVM process.
  */
@@ -40,4 +55,6 @@ object GlobalRouteRegistry {
     var corsConfig: CorsConfig? = null
     var exceptionHandler: ((Throwable) -> WebResponse)? = null
     val currentRequest = ThreadLocal<Any>()
+    /** Called after each completed (non-streaming) request. Receives (statusCode, durationMs). */
+    var afterRequestHook: ((statusCode: Int, durationMs: Long) -> Unit)? = null
 }

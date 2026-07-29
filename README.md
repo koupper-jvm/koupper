@@ -15,6 +15,60 @@
 
 Koupper is a Kotlin scripting runtime + CLI for teams that want fast iteration and production-grade execution in the same model.
 
+> **Current release:** [v7.2.1](https://github.com/koupper-jvm/koupper/releases/tag/v7.2.1) · **Docs:** [koupper.com](https://koupper.com/)  
+> **Distribution:** GitHub Releases (not Maven Central). Install also places `com.koupper:octopus-api` in **mavenLocal** for Gradle modules.
+
+## Quick install (standalone, no repo clone)
+
+Prerequisites: Java 17+ and Kotlin compiler (`kotlinc`) on your `PATH`.
+
+Same command for **first install** and **upgrade** (`--force` replaces jars + republishes mavenLocal):
+
+```bash
+curl -L -o install-standalone.kts https://github.com/koupper-jvm/koupper/releases/latest/download/install-standalone.kts
+kotlinc -script install-standalone.kts -- --force
+```
+
+Windows PowerShell:
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/koupper-jvm/koupper/releases/latest/download/install-standalone.kts" -OutFile "install-standalone.kts"
+kotlinc -script .\install-standalone.kts -- --force
+```
+
+Health check:
+
+```bash
+kotlinc -script install-standalone.kts -- --doctor
+```
+
+```powershell
+kotlinc -script .\install-standalone.kts -- --doctor
+```
+
+The standalone installer downloads signed release assets (`koupper-cli.jar`, `octopus.jar` fat runtime, `octopus-api.jar` light compile jar, `model-project.zip`, `providers.json`) and verifies them with `SHA256SUMS`.
+
+- **Runtime:** `~/.koupper/libs/octopus.jar` (daemon / `koupper run`)
+- **Compile (Gradle):** `com.koupper:octopus-api:<version>` via `mavenLocal()` after install
+
+```gradle
+repositories { mavenLocal(); mavenCentral() }
+dependencies { implementation("com.koupper:octopus-api:7.2.1") }
+```
+
+If `koupper module <name>` fails with `.../.koupper/helpers/list.kts` on an older local install, create the missing runtime folders once and rerun:
+
+```bash
+mkdir -p "$HOME/.koupper/helpers" "$HOME/.koupper/logs"
+```
+
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.koupper\helpers" | Out-Null
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.koupper\logs" | Out-Null
+```
+
 Why it matters:
 
 - write small Kotlin scripts,
@@ -33,45 +87,6 @@ Tech tags:
 - Command reference: https://koupper.com/commands/
 - Provider catalog: https://koupper.com/providers/
 - Agentic Core: https://koupper.com/agentic-core/
-- Using Octopus in apps / Maven Local / Lambda: [`docs/USING_OCTOPUS_AS_DEPENDENCY.md`](docs/USING_OCTOPUS_AS_DEPENDENCY.md)
-
-## Quick install (standalone, no repo clone)
-
-Prerequisites:
-
-- Java 17 on your `PATH`
-- Kotlin compiler (`kotlinc`) on your `PATH`
-
-```bash
-curl -L -o install-standalone.kts https://github.com/koupper-jvm/koupper/releases/latest/download/install-standalone.kts
-kotlinc -script install-standalone.kts -- --force
-kotlinc -script install-standalone.kts -- --doctor
-koupper -v
-```
-
-Windows PowerShell:
-
-```powershell
-Invoke-WebRequest -Uri "https://github.com/koupper-jvm/koupper/releases/latest/download/install-standalone.kts" -OutFile "install-standalone.kts"
-kotlinc -script .\install-standalone.kts -- --force
-kotlinc -script .\install-standalone.kts -- --doctor
-koupper -v
-```
-
-The standalone installer downloads signed release assets (`koupper-cli.jar`, `octopus.jar`, `model-project.zip`, `providers.json`) and verifies them with `SHA256SUMS`.
-
-If `koupper module <name>` fails with `.../.koupper/helpers/list.kts` on an older local install, create the missing runtime folders once and rerun:
-
-```bash
-mkdir -p "$HOME/.koupper/helpers" "$HOME/.koupper/logs"
-```
-
-Windows PowerShell:
-
-```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.koupper\helpers" | Out-Null
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.koupper\logs" | Out-Null
-```
 
 ## Installation modes
 

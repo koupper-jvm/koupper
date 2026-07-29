@@ -9,7 +9,7 @@ class JobRunnerTest : AnnotationSpec() {
 
     private fun makeTask(
         sourceType: String = "script",
-        scriptPath: String? = "src/main/kotlin/com/example/myjob.kt",
+        scriptPath: String? = "src/main/kotlin/com/example/myjob.kts",
         packageName: String? = null
     ) = KouTask(
         id = "test-job-1",
@@ -27,7 +27,7 @@ class JobRunnerTest : AnnotationSpec() {
 
     @Test
     fun `script branch invokes runScriptContent with resolved path`() {
-        val task = makeTask(sourceType = "script", scriptPath = "jobs/myscript.kt")
+        val task = makeTask(sourceType = "script", scriptPath = "jobs/myscript.kts")
         val captured = mutableListOf<Triple<String, String, String>>()
 
         val runScript: (String, String, String) -> Any? = { ctx, path, args ->
@@ -88,7 +88,7 @@ class JobRunnerTest : AnnotationSpec() {
     @Test
     fun `ackFn is invoked after successful script execution`() {
         var ackCalled = false
-        val task = makeTask(sourceType = "script", scriptPath = "path/to/script.kt")
+        val task = makeTask(sourceType = "script", scriptPath = "path/to/script.kts")
         val ok = JobResult.Ok(configName = "cfg", task = task, ackFn = { ackCalled = true })
 
         val runScript: (String, String, String) -> Any? = { _, _, _ -> "ok" }
@@ -100,7 +100,7 @@ class JobRunnerTest : AnnotationSpec() {
     @Test
     fun `releaseFn is invoked when script execution throws`() {
         var releaseCalled = false
-        val task = makeTask(sourceType = "script", scriptPath = "path/to/script.kt")
+        val task = makeTask(sourceType = "script", scriptPath = "path/to/script.kts")
         val ok = JobResult.Ok(configName = "cfg", task = task, releaseFn = { releaseCalled = true })
 
         val runScript: (String, String, String) -> Any? = { _, _, _ -> error("simulated failure") }
@@ -124,13 +124,32 @@ class JobRunnerTest : AnnotationSpec() {
     @Test
     fun `ackFn not called when execution fails`() {
         var ackCalled = false
-        val task = makeTask(sourceType = "script", scriptPath = "path/to/script.kt")
+        val task = makeTask(sourceType = "script", scriptPath = "path/to/script.kts")
         val ok = JobResult.Ok(configName = "cfg", task = task, ackFn = { ackCalled = true })
 
         val runScript: (String, String, String) -> Any? = { _, _, _ -> error("boom") }
         simulateRunPendingJobs(listOf(ok), runScript, "default")
 
         assertTrue(!ackCalled, "ackFn must NOT be called when execution fails")
+    }
+
+    @Test
+    fun `compiled failure releases and does not ack`() {
+        var ackCalled = false
+        var releaseCalled = false
+        val task = makeTask(sourceType = "compiled", scriptPath = null, packageName = "com.missing")
+        val ok = JobResult.Ok(
+            configName = "cfg",
+            task = task,
+            ackFn = { ackCalled = true },
+            releaseFn = { releaseCalled = true }
+        )
+
+        val mapped = simulateRunPendingJobs(listOf(ok), { _, _, _ -> "unused" }, "default")
+
+        assertTrue(mapped.any { it is JobResult.Error }, "compiled failure must surface as JobResult.Error")
+        assertTrue(releaseCalled, "releaseFn must run so file jobs go to .failed, not .done")
+        assertTrue(!ackCalled, "ackFn must NOT run when runCompiled fails")
     }
 
     // -------------------------------------------------------------------------
@@ -143,6 +162,66 @@ class JobRunnerTest : AnnotationSpec() {
         val result = JobResult.Ok(configName = "cfg", task = task)
         assertTrue(result.ackFn == null)
         assertTrue(result.releaseFn == null)
+    }
+
+    // -------------------------------------------------------------------------
+    // sourceType normalization — SCRIPT/COMPILED legacy + .kt vs .kts
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `normalizeJobSourceType accepts uppercase COMPILED and SCRIPT`() {
+        assertEquals("compiled", normalizeJobSourceType("COMPILED"))
+        assertEquals("script", normalizeJobSourceType("SCRIPT"))
+        assertEquals("compiled", normalizeJobSourceType("compiled"))
+        assertTrue(isCompiledJobSource("COMPILED"))
+        assertTrue(!isCompiledJobSource("SCRIPT"))
+    }
+
+    @Test
+    fun `resolvePropertyJobSourceType treats module kt as compiled and kts as script`() {
+        assertEquals(
+            "compiled",
+            resolvePropertyJobSourceType(
+                "C:/proj/src/main/kotlin/com/igly/comms/scripts/registerIglyUser.kt"
+            )
+        )
+        assertEquals("script", resolvePropertyJobSourceType("C:/proj/job-runner.kts"))
+        assertEquals("compiled", resolvePropertyJobSourceType(null))
+    }
+
+    @Test
+    fun `uppercase COMPILED sourceType routes to compiled branch`() {
+        val task = makeTask(sourceType = "COMPILED", scriptPath = null, packageName = "com.example")
+        val ok = JobResult.Ok(configName = "cfg", task = task)
+
+        var scriptCalled = false
+        val runScript: (String, String, String) -> Any? = { _, _, _ ->
+            scriptCalled = true
+            "should not be called"
+        }
+
+        simulateRunPendingJobs(listOf(ok), runScript, "default")
+        assertTrue(!scriptCalled, "runScriptContent must NOT be invoked for COMPILED jobs")
+    }
+
+    @Test
+    fun `legacy SCRIPT with module kt path still routes to compiled branch`() {
+        val task = makeTask(
+            sourceType = "SCRIPT",
+            scriptPath = "src/main/kotlin/com/igly/comms/scripts/registerIglyUser.kt",
+            packageName = "com.igly.comms.scripts"
+        )
+        val ok = JobResult.Ok(configName = "cfg", task = task)
+
+        var scriptCalled = false
+        val runScript: (String, String, String) -> Any? = { _, _, _ ->
+            scriptCalled = true
+            "should not be called"
+        }
+
+        simulateRunPendingJobs(listOf(ok), runScript, "default")
+        assertTrue(!scriptCalled, "legacy SCRIPT+.kt must not use script runner")
+        assertTrue(shouldRunJobAsCompiled("SCRIPT", task.scriptPath))
     }
 }
 
@@ -172,7 +251,7 @@ private fun simulateRunPendingJobs(
                 val taskContext = task.context?.takeIf { it.isNotBlank() } ?: context
 
                 val execResult = try {
-                    if (task.sourceType == "compiled") {
+                    if (shouldRunJobAsCompiled(task.sourceType, task.scriptPath)) {
                         JobRunner.runCompiled(taskContext, task)
                     } else {
                         val scriptPath = resolveTaskScriptPath(task) ?: run {

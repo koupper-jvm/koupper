@@ -9,6 +9,7 @@ import com.koupper.shared.runtime.GlobalRouteRegistry
 import com.koupper.shared.runtime.RegisteredRuntimeRoute
 import com.koupper.shared.runtime.WebResponse
 import com.koupper.shared.runtime.CorsConfig
+import com.koupper.shared.runtime.resolveCorsAllowOrigin
 import com.koupper.shared.validators.core.Schema
 import org.glassfish.grizzly.http.server.HttpHandler
 import org.glassfish.grizzly.http.server.HttpServer
@@ -381,7 +382,13 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
         httpServer.serverConfiguration.addHttpHandler(object : HttpHandler() {
             override fun service(request: Request, response: Response) {
                 val cors = GlobalRouteRegistry.corsConfig
-                response.setHeader("Access-Control-Allow-Origin", cors?.allowedOrigins?.joinToString(",") ?: "*")
+                val allowOrigin = resolveCorsAllowOrigin(cors?.allowedOrigins, request.getHeader("Origin"))
+                if (allowOrigin != null) {
+                    response.setHeader("Access-Control-Allow-Origin", allowOrigin)
+                    if (allowOrigin != "*") {
+                        response.setHeader("Vary", "Origin")
+                    }
+                }
                 response.setHeader("Access-Control-Allow-Methods", cors?.allowedMethods?.joinToString(",") ?: "GET, POST, PUT, DELETE, OPTIONS, PATCH")
                 response.setHeader("Access-Control-Allow-Headers", cors?.allowedHeaders?.joinToString(",") ?: "Content-Type, Authorization")
                 if (request.method.methodString == "OPTIONS") { response.status = 204; return }
@@ -415,6 +422,7 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
             headersMap[name] = request.getHeaders(name).toList()
         }
 
+        val startMs = System.currentTimeMillis()
         val outcome = dispatcher.dispatch(DispatchRequest(
             method = request.method.methodString,
             path = request.requestURI,
@@ -426,7 +434,10 @@ class GrizzlyRuntimeRouterProvider : RuntimeRouterProvider {
 
         when (outcome) {
             is DispatchOutcome.Stream -> handleStream(response, outcome.stream)
-            is DispatchOutcome.Completed -> respond(response, outcome.status, outcome.payload, outcome.contentType, outcome.headers)
+            is DispatchOutcome.Completed -> {
+                respond(response, outcome.status, outcome.payload, outcome.contentType, outcome.headers)
+                GlobalRouteRegistry.afterRequestHook?.invoke(outcome.status, System.currentTimeMillis() - startMs)
+            }
         }
     }
 
