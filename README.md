@@ -206,4 +206,4 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full contract. Short version:
 
 ## License
 
-MIT
+[MIT](LICENSE)

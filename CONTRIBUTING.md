@@ -68,4 +68,4 @@ See [MAINTAINER_GUIDE.md](https://github.com/koupper-jvm/koupper-workspace/blob/
 
 ## License
 
-By contributing you agree your work is MIT, same as the project.
+By contributing you agree your work is licensed under [MIT](LICENSE), same as the project.

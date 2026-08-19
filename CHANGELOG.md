@@ -6,8 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [7.2.1] - 2026-07-29
+
 ### Added
-- **`GlobalRouteRegistry.afterRequestHook`**: optional `(statusCode: Int, durationMs: Long) -> Unit` callback invoked after every completed (non-streaming) HTTP request. Enables structured response logging and MDC cleanup from the application layer without patching the router. Set it once in your server setup; `null` by default (zero overhead when unused).
+- Community GitHub Release install assets and `com.koupper:octopus-api:7.2.1` on mavenLocal.
+- **`GlobalRouteRegistry.afterRequestHook`**: optional `(statusCode: Int, durationMs: Long) -> Unit` callback after every completed (non-streaming) HTTP request.
 
 ### Fixed
 - **`koupper module` V7 DX**: show RuntimeRouter routes + `@Export` symbols; detect octopus from Gradle; skip noisy script compile during module scan; quiet `[DEBUG] Compiling` via `koupper.scripting.quiet`.
