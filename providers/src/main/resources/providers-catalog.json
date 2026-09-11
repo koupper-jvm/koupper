@@ -967,6 +967,30 @@
       ],
       "env": [],
       "docs": "https://koupper.com/docs/providers/youtube"
+    },
+    {
+      "id": "hailo-vision",
+      "serviceProvider": "HailoVisionServiceProvider",
+      "description": "Hardware-accelerated edge vision provider mapping to TAPPAS/HailoRT via ffmpeg frames. Target: Raspberry Pi 5 + Hailo-8L NPU.",
+      "bindings": [
+        {
+          "contract": "HailoVisionProvider",
+          "implementations": [
+            { "class": "CliHailoVisionProvider" }
+          ]
+        }
+      ],
+      "env": [
+        { "name": "HAILO_VISION_ENABLED", "required": false, "description": "soft-disable." },
+        { "name": "HAILO_DEVICE", "required": false, "description": "device check (default: /dev/hailo0)." },
+        { "name": "HAILO_FFMPEG_BIN", "required": false, "description": "ffmpeg binary (default: ffmpeg)." },
+        { "name": "HAILO_MODEL_PATH", "required": false, "description": "detection model HEF path." },
+        { "name": "HAILO_PYTHON", "required": false, "description": "runner script python (default: python3)." },
+        { "name": "HAILO_RUNNER", "required": false, "description": "CLI bridge script." },
+        { "name": "HAILO_OCR", "required": false, "description": "enable OCR path." },
+        { "name": "HAILO_TIMEOUT_SEC", "required": false, "description": "process timeout." }
+      ],
+      "docs": "https://koupper.com/docs/providers/hailo-vision"
     }
   ]
 }
