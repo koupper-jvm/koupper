@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [7.2.2] - 2026-09-10
+
+### Added
+- **HailoVisionServiceProvider**: New edge hardware vision provider for Koupper. Integrates with Raspberry Pi 5 + Hailo-8L NPU via `ffmpeg` frames and `HailoRT/TAPPAS`. Gracefully degrades when `/dev/hailo0` is missing. Included in the provider catalog as `hailo-vision`.
+
 ## [7.2.1] - 2026-07-29
 
 ### Added

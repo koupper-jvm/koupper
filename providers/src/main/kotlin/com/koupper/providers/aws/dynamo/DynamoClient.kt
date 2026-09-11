@@ -46,7 +46,9 @@ interface DynamoClient {
         indexName: String? = null,
         filterExpression: String? = null,
         limit: Int = 20,
-        cursorToken: String? = null
+        cursorToken: String? = null,
+        expressionAttributeNames: Map<String, String>? = null,
+        scanIndexForward: Boolean = true
     ): Pair<List<Map<String, Any>>, String?>
     fun scanItems(tableName: String): List<Map<String, Any>> // Nuevo método para escaneo
     fun scanItemsPaginatedChunk(
