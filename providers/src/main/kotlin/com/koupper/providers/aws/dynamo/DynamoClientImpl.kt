@@ -348,7 +348,9 @@ class DynamoClientImpl private constructor(
         indexName: String?,
         filterExpression: String?,
         limit: Int,
-        cursorToken: String?
+        cursorToken: String?,
+        expressionAttributeNames: Map<String, String>?,
+        scanIndexForward: Boolean
     ): Pair<List<Map<String, Any>>, String?> {
         val attrValues = expressionAttributeValues.mapValues { (_, v) -> processValue(v) }
 
@@ -357,9 +359,13 @@ class DynamoClientImpl private constructor(
             .keyConditionExpression(keyConditionExpression)
             .expressionAttributeValues(attrValues)
             .limit(limit)
+            .scanIndexForward(scanIndexForward)
 
         if (!indexName.isNullOrBlank()) requestBuilder.indexName(indexName)
         if (!filterExpression.isNullOrBlank()) requestBuilder.filterExpression(filterExpression)
+        if (!expressionAttributeNames.isNullOrEmpty()) {
+            requestBuilder.expressionAttributeNames(expressionAttributeNames)
+        }
 
         decodeCursorFromBase64(cursorToken)?.let { requestBuilder.exclusiveStartKey(it) }
 
