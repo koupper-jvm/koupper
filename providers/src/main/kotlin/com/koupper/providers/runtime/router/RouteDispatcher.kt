@@ -195,11 +195,11 @@ class RouteDispatcher {
         payload is String && payload.trimStart().let { it.startsWith("<!DOCTYPE") || it.startsWith("<html") } ->
             "text/html; charset=UTF-8" to payload.toByteArray(Charsets.UTF_8)
         payload is String && (payload.startsWith("{") || payload.startsWith("[")) ->
-            "application/json" to payload.toByteArray(Charsets.UTF_8)
+            "application/json; charset=UTF-8" to payload.toByteArray(Charsets.UTF_8)
         payload is String ->
             "text/plain; charset=UTF-8" to payload.toByteArray(Charsets.UTF_8)
         else ->
-            "application/json" to mapper.writeValueAsBytes(payload)
+            "application/json; charset=UTF-8" to mapper.writeValueAsBytes(payload)
     }
 
     private fun buildArgument(request: DispatchRequest, route: RegisteredRuntimeRoute): Any? {

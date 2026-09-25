@@ -211,7 +211,7 @@ class RouteDispatcherTest : AnnotationSpec() {
     @Test
     fun `serializePayload infers json for non-string payloads`() {
         val (ct, bytes) = dispatcher.serializePayload(mapOf("a" to 1))
-        assertEquals("application/json", ct)
+        assertEquals("application/json; charset=UTF-8", ct)
         assertTrue(String(bytes).contains("\"a\":1"))
     }
 
